@@ -1,0 +1,19 @@
+export async function register() {
+  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+
+  const { bootstrapDataDir } = await import("./lib/storage/dataDir");
+  const { getAuthToken } = await import("./lib/auth/token");
+  const { getDb } = await import("./lib/db/client");
+  const { isFfmpegAvailable } = await import("./lib/ffmpeg");
+
+  bootstrapDataDir();
+  getAuthToken();
+  getDb();
+
+  if (!isFfmpegAvailable()) {
+    console.warn(
+      "[local-fi] ffmpeg was not found on PATH — import/waveform generation will be disabled until it's installed. " +
+        "Set LOCALFI_FFMPEG_PATH to point at a specific binary instead."
+    );
+  }
+}

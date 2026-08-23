@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local-fi data dir (SQLite DB, auth token, media files) — never committed
+/data/

@@ -23,11 +23,11 @@ Set up `create-next-app` (Next.js 16, App Router, TypeScript), Tailwind v4 wired
 
 ### M1 — Backend skeleton: DB schema, migrations, file storage, auth stub, health
 
-Add Drizzle schema (ARCHITECTURE.md §3, all tables) + `drizzle-kit` migration setup. Implement `LOCALFI_DATA_DIR` bootstrap (creates `originals/ artwork/ waveforms/ staging/ trash/ tmp/`, generates `auth-token` on first run). Implement `proxy.ts` + `lib/auth/verifyToken.ts` + the internal `app/api/_unauthorized/route.ts` rewrite target (§8's corrected pattern — proxy.ts checks the token and rewrites to this route on failure; it never returns a body itself). Implement `GET /api/v1/health` (DB reachable, data dir writable, `ffmpeg -version` check). No track-facing endpoints yet.
+Add Drizzle schema (ARCHITECTURE.md §3, all tables) + `drizzle-kit` migration setup. Implement `LOCALFI_DATA_DIR` bootstrap (creates `originals/ artwork/ waveforms/ staging/ trash/ tmp/`, generates `auth-token` on first run). Implement `proxy.ts` + `lib/auth/verifyToken.ts` + the internal `app/api/unauthorized/route.ts` rewrite target (§8's corrected pattern — proxy.ts checks the token and rewrites to this route on failure; it never returns a body itself; note the route must not be `_`-prefixed, since Next treats `_folder` as a private, non-routable folder). Implement `GET /api/v1/health` (DB reachable, data dir writable, `ffmpeg -version` check). No track-facing endpoints yet.
 
 **Dependencies**: `drizzle-orm drizzle-kit better-sqlite3 @types/better-sqlite3 zod`.
 
-**Demoable**: server boots, `data/library.db` and `data/auth-token` exist on disk; `curl -H "Authorization: Bearer <token>" localhost:3000/api/v1/health` returns `{ ffmpeg: true, db: true, dataDir: true }`; an unauthenticated request returns `401` (via the proxy rewrite → `_unauthorized` route, confirming the corrected auth mechanism actually works end-to-end, not just in theory). This is a real, testable backend skeleton before any UI touches it.
+**Demoable**: server boots, `data/library.db` and `data/auth-token` exist on disk; `curl -H "Authorization: Bearer <token>" localhost:3000/api/v1/health` returns `{ ffmpeg: true, db: true, dataDir: true }`; an unauthenticated request returns `401` (via the proxy rewrite → `unauthorized` route, confirming the corrected auth mechanism actually works end-to-end, not just in theory). This is a real, testable backend skeleton before any UI touches it.
 
 ---
 
