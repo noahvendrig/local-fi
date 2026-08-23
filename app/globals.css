@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+:root[data-theme="dark"] {
+  --lf-bg: #121016;      --lf-surf: #1A1720;    --lf-surf-2: #221E2A;
+  --lf-line: #2E2939;
+  --lf-t1: #EFEAF5;      --lf-t2: #A29BB0;      --lf-t3: #6A6478;   /* no distinct t4 in dark; falls back to t3 */
+  --lf-acc: #8A5CF0;     --lf-acc-2: #A47BFF;   --lf-acc-text: #8A5CF0;   /* accText == acc in dark, not acc-2 */
+  --lf-on-acc: #FFFFFF;
+  --lf-playing: #C9A6FF;
+  --lf-ok: #9BB4E8;      --lf-warn: #D6B45C;    --lf-err: #E0566E;
+  --lf-glass: rgba(18,16,22,.87);
+  --lf-tint: rgba(138,92,240,.13);
+  --lf-ring: rgba(164,123,255,.12);
+  --lf-glow-a: rgba(138,92,240,.32);
+  --lf-glow-b: rgba(201,166,255,.18);
+  --lf-art-shadow: 0 8px 20px rgba(14,10,24,.36);
+  --lf-shadow: 0 18px 48px rgba(14,10,24,.42);
+}
+
+:root[data-theme="light"] {
+  --lf-bg: #F7F5FB;      --lf-surf: #FFFFFF;    --lf-surf-2: #F0ECF8;
+  --lf-line: #E4DFEE;
+  --lf-t1: #1C1826;      --lf-t2: #665F78;      --lf-t3: #665F78;   --lf-t4: #A29BB0;
+  --lf-acc: #7343DE;     --lf-acc-2: #6435C9;   --lf-acc-text: #6B3ACB;
+  --lf-playing: #5B2FBF;
+  --lf-ok: #3F5F94;      --lf-warn: #7E6320;    --lf-err: #B23A50;
+  --lf-shadow: 0 18px 48px rgba(14,10,24,.18);
+  /* --lf-glass / --lf-tint / --lf-ring / --lf-glow-a / --lf-glow-b are intentionally NOT
+     redefined here — they cascade/inherit from the dark block above by design (confirmed
+     against the source file: the light-mode override never redefines them either). The
+     Now Playing glass backdrop keeps the same warm purple glow in both themes. */
+}
+
+@theme {
+  --color-bg: var(--lf-bg);
+  --color-surf: var(--lf-surf);
+  --color-surf-2: var(--lf-surf-2);
+  --color-line: var(--lf-line);
+  --color-t1: var(--lf-t1);
+  --color-t2: var(--lf-t2);
+  --color-t3: var(--lf-t3);
+  --color-acc: var(--lf-acc);
+  --color-acc-2: var(--lf-acc-2);
+  --color-playing: var(--lf-playing);
+  --color-ok: var(--lf-ok);
+  --color-warn: var(--lf-warn);
+  --color-err: var(--lf-err);
+
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono);
+  --font-serif: var(--font-fraunces);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--lf-bg);
+  color: var(--lf-t1);
+}
