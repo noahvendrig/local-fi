@@ -6,7 +6,6 @@ import { WaveformScrubber } from "./WaveformScrubber";
 import { IconButton } from "./IconButton";
 import {
   AlbumPlaceholderIcon,
-  CloseIcon,
   NextIcon,
   PauseIcon,
   PlayIcon,
@@ -16,8 +15,7 @@ import {
   ShuffleIcon,
 } from "./PlayerIcons";
 
-// Full-screen Now Playing overlay (ARCHITECTURE.md M5) — the one and only use of
-// backdrop-filter in the app, per §9's semantic rule.
+// Full-screen Now Playing overlay — the one and only use of backdrop-filter in the app.
 export function NowPlayingOverlay() {
   const isOpen = usePlayerStore((s) => s.isNowPlayingOpen);
   const closeNowPlaying = usePlayerStore((s) => s.closeNowPlaying);
@@ -43,30 +41,32 @@ export function NowPlayingOverlay() {
       role="dialog"
       aria-modal="true"
       aria-label="Now Playing"
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden px-6 pb-[88px]"
-      style={{ backgroundColor: "var(--lf-glass, rgba(18,16,22,.87))", backdropFilter: "blur(48px) saturate(140%)" }}
+      className="fixed inset-0 z-50 flex flex-col overflow-hidden"
+      style={{
+        background:
+          "radial-gradient(120% 90% at 22% 12%, var(--lf-glow-a), transparent 60%)," +
+          "radial-gradient(90% 80% at 82% 78%, var(--lf-glow-b), transparent 62%)," +
+          "var(--lf-glass)",
+        backdropFilter: "blur(48px) saturate(140%)",
+        animation: "lfrise 220ms cubic-bezier(.22,1.3,.4,1)",
+      }}
     >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(60% 50% at 50% 15%, var(--lf-glow-a, rgba(138,92,240,.32)), transparent 70%)," +
-            "radial-gradient(50% 40% at 85% 85%, var(--lf-glow-b, rgba(201,166,255,.18)), transparent 70%)",
-        }}
-      />
+      <div className="flex items-center px-8 py-5">
+        <button
+          type="button"
+          onClick={closeNowPlaying}
+          className="rounded-lg border border-line bg-surf-2 px-3 py-2 text-xs font-medium text-t1 hover:border-acc"
+        >
+          ↓ Collapse
+        </button>
+        <div className="flex-1" />
+        <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-t2">
+          {currentTrack.albumTitle ? `Playing from · ${currentTrack.albumTitle}` : "Now playing"}
+        </span>
+      </div>
 
-      <button
-        type="button"
-        onClick={closeNowPlaying}
-        aria-label="Close Now Playing"
-        className="absolute right-6 top-6 flex h-9 w-9 items-center justify-center rounded-full text-t2 hover:bg-[var(--lf-tint)] hover:text-t1"
-      >
-        <CloseIcon />
-      </button>
-
-      <div className="relative flex w-full max-w-md flex-col items-center gap-6">
-        <div className="h-72 w-72 max-w-full overflow-hidden rounded-2xl bg-surf-2 shadow-[var(--lf-shadow)]">
+      <div className="flex min-h-0 flex-1 items-center justify-center gap-14 px-16">
+        <div className="lf-hatch h-[380px] w-[380px] max-w-full shrink-0 overflow-hidden rounded-3xl shadow-[var(--lf-art-shadow-lg)]">
           {currentTrack.coverArtUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- local-only images
             <img src={withAuthQuery(currentTrack.coverArtUrl)} alt="" className="h-full w-full object-cover" />
@@ -77,55 +77,66 @@ export function NowPlayingOverlay() {
           )}
         </div>
 
-        <div className="w-full text-center">
-          <h1 className="truncate font-serif text-2xl text-t1" title={currentTrack.title ?? undefined}>
+        <div className="w-full max-w-[520px]">
+          <p className="mb-3.5 text-[11px] font-medium uppercase tracking-[0.04em] text-playing">Now playing</p>
+          <h1 className="mb-3 font-serif text-[40px] font-medium leading-[1.1] text-t1" title={currentTrack.title ?? undefined}>
             {currentTrack.title ?? "Untitled"}
           </h1>
-          <p className="mt-1 truncate text-sm text-t2">{currentTrack.artistName ?? "Unknown artist"}</p>
-          {currentTrack.albumTitle && <p className="truncate text-xs text-t3">{currentTrack.albumTitle}</p>}
-        </div>
+          <p className="mb-5 text-sm leading-[1.5] text-t2">
+            {currentTrack.artistName ?? "Unknown artist"}
+            {currentTrack.albumTitle ? ` · ${currentTrack.albumTitle}` : ""}
+          </p>
+          <p className="mb-7 flex gap-3.5 font-mono text-xs text-t3">
+            <span className="text-ok">{currentTrack.format.toUpperCase()}</span>
+          </p>
 
-        <div className="w-full">
-          <WaveformScrubber
-            waveform={waveform}
-            currentTime={currentTime}
-            duration={currentTrack.durationSeconds}
-            onSeek={seekTo}
-            disabled={false}
-          />
-        </div>
+          <div className="mb-7">
+            <WaveformScrubber
+              waveform={waveform}
+              currentTime={currentTime}
+              duration={currentTrack.durationSeconds}
+              onSeek={seekTo}
+              disabled={false}
+            />
+          </div>
 
-        <div className="flex items-center gap-3">
-          <IconButton onClick={toggleShuffle} label="Shuffle" active={shuffle}>
-            <ShuffleIcon />
-          </IconButton>
-          <IconButton onClick={playPrevious} label="Previous track" size="lg">
-            <PreviousIcon />
-          </IconButton>
-          <button
-            type="button"
-            onClick={togglePlay}
-            aria-label={isPlaying ? "Pause" : "Play"}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-acc text-[var(--lf-on-acc)] hover:bg-acc-2"
-          >
-            {isPlaying ? <PauseIcon /> : <PlayIcon />}
-          </button>
-          <IconButton onClick={playNext} label="Next track" size="lg">
-            <NextIcon />
-          </IconButton>
-          <IconButton onClick={toggleRepeatMode} label="Repeat" active={repeatMode !== "off"}>
-            {repeatMode === "one" ? <RepeatOneIcon /> : <RepeatIcon />}
-          </IconButton>
+          <div className="flex items-center gap-5">
+            <IconButton onClick={toggleShuffle} label="Shuffle" active={shuffle} size="xl">
+              <ShuffleIcon size={36} />
+            </IconButton>
+            <IconButton onClick={playPrevious} label="Previous track" size="xl">
+              <PreviousIcon size={40} />
+            </IconButton>
+            <button
+              type="button"
+              onClick={togglePlay}
+              aria-label={isPlaying ? "Pause" : "Play"}
+              className="flex h-[60px] w-[60px] items-center justify-center rounded-full border border-acc bg-acc text-on-acc shadow-[0_10px_26px_rgba(20,15,10,.4)] hover:bg-acc-2"
+            >
+              {isPlaying ? <PauseIcon size={26} /> : <PlayIcon size={26} />}
+            </button>
+            <IconButton onClick={playNext} label="Next track" size="xl">
+              <NextIcon size={40} />
+            </IconButton>
+            <IconButton
+              onClick={toggleRepeatMode}
+              label={repeatMode === "one" ? "Repeat one" : repeatMode === "all" ? "Repeat all" : "Repeat"}
+              active={repeatMode !== "off"}
+              size="xl"
+            >
+              {repeatMode === "one" ? <RepeatOneIcon size={36} /> : <RepeatIcon size={36} />}
+            </IconButton>
+            <div className="flex-1" />
+            <button
+              type="button"
+              onClick={toggleQueue}
+              aria-pressed={isQueueOpen}
+              className="rounded-lg border border-line bg-surf-2 px-3.5 py-2 text-[11px] font-medium uppercase tracking-[0.04em] text-t1 hover:border-acc"
+            >
+              Up next ↑
+            </button>
+          </div>
         </div>
-
-        <button
-          type="button"
-          onClick={toggleQueue}
-          aria-pressed={isQueueOpen}
-          className={`text-sm font-medium ${isQueueOpen ? "text-acc-text" : "text-t2"} hover:text-t1`}
-        >
-          Up Next
-        </button>
       </div>
     </div>
   );

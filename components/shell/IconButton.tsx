@@ -4,7 +4,7 @@ export function HoverTip({ text }: { text: string }) {
   return (
     <span
       aria-hidden
-      className="pointer-events-none absolute bottom-full left-1/2 z-40 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md border border-line bg-surf-2 px-2 py-1 text-xs text-t1 opacity-0 shadow-[var(--lf-shadow)] transition-opacity delay-75 group-hover:opacity-100 group-focus-visible:opacity-100"
+      className="pointer-events-none absolute bottom-full left-1/2 z-40 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded border border-line bg-bg px-2 py-1 font-mono text-[11px] text-t1 opacity-0 shadow-[var(--lf-shadow)] transition-opacity delay-75 group-hover:opacity-100 group-focus-visible:opacity-100"
     >
       {text}
     </span>
@@ -22,10 +22,10 @@ export function IconButton({
   onClick: () => void;
   label: string;
   active?: boolean;
-  size?: "sm" | "lg";
+  size?: "sm" | "lg" | "xl";
   children: React.ReactNode;
 }) {
-  const dimension = size === "lg" ? "h-11 w-11" : "h-8 w-8";
+  const dimension = size === "xl" ? "h-14 w-14" : size === "lg" ? "h-11 w-11" : "h-8 w-8";
   return (
     <button
       type="button"

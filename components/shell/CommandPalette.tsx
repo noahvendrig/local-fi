@@ -207,24 +207,25 @@ export function CommandPalette() {
       role="dialog"
       aria-modal="true"
       aria-label="Command palette"
-      className="fixed inset-0 z-50 flex items-start justify-center px-6 pt-[12vh]"
-      style={{ backgroundColor: "var(--lf-glass, rgba(18,16,22,.6))" }}
+      className="fixed inset-0 z-50 flex items-start justify-center px-6 pt-[120px]"
+      style={{ backgroundColor: "rgba(12, 11, 10, 0.6)", backdropFilter: "blur(3px)" }}
       onClick={handleClose}
     >
       <div
-        className="flex max-h-[70vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-line bg-surf shadow-[var(--lf-shadow)]"
+        className="flex max-h-[70vh] w-full max-w-[640px] flex-col overflow-hidden rounded-3xl border border-line bg-surf shadow-[var(--lf-shadow)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+        <div className="flex items-center gap-3 border-b border-line px-5 py-[18px]">
           <SearchIcon />
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search tracks, albums, artists, crates…"
-            className="flex-1 bg-transparent text-sm text-t1 outline-none placeholder:text-t3"
+            placeholder="Search library"
+            className="flex-1 bg-transparent text-base text-t1 outline-none placeholder:text-t3"
           />
+          <span className="font-mono text-[11px] text-t3">esc</span>
         </div>
 
         <div className="flex-1 overflow-y-auto py-2">
@@ -246,8 +247,10 @@ export function CommandPalette() {
                       type="button"
                       onMouseEnter={() => setActiveKey(result.key)}
                       onClick={() => openResult(result)}
-                      className={`flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left ${
-                        activeResult?.key === result.key ? "bg-[var(--lf-tint)]" : "hover:bg-surf-2"
+                      className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left ${
+                        activeResult?.key === result.key
+                          ? "border-acc bg-surf-2"
+                          : "border-transparent hover:bg-surf-2"
                       }`}
                     >
                       <span className="flex h-4 w-4 shrink-0 items-center justify-center text-t3" aria-hidden>
@@ -255,7 +258,7 @@ export function CommandPalette() {
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm text-t1">{result.label}</span>
-                        <span className="block truncate text-xs text-t3">{result.sublabel}</span>
+                        <span className="block truncate font-mono text-xs text-t3">{result.sublabel}</span>
                       </span>
                       {result.track && (
                         <span className="shrink-0 font-mono text-xs text-t3">{formatDuration(result.track.durationSeconds)}</span>

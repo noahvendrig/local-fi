@@ -5,7 +5,9 @@ import { streamUrl, waveformUrl } from "@/lib/api-client";
 import { withAuthQuery } from "@/lib/api/http";
 import { fetchWaveform } from "@/lib/waveform/parse";
 import { usePlayerStore } from "@/lib/store/player";
+import { getPlaybackEqualizer } from "@/lib/audio/equalizer";
 import { WaveformScrubber } from "./WaveformScrubber";
+import { EqualizerPopover } from "./EqualizerPopover";
 import { HoverTip, IconButton } from "./IconButton";
 import {
   AlbumPlaceholderIcon,
@@ -13,7 +15,6 @@ import {
   PauseIcon,
   PlayIcon,
   PreviousIcon,
-  QueueIcon,
   RepeatIcon,
   RepeatOneIcon,
   ShuffleIcon,
@@ -37,6 +38,9 @@ export function TransportBar() {
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
   const volume = usePlayerStore((s) => s.volume);
   const setVolume = usePlayerStore((s) => s.setVolume);
+  const eqEnabled = usePlayerStore((s) => s.eqEnabled);
+  const eqGains = usePlayerStore((s) => s.eqGains);
+  const eqPreamp = usePlayerStore((s) => s.eqPreamp);
   const currentTime = usePlayerStore((s) => s.currentTime);
   const setCurrentTime = usePlayerStore((s) => s.setCurrentTime);
   const waveform = usePlayerStore((s) => s.waveform);
@@ -73,11 +77,19 @@ export function TransportBar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- setWaveform is a stable store action
   }, [currentTrack?.id]);
 
+  // Attach the Web Audio EQ graph once. createMediaElementSource can only run once per element.
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    getPlaybackEqualizer().connect(audio);
+  }, []);
+
   // Sync the <audio> element's play/pause state to the store, including right after a src change.
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !currentTrack) return;
     if (isPlaying) {
+      void getPlaybackEqualizer().resume();
       audio.play().catch(() => {
         // Autoplay can be blocked (e.g. no prior user gesture); the UI stays in sync via onPause below.
       });
@@ -86,13 +98,16 @@ export function TransportBar() {
     }
   }, [isPlaying, currentTrack]);
 
-  // Volume lives in the store (and is persisted) but must be applied to the element —
-  // HTMLAudioElement.volume is a DOM property, not something React keeps in sync.
+  // After the graph is connected, element.volume is ignored in some browsers — drive it via GainNode.
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio) return;
-    audio.volume = volume;
+    if (audio) audio.volume = 1;
+    getPlaybackEqualizer().setVolume(volume);
   }, [volume]);
+
+  useEffect(() => {
+    getPlaybackEqualizer().setEq({ enabled: eqEnabled, gains: eqGains, preamp: eqPreamp });
+  }, [eqEnabled, eqGains, eqPreamp]);
 
   // Applies a seek requested from anywhere (this bar's scrubber, the Now Playing overlay's
   // scrubber, or a hydrated position restored on load) to the actual audio element.
@@ -140,9 +155,10 @@ export function TransportBar() {
   };
 
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-30 flex h-[88px] items-center gap-4 overflow-visible border-t border-line bg-surf px-6 shadow-[var(--lf-shadow)]">
+    <footer className="fixed inset-x-0 bottom-0 z-30 flex h-[88px] items-center gap-6 overflow-visible border-t border-line bg-surf px-6 shadow-[var(--lf-transport-shadow)]">
       <audio
         ref={audioRef}
+        crossOrigin="anonymous"
         src={currentTrack ? streamUrl(currentTrack.id) : undefined}
         onTimeUpdate={(e) => handleTimeUpdate(e.currentTarget.currentTime)}
         onEnded={handleEnded}
@@ -159,11 +175,11 @@ export function TransportBar() {
           <button
             type="button"
             onClick={openNowPlaying}
-            className="group relative flex w-64 shrink-0 items-center gap-3 text-left"
+            className="group relative flex w-[250px] shrink-0 items-center gap-3 text-left"
             aria-label="Now Playing"
           >
             <HoverTip text="Now Playing" />
-            <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-surf-2 shadow-[var(--lf-art-shadow)]">
+            <div className="lf-hatch h-14 w-14 shrink-0 overflow-hidden rounded-xl shadow-[var(--lf-art-shadow)]">
               {currentTrack.coverArtUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element -- local-only images
                 <img src={withAuthQuery(currentTrack.coverArtUrl)} alt="" className="h-full w-full object-cover" />
@@ -174,10 +190,13 @@ export function TransportBar() {
               )}
             </div>
             <div className="min-w-0">
-              <p className="truncate text-base font-medium text-t1" title={currentTrack.title ?? undefined}>
+              <p
+                className={`truncate text-sm ${isPlaying ? "text-playing" : "text-t1"}`}
+                title={currentTrack.title ?? undefined}
+              >
                 {currentTrack.title ?? "Untitled"}
               </p>
-              <p className="truncate text-sm text-t2" title={currentTrack.artistName ?? undefined}>
+              <p className="truncate font-mono text-xs text-t3" title={currentTrack.artistName ?? undefined}>
                 {currentTrack.artistName ?? "Unknown artist"}
               </p>
             </div>
@@ -191,9 +210,9 @@ export function TransportBar() {
               type="button"
               onClick={togglePlay}
               aria-label={isPlaying ? "Pause" : "Play"}
-              className="group relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-acc text-[var(--lf-on-acc)] hover:bg-acc-2"
+              className="lf-top group relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-acc bg-acc text-on-acc hover:border-acc-2 hover:bg-acc-2"
             >
-              {isPlaying ? <PauseIcon size={28} /> : <PlayIcon size={28} />}
+              {isPlaying ? <PauseIcon size={20} /> : <PlayIcon size={26} />}
               <HoverTip text={isPlaying ? "Pause" : "Play"} />
             </button>
             <IconButton onClick={playNext} label="Next" size="lg">
@@ -228,13 +247,34 @@ export function TransportBar() {
               />
               <HoverTip text="Volume" />
             </div>
-            <IconButton onClick={toggleQueue} label="Queue" active={isQueueOpen} size="lg">
-              <QueueIcon size={24} />
-            </IconButton>
+            <EqualizerPopover />
+            <span className="hidden font-mono text-[11px] text-ok xl:inline">{currentTrack.format.toUpperCase()}</span>
+            <button
+              type="button"
+              onClick={toggleQueue}
+              aria-pressed={isQueueOpen}
+              className={`rounded-lg px-2.5 py-1.5 text-[11px] font-medium uppercase tracking-[0.04em] ${
+                isQueueOpen ? "border border-acc text-acc-text" : "border border-line text-t2 hover:border-acc hover:text-t1"
+              }`}
+            >
+              Queue
+            </button>
           </div>
         </>
       ) : (
-        <span className="text-sm text-t3">No track playing</span>
+        <>
+          <div className="flex w-[250px] shrink-0 items-center gap-3">
+            <div className="lf-hatch h-14 w-14 shrink-0 rounded-xl" aria-hidden />
+            <div className="min-w-0">
+              <p className="truncate text-sm text-t3">Nothing playing</p>
+              <p className="truncate font-mono text-xs text-t3">pick a track or ⌘K</p>
+            </div>
+          </div>
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line text-t3" aria-hidden>
+            <PlayIcon size={18} />
+          </div>
+          <span className="flex-1 font-mono text-xs text-t3">—:—</span>
+        </>
       )}
     </footer>
   );

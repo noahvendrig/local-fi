@@ -1,34 +1,70 @@
 @import "tailwindcss";
 
+/* Ultraviolet Dub — the in-use scheme from Local-fi.dc.html (ink violet · electric iris · pale lilac). */
 :root[data-theme="dark"] {
-  --lf-bg: #121016;      --lf-surf: #1A1720;    --lf-surf-2: #221E2A;
-  --lf-line: #2E2939;
-  --lf-t1: #EFEAF5;      --lf-t2: #A29BB0;      --lf-t3: #6A6478;   /* no distinct t4 in dark; falls back to t3 */
-  --lf-acc: #8A5CF0;     --lf-acc-2: #A47BFF;   --lf-acc-text: #8A5CF0;   /* accText == acc in dark, not acc-2 */
-  --lf-on-acc: #FFFFFF;
-  --lf-playing: #C9A6FF;
-  --lf-ok: #9BB4E8;      --lf-warn: #D6B45C;    --lf-err: #E0566E;
-  --lf-glass: rgba(18,16,22,.87);
-  --lf-tint: rgba(138,92,240,.13);
-  --lf-ring: rgba(164,123,255,.12);
-  --lf-glow-a: rgba(138,92,240,.32);
-  --lf-glow-b: rgba(201,166,255,.18);
-  --lf-art-shadow: 0 8px 20px rgba(14,10,24,.36);
-  --lf-shadow: 0 18px 48px rgba(14,10,24,.42);
+  --lf-bg: #121016;
+  --lf-surf: #1a1720;
+  --lf-surf-2: #221e2a;
+  --lf-line: #2e2939;
+  --lf-t1: #efeaf5;
+  --lf-t2: #a29bb0;
+  --lf-t3: #6a6478;
+  --lf-t4: #6a6478;
+  --lf-acc: #8a5cf0;
+  --lf-acc-2: #a47bff;
+  --lf-acc-text: #8a5cf0;
+  --lf-on-acc: #ffffff;
+  --lf-gold: #c9a6ff;
+  --lf-playing: #c9a6ff;
+  --lf-ok: #9bb4e8;
+  --lf-warn: #d6b45c;
+  --lf-err: #e0566e;
+  --lf-glass: rgba(18, 16, 22, 0.87);
+  --lf-tint: rgba(138, 92, 240, 0.13);
+  --lf-ring: rgba(164, 123, 255, 0.12);
+  --lf-glow-a: rgba(138, 92, 240, 0.32);
+  --lf-glow-b: rgba(201, 166, 255, 0.18);
+  --lf-art-shadow: 0 8px 20px rgba(14, 10, 24, 0.36);
+  --lf-art-shadow-lg: 0 24px 56px rgba(14, 10, 24, 0.56);
+  --lf-shadow: 0 18px 48px rgba(14, 10, 24, 0.42);
+  --lf-transport-shadow: 0 -10px 30px rgba(14, 10, 24, 0.28);
+  --lf-top: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --lf-hatch-a: #221e2a;
+  --lf-hatch-b: #191622;
+  --lf-canvas: #0b0910;
 }
 
 :root[data-theme="light"] {
-  --lf-bg: #F7F5FB;      --lf-surf: #FFFFFF;    --lf-surf-2: #F0ECF8;
-  --lf-line: #E4DFEE;
-  --lf-t1: #1C1826;      --lf-t2: #665F78;      --lf-t3: #665F78;   --lf-t4: #A29BB0;
-  --lf-acc: #7343DE;     --lf-acc-2: #6435C9;   --lf-acc-text: #6B3ACB;
-  --lf-playing: #5B2FBF;
-  --lf-ok: #3F5F94;      --lf-warn: #7E6320;    --lf-err: #B23A50;
-  --lf-shadow: 0 18px 48px rgba(14,10,24,.18);
-  /* --lf-glass / --lf-tint / --lf-ring / --lf-glow-a / --lf-glow-b are intentionally NOT
-     redefined here — they cascade/inherit from the dark block above by design (confirmed
-     against the source file: the light-mode override never redefines them either). The
-     Now Playing glass backdrop keeps the same warm purple glow in both themes. */
+  --lf-bg: #f7f5fb;
+  --lf-surf: #ffffff;
+  --lf-surf-2: #f0ecf8;
+  --lf-line: #e4dfee;
+  --lf-t1: #1c1826;
+  --lf-t2: #665f78;
+  --lf-t3: #665f78;
+  --lf-t4: #a29bb0;
+  --lf-acc: #7343de;
+  --lf-acc-2: #6435c9;
+  --lf-acc-text: #6b3acb;
+  --lf-on-acc: #ffffff;
+  --lf-gold: #c9a6ff;
+  --lf-playing: #5b2fbf;
+  --lf-ok: #3f5f94;
+  --lf-warn: #7e6320;
+  --lf-err: #b23a50;
+  --lf-glass: rgba(247, 245, 251, 0.9);
+  --lf-tint: rgba(138, 92, 240, 0.13);
+  --lf-ring: rgba(164, 123, 255, 0.12);
+  --lf-glow-a: rgba(138, 92, 240, 0.32);
+  --lf-glow-b: rgba(201, 166, 255, 0.18);
+  --lf-art-shadow: 0 8px 20px rgba(14, 10, 24, 0.14);
+  --lf-art-shadow-lg: 0 24px 56px rgba(14, 10, 24, 0.2);
+  --lf-shadow: 0 18px 48px rgba(14, 10, 24, 0.18);
+  --lf-transport-shadow: 0 -8px 24px rgba(14, 10, 24, 0.1);
+  --lf-top: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --lf-hatch-a: #efeaf7;
+  --lf-hatch-b: #e3dcef;
+  --lf-canvas: #e7e2f0;
 }
 
 @theme {
@@ -39,8 +75,12 @@
   --color-t1: var(--lf-t1);
   --color-t2: var(--lf-t2);
   --color-t3: var(--lf-t3);
+  --color-t4: var(--lf-t4);
   --color-acc: var(--lf-acc);
   --color-acc-2: var(--lf-acc-2);
+  --color-acc-text: var(--lf-acc-text);
+  --color-on-acc: var(--lf-on-acc);
+  --color-gold: var(--lf-gold);
   --color-playing: var(--lf-playing);
   --color-ok: var(--lf-ok);
   --color-warn: var(--lf-warn);
@@ -49,6 +89,11 @@
   --font-sans: var(--font-inter);
   --font-mono: var(--font-jetbrains-mono);
   --font-serif: var(--font-fraunces);
+
+  --radius-lf: 8px;
+  --radius-lf-lg: 16px;
+  --radius-lf-xl: 20px;
+  --radius-lf-2xl: 24px;
 }
 
 html,
@@ -59,4 +104,45 @@ body {
 body {
   background-color: var(--lf-bg);
   color: var(--lf-t1);
+}
+
+::selection {
+  background: var(--lf-tint);
+  color: var(--lf-t1);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--lf-line) transparent;
+}
+
+@utility lf-top {
+  box-shadow: var(--lf-top);
+}
+
+@utility lf-hatch {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--lf-hatch-a),
+    var(--lf-hatch-a) 5px,
+    var(--lf-hatch-b) 5px,
+    var(--lf-hatch-b) 10px
+  );
+}
+
+@utility lf-card {
+  border: 1px solid var(--lf-line);
+  background: var(--lf-surf);
+  box-shadow: var(--lf-top);
+}
+
+@keyframes lfrise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }

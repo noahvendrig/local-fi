@@ -1,6 +1,13 @@
 import { create } from "zustand";
 import type { TrackSummary } from "@/lib/api-client";
 import { fetchPlaybackState, putPlaybackState, type RepeatMode } from "@/lib/api/playbackClient";
+import {
+  DEFAULT_EQ_STATE,
+  matchPresetId,
+  presetById,
+  snapEqGain,
+  type EqPresetId,
+} from "@/lib/audio/eqConfig";
 import type { WaveformData } from "@/lib/waveform/parse";
 
 const PERSIST_DEBOUNCE_MS = 400;
@@ -23,6 +30,10 @@ interface PlayerState {
   isQueueOpen: boolean;
   isNowPlayingOpen: boolean;
   hydrated: boolean;
+  eqEnabled: boolean;
+  eqGains: number[];
+  eqPreamp: number;
+  eqPreset: EqPresetId;
 
   hydrate: () => Promise<void>;
   /** Selects a track; re-clicking the already-current track toggles play/pause instead of restarting it. */
@@ -32,6 +43,11 @@ interface PlayerState {
   togglePlay: () => void;
   setPlaying: (playing: boolean) => void;
   setVolume: (volume: number) => void;
+  setEqEnabled: (enabled: boolean) => void;
+  setEqBand: (index: number, gainDb: number) => void;
+  setEqPreamp: (preampDb: number) => void;
+  setEqPreset: (preset: Exclude<EqPresetId, "custom">) => void;
+  resetEq: () => void;
   playNext: () => void;
   playPrevious: () => void;
   toggleRepeatMode: () => void;
@@ -66,6 +82,12 @@ function schedulePersist(get: () => PlayerState) {
       volume: s.volume,
       repeatMode: s.repeatMode,
       shuffle: s.shuffle,
+      eq: {
+        enabled: s.eqEnabled,
+        gains: s.eqGains,
+        preamp: s.eqPreamp,
+        preset: s.eqPreset,
+      },
     });
   }, PERSIST_DEBOUNCE_MS);
 }
@@ -84,6 +106,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   isQueueOpen: false,
   isNowPlayingOpen: false,
   hydrated: false,
+  eqEnabled: DEFAULT_EQ_STATE.enabled,
+  eqGains: [...DEFAULT_EQ_STATE.gains],
+  eqPreamp: DEFAULT_EQ_STATE.preamp,
+  eqPreset: DEFAULT_EQ_STATE.preset,
 
   hydrate: async () => {
     try {
@@ -97,6 +123,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         volume: data.volume,
         repeatMode: data.repeatMode,
         shuffle: data.shuffle,
+        eqEnabled: data.eq?.enabled ?? DEFAULT_EQ_STATE.enabled,
+        eqGains: [...(data.eq?.gains ?? DEFAULT_EQ_STATE.gains)],
+        eqPreamp: data.eq?.preamp ?? DEFAULT_EQ_STATE.preamp,
+        eqPreset: data.eq?.preset ?? DEFAULT_EQ_STATE.preset,
         isPlaying: false, // never autoplay on load — browsers block it anyway, and it's a jarring UX
         currentTime: currentTrack ? data.positionSeconds : 0,
         pendingSeekSeconds: currentTrack && data.positionSeconds > 0 ? data.positionSeconds : null,
@@ -159,6 +189,43 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   setVolume: (volume) => {
     set({ volume });
+    schedulePersist(get);
+  },
+
+  setEqEnabled: (enabled) => {
+    set({ eqEnabled: enabled });
+    schedulePersist(get);
+  },
+
+  setEqBand: (index, gainDb) => {
+    if (index < 0 || index >= DEFAULT_EQ_STATE.gains.length) return;
+    const eqGains = get().eqGains.map((gain, i) => (i === index ? snapEqGain(gainDb) : gain));
+    set({ eqGains, eqPreset: matchPresetId(eqGains), eqEnabled: true });
+    schedulePersist(get);
+  },
+
+  setEqPreamp: (preampDb) => {
+    set({ eqPreamp: snapEqGain(preampDb) });
+    schedulePersist(get);
+  },
+
+  setEqPreset: (presetId) => {
+    const preset = presetById(presetId);
+    set({
+      eqGains: [...preset.gains],
+      eqPreset: preset.id,
+      eqEnabled: true,
+    });
+    schedulePersist(get);
+  },
+
+  resetEq: () => {
+    const flat = presetById("flat");
+    set({
+      eqGains: [...flat.gains],
+      eqPreamp: 0,
+      eqPreset: "flat",
+    });
     schedulePersist(get);
   },
 

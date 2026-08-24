@@ -6,7 +6,6 @@ import type { TrackSummary } from "@/lib/api-client";
 import { usePlayerStore } from "@/lib/store/player";
 import { useTagEditorStore } from "@/lib/store/tagEditor";
 import { PlayingIcon } from "@/components/shell/PlayerIcons";
-import { FormatBadge } from "./FormatBadge";
 
 export function TrackList({ tracks }: { tracks: TrackSummary[] }) {
   const currentTrackId = usePlayerStore((s) => s.currentTrack?.id);
@@ -15,80 +14,85 @@ export function TrackList({ tracks }: { tracks: TrackSummary[] }) {
   const openTagEditor = useTagEditorStore((s) => s.open);
 
   return (
-    <table className="w-full border-collapse text-sm">
-      <thead>
-        <tr className="border-b border-line text-left text-xs text-t3">
-          <th className="w-10 py-2 pr-2 font-normal">#</th>
-          <th className="py-2 pr-4 font-normal">Title</th>
-          <th className="py-2 pr-4 font-normal">Album</th>
-          <th className="w-20 py-2 pr-4 font-normal">Format</th>
-          <th className="w-24 py-2 pr-4 font-normal">Rate</th>
-          <th className="w-16 py-2 pr-2 text-right font-normal">Time</th>
-          <th className="w-8 py-2 pr-2 font-normal" aria-hidden />
-        </tr>
-      </thead>
-      <tbody>
-        {tracks.map((track, i) => {
-          const isCurrent = track.id === currentTrackId;
-          return (
-            <tr
-              key={track.id}
-              onClick={() => !track.missing && playTrack(track, tracks)}
-              className={`group border-b border-line last:border-b-0 hover:bg-surf-2 ${track.missing ? "cursor-not-allowed opacity-40" : "cursor-pointer"} ${isCurrent ? "bg-[var(--lf-tint)]" : ""}`}
-              title={track.missing ? "File missing on disk" : undefined}
-            >
-              <td className="py-2 pr-2 font-mono text-xs text-t3">{isCurrent && isPlaying ? <PlayingIcon /> : i + 1}</td>
-              <td className={`min-w-0 max-w-0 truncate py-2 pr-4 ${isCurrent ? "text-playing" : "text-t1"}`}>
+    <div>
+      <div className="mb-2 grid grid-cols-[32px_1fr_200px_120px_84px_64px_32px] gap-3 border-b border-line px-3 pb-2 text-[11px] font-medium uppercase tracking-[0.04em] text-t3">
+        <span>#</span>
+        <span>Title</span>
+        <span>Album</span>
+        <span>Format</span>
+        <span>Rate</span>
+        <span className="text-right">Time</span>
+        <span aria-hidden />
+      </div>
+      {tracks.map((track, i) => {
+        const isCurrent = track.id === currentTrackId;
+        return (
+          <div
+            key={track.id}
+            onClick={() => !track.missing && playTrack(track, tracks)}
+            onKeyDown={(e) => {
+              if ((e.key === "Enter" || e.key === " ") && !track.missing) {
+                e.preventDefault();
+                playTrack(track, tracks);
+              }
+            }}
+            role="button"
+            tabIndex={track.missing ? -1 : 0}
+            aria-label={`Play ${track.title ?? "Untitled"}`}
+            className={`group grid grid-cols-[32px_1fr_200px_120px_84px_64px_32px] items-center gap-3 rounded-lg border border-transparent px-3 py-3 ${
+              track.missing ? "cursor-not-allowed opacity-40" : "cursor-pointer hover:border-line hover:bg-surf-2"
+            } ${isCurrent ? "bg-[var(--lf-tint)]" : ""}`}
+            title={track.missing ? "File missing on disk" : undefined}
+          >
+            <span className={`font-mono text-xs ${isCurrent ? "text-playing" : "text-t3"}`}>
+              {isCurrent && isPlaying ? <PlayingIcon /> : String(i + 1).padStart(2, "0")}
+            </span>
+            <div className="min-w-0">
+              <p className={`truncate text-sm leading-[1.5] ${isCurrent ? "text-playing" : "text-t1"}`}>
                 {track.title ?? "Untitled"}
-                {track.artistId ? (
-                  <Link
-                    href={`/artists/${track.artistId}`}
-                    onClick={(e) => e.stopPropagation()}
-                    className="ml-2 truncate text-t3 hover:text-acc-text hover:underline"
-                  >
-                    {track.artistName}
-                  </Link>
-                ) : (
-                  <span className="ml-2 truncate text-t3">{track.artistName}</span>
-                )}
-              </td>
-              <td className="min-w-0 max-w-0 truncate py-2 pr-4 text-t2">
-                {track.albumId ? (
-                  <Link
-                    href={`/albums/${track.albumId}`}
-                    onClick={(e) => e.stopPropagation()}
-                    className="hover:text-acc-text hover:underline"
-                  >
-                    {track.albumTitle ?? "—"}
-                  </Link>
-                ) : (
-                  (track.albumTitle ?? "—")
-                )}
-              </td>
-              <td className="py-2 pr-4">
-                <FormatBadge format={track.format} lossless={track.lossless} />
-              </td>
-              <td className="py-2 pr-4 font-mono text-xs text-t2">{formatRate(track)}</td>
-              <td className="py-2 pr-2 text-right font-mono text-xs text-t2">{formatDuration(track.durationSeconds)}</td>
-              <td className="py-2 pr-2 text-right">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openTagEditor(track.id);
-                  }}
-                  aria-label="Edit tags"
-                  title="Edit tags"
-                  className="rounded-md p-1 text-t3 opacity-0 hover:bg-surf hover:text-t1 group-hover:opacity-100 focus:opacity-100"
+              </p>
+              {track.artistId ? (
+                <Link
+                  href={`/artists/${track.artistId}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="block truncate font-mono text-xs text-t3 hover:text-acc-text"
                 >
-                  <EditIcon />
-                </button>
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+                  {track.artistName}
+                </Link>
+              ) : (
+                <span className="block truncate font-mono text-xs text-t3">{track.artistName}</span>
+              )}
+            </div>
+            <span className="min-w-0 truncate text-sm text-t2">
+              {track.albumId ? (
+                <Link href={`/albums/${track.albumId}`} onClick={(e) => e.stopPropagation()} className="hover:text-acc-text">
+                  {track.albumTitle ?? "—"}
+                </Link>
+              ) : (
+                (track.albumTitle ?? "—")
+              )}
+            </span>
+            <span className={`truncate font-mono text-xs ${track.lossless ? "text-ok" : "text-warn"}`}>
+              {track.format.toUpperCase()}
+            </span>
+            <span className="font-mono text-xs text-t3">{formatRate(track)}</span>
+            <span className="text-right font-mono text-xs text-t2">{formatDuration(track.durationSeconds)}</span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                openTagEditor(track.id);
+              }}
+              aria-label="Edit tags"
+              title="Edit tags"
+              className="rounded-md p-1 text-t3 opacity-0 hover:bg-surf hover:text-t1 group-hover:opacity-100 focus:opacity-100"
+            >
+              <EditIcon />
+            </button>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

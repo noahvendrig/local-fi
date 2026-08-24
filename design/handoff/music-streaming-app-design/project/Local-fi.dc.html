@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="./image-slot.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:#0C0B0A;font-family:Inter,system-ui,sans-serif;
+--bg:#121110;--surf:#1B1815;--surf2:#221E19;--line:#2E2925;--t1:#F5EFE4;--t2:#A89F91;--t3:#6B6358;
+--acc:#D97B4F;--acc2:#E8935F;--accText:#D97B4F;--onAcc:#1B1815;--gold:#F2B705;--playing:#F2B705;--ok:#7C9473;--warn:#D9A441;--err:#C1543C;--okDark:#7C9473;--warnDark:#D9A441;--glass:rgba(18,17,16,.87);--artShadow:0 8px 20px rgba(20,15,10,.32);--artShadowLg:0 24px 56px rgba(20,15,10,.52);
+--shadow:0 18px 48px rgba(20,15,10,.35);--top:inset 0 1px 0 rgba(255,255,255,.04);
+--tint:rgba(217,123,79,.12);--ring:rgba(232,147,95,.10);--glowA:rgba(217,123,79,.30);--glowB:rgba(242,183,5,.16);
+--canvas:#0C0B0A;--canvasTxt:#8C8378;--hatchA:#221E19;--hatchB:#191612}
+body[data-theme="light"]{background:#EDE6DA;--playing:#8A5A00;--accText:#A0521F;--ok:#4F6B46;--warn:#8A6417;--err:#A33726;
+--bg:#FAF6EF;--surf:#FFFFFF;--surf2:#F3EDE3;--line:#E5DDD0;--t1:#221E19;--t2:#6B6358;--t3:#6B6358;--t4:#A89F91;
+--shadow:0 18px 48px rgba(20,15,10,.20);--top:inset 0 1px 0 rgba(255,255,255,.7);
+--glass:rgba(250,246,239,.90);--artShadow:0 8px 20px rgba(20,15,10,.14);--artShadowLg:0 24px 56px rgba(20,15,10,.20);--canvas:#EDE6DA;--canvasTxt:#6B6358;--hatchA:#EFE8DC;--hatchB:#E3DACB}
+a{color:var(--accText);text-decoration:none}a:hover{color:var(--acc2)}
+image-slot{--is-radius:16px}
+@keyframes lfspin{to{transform:rotate(360deg)}}
+@keyframes lfrise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+</style></helmet>
+
+<section style="padding:40px 44px 36px;font-family:Inter,sans-serif;border-bottom:1px solid rgba(128,128,128,.18)">
+<div style="display:flex;align-items:baseline;gap:12px;margin:0 0 8px">
+<span style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:var(--acc);color:var(--onAcc);border-radius:4px">2</span>
+<span style="font:500 13px Inter,sans-serif;color:var(--canvasTxt)">Alternative colour schemes &mdash; no green, no orange</span>
+</div>
+<p style="max-width:680px;margin:0 0 26px;font:400 12.5px/1.6 Inter,sans-serif;color:var(--canvasTxt);text-wrap:pretty">Each scheme keeps the structure of the spec &mdash; a near-black tinted base, one action accent, one playback accent, hairline borders &mdash; and only moves the hue. Click any card to retint every board below it, then use the mode toggle to check its Daylight pair.</p>
+<div style="display:flex;gap:24px;flex-wrap:wrap">
+  <sc-for list="{{ palettes }}" as="p" hint-placeholder-count="4">
+    <div id="{{ p.id }}" style="width:344px;display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font:600 10.5px ui-monospace,monospace;padding:3px 7px;border-radius:5px;background:{{ p.badgeBg }};color:{{ p.badgeFg }}">{{ p.id }}</span>
+        <span style="font:400 11px Inter,sans-serif;color:var(--canvasTxt)">{{ p.tag }}</span>
+      </div>
+      <div onClick="{{ p.apply }}" style="border-radius:16px;overflow:hidden;border:1px solid {{ p.cardBd }};background:{{ p.bg }};cursor:pointer;box-shadow:{{ p.cardShadow }}">
+        <div style="padding:18px 18px 14px">
+          <div style="font:500 22px/1.2 Fraunces,serif;color:{{ p.t1 }};margin-bottom:5px">{{ p.name }}</div>
+          <div style="font:400 11px JetBrains Mono,monospace;color:{{ p.t2 }}">{{ p.hues }}</div>
+        </div>
+        <div style="display:flex;gap:0;padding:0 18px 16px">
+          <sc-for list="{{ p.swatches }}" as="s" hint-placeholder-count="6">
+            <div style="flex:1">
+              <div style="height:34px;background:{{ s.hex }};border:1px solid {{ s.bd }};border-right:none"></div>
+              <div style="font:400 8.5px JetBrains Mono,monospace;color:{{ s.label }};padding-top:5px;text-align:center">{{ s.role }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="margin:0 18px 16px;padding:14px;border-radius:16px;border:1px solid {{ p.line }};background:{{ p.surf }}">
+          <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px">
+            <div style="width:52px;height:52px;flex:none;border-radius:12px;background:repeating-linear-gradient(45deg,{{ p.hatchA }},{{ p.hatchA }} 4px,{{ p.hatchB }} 4px,{{ p.hatchB }} 8px)"></div>
+            <div style="min-width:0;flex:1">
+              <div style="font:400 14px Inter,sans-serif;color:{{ p.playing }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">What&rsquo;s Going On</div>
+              <div style="font:400 12px JetBrains Mono,monospace;color:{{ p.t3 }}">Marvin Gaye &middot; FLAC</div>
+            </div>
+            <div style="width:32px;height:32px;flex:none;border-radius:50%;background:{{ p.acc }};color:{{ p.onAcc }};display:grid;place-items:center;font-size:11px">&#x275A;&#x275A;</div>
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:2px;height:30px">
+            <sc-for list="{{ p.bars }}" as="b" hint-placeholder-count="40">
+              <div style="flex:1;border-radius:1px;height:{{ b.h }};background:{{ b.bg }}"></div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:0 18px 18px">
+          <div style="padding:8px 12px;border-radius:8px;background:{{ p.acc }};color:{{ p.onAcc }};font:600 12px Inter,sans-serif">{{ p.cta }}</div>
+          <span style="font:400 11px JetBrains Mono,monospace;color:{{ p.t3 }}">{{ p.note }}</span>
+        </div>
+      </div>
+    </div>
+  </sc-for>
+</div>
+</section>
+
+<section style="padding:40px 44px 56px;font-family:Inter,sans-serif">
+<div style="display:flex;align-items:baseline;gap:12px;margin:0 0 8px">
+<span style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:var(--acc);color:var(--onAcc);border-radius:4px">1</span>
+<span style="font:500 13px Inter,sans-serif;color:var(--canvasTxt)">local-fi &middot; {{ schemeName }}</span>
+</div>
+<p style="max-width:680px;margin:0 0 32px;font:400 12.5px/1.6 Inter,sans-serif;color:var(--canvasTxt);text-wrap:pretty">The attached <code style="font:400 12px JetBrains Mono,monospace">local-fi</code> folder held no source, so this is built entirely from your written spec. Desktop shell is live &mdash; nav switches views, tracks play, the queue rail and Now Playing open for real. Mobile frames below are static. Six album sleeves are drop-zones; the rest are hatched placeholders.</p>
+
+<div style="display:flex;flex-direction:column;gap:14px;margin-bottom:44px">
+<div style="display:flex;align-items:center;gap:10px">
+<span style="font:600 10.5px ui-monospace,monospace;padding:3px 7px;background:var(--surf2);color:var(--accText);border-radius:5px">1a</span>
+<span style="font:400 11px Inter,sans-serif;color:var(--canvasTxt)">Desktop &mdash; Command Deck shell, clickable</span>
+<div style="flex:1"></div>
+<button onClick="{{ toggleTheme }}" style="font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surf);color:var(--t2);cursor:pointer" style-hover="border-color:var(--acc);color:var(--t1)">{{ themeLabel }}</button>
+</div>
+
+<div style="position:relative;width:1440px;height:920px;border-radius:16px;overflow:hidden;border:1px solid var(--line);background:var(--bg);box-shadow:var(--shadow);display:flex;flex-direction:column;color:var(--t1)">
+
+  <div style="flex:1;display:flex;min-height:0">
+    <!-- nav rail -->
+    <nav style="width:240px;flex:none;border-right:1px solid var(--line);background:var(--bg);display:flex;flex-direction:column;padding:20px 12px 16px">
+      <div style="display:flex;align-items:center;gap:9px;padding:0 8px 20px">
+        <div style="width:22px;height:22px;border-radius:50%;border:1px solid var(--acc);display:grid;place-items:center"><div style="width:5px;height:5px;border-radius:50%;background:var(--acc)"></div></div>
+        <span style="font:500 19px/1 Fraunces,serif;color:var(--t1)">local&#8209;fi</span>
+      </div>
+      <button onClick="{{ goUpload }}" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 12px;margin-bottom:20px;border-radius:8px;border:1px solid var(--acc);background:var(--acc);color:var(--onAcc);font:600 13px Inter,sans-serif;cursor:pointer;box-shadow:var(--top)" style-hover="background:var(--acc2);border-color:var(--acc2)">
+        <span style="font:500 15px/1 Inter">&#8593;</span>Import files
+      </button>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <sc-for list="{{ nav }}" as="n" hint-placeholder-count="6">
+          <button onClick="{{ n.go }}" style="display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:8px;border:1px solid {{ n.bd }};background:{{ n.bg }};color:{{ n.fg }};font:{{ n.font }};cursor:pointer;text-align:left;width:100%" style-hover="background:var(--surf2)">
+            <span style="width:16px;text-align:center;font-size:13px;opacity:.85">{{ n.icon }}</span>{{ n.label }}
+            <div style="flex:1"></div>
+            <span style="font:400 11px JetBrains Mono,monospace;color:var(--t3)">{{ n.count }}</span>
+          </button>
+        </sc-for>
+      </div>
+      <div style="margin:24px 8px 12px;font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--t3)">Crates</div>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <sc-for list="{{ crates }}" as="c" hint-placeholder-count="4">
+          <button onClick="{{ c.go }}" style="display:flex;align-items:center;gap:9px;padding:7px 12px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--t2);font:400 13px Inter,sans-serif;cursor:pointer;text-align:left;width:100%;white-space:nowrap" style-hover="background:var(--surf2);color:var(--t1)">
+            <span style="width:6px;height:6px;border-radius:2px;background:{{ c.dot }};flex:none"></span>{{ c.name }}
+          </button>
+        </sc-for>
+      </div>
+      <div style="flex:1"></div>
+      <div style="padding:12px;border:1px solid var(--line);border-radius:8px;margin-bottom:10px;background:var(--surf)">
+        <div style="display:flex;justify-content:space-between;font:400 11px JetBrains Mono,monospace;color:var(--t2);margin-bottom:7px"><span>{{ scanLabel }}</span><span style="color:var(--playing)">{{ scanPct }}</span></div>
+        <div style="height:3px;border-radius:2px;background:var(--surf2);overflow:hidden"><div style="height:100%;width:{{ scanPct }};background:var(--playing)"></div></div>
+      </div>
+      <button onClick="{{ goHealth }}" style="display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--t2);font:400 13px Inter,sans-serif;cursor:pointer;text-align:left;width:100%" style-hover="background:var(--surf2);color:var(--t1)"><span style="width:16px;text-align:center">&#9881;</span>Settings &amp; health</button>
+    </nav>
+
+    <!-- main -->
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg)">
+      <header style="flex:none;display:flex;align-items:center;gap:16px;padding:22px 40px 18px">
+        <h1 style="margin:0;font:700 28px/1.2 Inter,sans-serif;color:var(--t1);white-space:nowrap">{{ pageTitle }}</h1>
+        <span style="font:400 12px JetBrains Mono,monospace;color:var(--t3);padding-top:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ pageMeta }}</span>
+        <div style="flex:1"></div>
+        <button onClick="{{ openCmdk }}" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surf);color:var(--t2);font:400 13px Inter,sans-serif;cursor:pointer;min-width:190px" style-hover="border-color:var(--acc);color:var(--t1)">
+          <span>&#9906;</span>Search library<div style="flex:1"></div><span style="font:400 11px JetBrains Mono,monospace;color:var(--t3)">&#8984;K</span>
+        </button>
+        <div style="display:flex;padding:3px;gap:2px;border-radius:8px;border:1px solid var(--line);background:var(--surf)">
+          <button onClick="{{ goGrid }}" style="padding:6px 11px;border-radius:5px;border:none;cursor:pointer;font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;background:{{ gridTabBg }};color:{{ gridTabFg }}">Grid</button>
+          <button onClick="{{ goList }}" style="padding:6px 11px;border-radius:5px;border:none;cursor:pointer;font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;background:{{ listTabBg }};color:{{ listTabFg }}">List</button>
+        </div>
+      </header>
+
+      <div style="flex:1;min-height:0;overflow:auto;padding:0 40px 32px">
+
+        <!-- GRID -->
+        <sc-if value="{{ isGrid }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;margin:6px 0 16px">
+              <h2 style="margin:0;font:600 20px/1.3 Inter,sans-serif;color:var(--t1)">Recently added</h2>
+              <span style="font:400 12px JetBrains Mono,monospace;color:var(--t3)">last 30 days</span>
+            </div>
+            <div style="display:grid;grid-template-columns:{{ gridCols }};gap:24px">
+              <sc-for list="{{ albums }}" as="a" hint-placeholder-count="8">
+                <div onClick="{{ a.open }}" style="min-width:0;border-radius:16px;padding:16px;border:1px solid var(--line);background:var(--surf);cursor:pointer;box-shadow:var(--top);transition:background 150ms ease,border-color 150ms ease" style-hover="background:var(--surf2);border-color:#3A342D">
+                  <div style="position:relative;aspect-ratio:1;border-radius:20px;overflow:hidden;box-shadow:var(--artShadow);background:repeating-linear-gradient(45deg,var(--hatchA),var(--hatchA) 5px,var(--hatchB) 5px,var(--hatchB) 10px)">
+                    <sc-if value="{{ a.hero }}" hint-placeholder-val="{{ false }}">
+                      <image-slot id="{{ a.slot }}" shape="rounded" radius="20" placeholder="{{ a.slotHint }}" style="width:100%;height:100%"></image-slot>
+                    </sc-if>
+                    <sc-if value="{{ a.hatch }}" hint-placeholder-val="{{ true }}">
+                      <div style="position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:12px">
+                        <span style="font:400 10.5px/1.4 JetBrains Mono,monospace;color:var(--t3)">{{ a.hatchLabel }}</span>
+                      </div>
+                    </sc-if>
+                    <div style="position:absolute;left:10px;top:10px;padding:3px 7px;border-radius:4px;background:var(--surf);border:1px solid var(--line);font:400 10px JetBrains Mono,monospace;color:{{ a.fmtColor }}">{{ a.fmt }}</div>
+                  </div>
+                  <div style="display:flex;align-items:flex-start;gap:8px;margin-top:14px">
+                    <div style="min-width:0;flex:1">
+                      <div style="font:600 16px/1.4 Inter,sans-serif;color:{{ a.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.title }}</div>
+                      <div style="font:400 14px/1.5 Inter,sans-serif;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.artist }}</div>
+                    </div>
+                    <span style="font:400 12px JetBrains Mono,monospace;color:var(--t3);padding-top:3px">{{ a.year }}</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- LIST -->
+        <sc-if value="{{ isList }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 20px">
+              <sc-for list="{{ chips }}" as="ch" hint-placeholder-count="6">
+                <button onClick="{{ ch.toggle }}" style="padding:6px 11px;border-radius:4px;border:1px solid {{ ch.bd }};background:{{ ch.bg }};color:{{ ch.fg }};font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;cursor:pointer" style-hover="border-color:var(--acc2)">{{ ch.label }}</button>
+              </sc-for>
+              <div style="flex:1"></div>
+              <span style="font:400 12px JetBrains Mono,monospace;color:var(--t3);align-self:center">{{ listCount }}</span>
+            </div>
+            <div style="display:grid;grid-template-columns:32px 1fr 200px 120px 84px 64px;gap:12px;padding:0 12px 8px;border-bottom:1px solid var(--line);font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--t3)">
+              <span>#</span><span>Title</span><span>Album</span><span>Format</span><span>Rate</span><span style="text-align:right">Time</span>
+            </div>
+            <sc-for list="{{ rows }}" as="r" hint-placeholder-count="9">
+              <div onClick="{{ r.play }}" style="display:grid;grid-template-columns:32px 1fr 200px 120px 84px 64px;gap:12px;align-items:center;padding:12px;border-radius:8px;border:1px solid transparent;cursor:pointer" style-hover="background:var(--surf2);border-color:var(--line)">
+                <span style="font:400 12px JetBrains Mono,monospace;color:{{ r.numColor }}">{{ r.num }}</span>
+                <div style="min-width:0">
+                  <div style="font:400 14px/1.5 Inter,sans-serif;color:{{ r.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.title }}</div>
+                  <div style="font:400 12px JetBrains Mono,monospace;color:var(--t3)">{{ r.artist }}</div>
+                </div>
+                <span style="font:400 14px Inter,sans-serif;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.album }}</span>
+                <span style="font:400 12px JetBrains Mono,monospace;color:{{ r.fmtColor }}">{{ r.fmt }}</span>
+                <span style="font:400 12px JetBrains Mono,monospace;color:var(--t3)">{{ r.kbps }}</span>
+                <span style="font:400 12px JetBrains Mono,monospace;color:var(--t2);text-align:right">{{ r.dur }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- ALBUM DETAIL -->
+        <sc-if value="{{ isAlbum }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <div style="display:flex;gap:32px;padding:8px 0 32px">
+              <div style="width:260px;flex:none">
+                <div style="aspect-ratio:1;border-radius:20px;overflow:hidden;box-shadow:var(--artShadow);background:repeating-linear-gradient(45deg,var(--hatchA),var(--hatchA) 5px,var(--hatchB) 5px,var(--hatchB) 10px)">
+                  <image-slot id="lf-detail-art" shape="rounded" radius="20" placeholder="album sleeve &middot; 1:1" style="width:100%;height:100%"></image-slot>
+                </div>
+              </div>
+              <div style="flex:1;min-width:0;padding-top:6px">
+                <div style="font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);margin-bottom:10px">Album &middot; 1971</div>
+                <div style="font:500 40px/1.1 Fraunces,serif;color:var(--t1);margin-bottom:10px">What&rsquo;s Going On</div>
+                <div style="font:400 14px/1.5 Inter,sans-serif;color:var(--t2);margin-bottom:18px">Marvin Gaye</div>
+                <div style="display:flex;gap:14px;font:400 12px JetBrains Mono,monospace;color:var(--t3);margin-bottom:24px">
+                  <span>9 tracks</span><span>35:32</span><span style="color:var(--ok)">FLAC 24/96</span><span>/Music/Soul/Gaye_1971</span>
+                </div>
+                <div style="display:flex;gap:10px">
+                  <button onClick="{{ playAlbum }}" style="display:flex;align-items:center;gap:9px;padding:11px 20px;border-radius:8px;border:1px solid var(--acc);background:var(--acc);color:var(--onAcc);font:600 13px Inter,sans-serif;cursor:pointer;box-shadow:var(--top)" style-hover="background:var(--acc2);border-color:var(--acc2)">&#9654; Play album</button>
+                  <button onClick="{{ openQueue }}" style="padding:11px 16px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--t1);font:500 13px Inter,sans-serif;cursor:pointer" style-hover="border-color:var(--acc);background:var(--surf2)">Add to queue</button>
+                  <button onClick="{{ openTags }}" style="padding:11px 16px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--t1);font:500 13px Inter,sans-serif;cursor:pointer" style-hover="border-color:var(--acc);background:var(--surf2)">Edit tags</button>
+                </div>
+              </div>
+            </div>
+            <sc-for list="{{ albumRows }}" as="r" hint-placeholder-count="9">
+              <div onClick="{{ r.play }}" style="display:grid;grid-template-columns:32px 1fr 120px 64px;gap:16px;align-items:center;padding:12px;border-radius:8px;border:1px solid transparent;cursor:pointer" style-hover="background:var(--surf2);border-color:var(--line)">
+                <span style="font:400 12px JetBrains Mono,monospace;color:{{ r.numColor }}">{{ r.num }}</span>
+                <span style="font:400 14px Inter,sans-serif;color:{{ r.titleColor }}">{{ r.title }}</span>
+                <span style="font:400 12px JetBrains Mono,monospace;color:var(--t3)">{{ r.kbps }}</span>
+                <span style="font:400 12px JetBrains Mono,monospace;color:var(--t2);text-align:right">{{ r.dur }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- UPLOAD -->
+        <sc-if value="{{ isUpload }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <div onClick="{{ toggleDrag }}" style="border-radius:16px;padding:48px;text-align:center;cursor:pointer;border:{{ dzBorder }};background:{{ dzBg }};box-shadow:{{ dzGlow }};transition:all 150ms ease">
+              <div style="font:500 40px/1.1 Fraunces,serif;color:var(--t1);margin-bottom:12px">{{ dzTitle }}</div>
+              <div style="font:400 14px/1.5 Inter,sans-serif;color:var(--t2);margin-bottom:6px">{{ dzSub }}</div>
+              <div style="font:400 12px JetBrains Mono,monospace;color:var(--t3)">FLAC &middot; ALAC &middot; MP3 &middot; WAV &middot; AIFF &middot; OGG</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;margin:32px 0 14px">
+              <h2 style="margin:0;font:600 20px/1.3 Inter,sans-serif;color:var(--t1)">Ingest tray</h2>
+              <span style="font:400 12px JetBrains Mono,monospace;color:var(--t3)">4 of 6 processed</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <sc-for list="{{ ingest }}" as="f" hint-placeholder-count="6">
+                <div style="display:grid;grid-template-columns:44px 1fr 150px 92px 74px;gap:14px;align-items:center;padding:12px;border-radius:8px;border:1px solid var(--line);background:var(--surf);box-shadow:var(--top)">
+                  <div style="height:32px;border-radius:4px;background:repeating-linear-gradient(90deg,{{ f.wave }},{{ f.wave }} 2px,transparent 2px,transparent 4px);opacity:.9"></div>
+                  <div style="min-width:0">
+                    <div style="font:400 14px Inter,sans-serif;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.name }}</div>
+                    <div style="font:400 12px JetBrains Mono,monospace;color:{{ f.stColor }}">{{ f.status }}</div>
+                  </div>
+                  <div style="height:4px;border-radius:2px;background:var(--surf2);overflow:hidden"><div style="height:100%;width:{{ f.pct }};background:{{ f.stColor }}"></div></div>
+                  <span style="font:400 12px JetBrains Mono,monospace;color:var(--t3)">{{ f.fmt }}</span>
+                  <span style="font:400 12px JetBrains Mono,monospace;color:var(--t3);text-align:right">{{ f.size }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- CRATES -->
+        <sc-if value="{{ isCrate }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:760px">
+            <div style="display:flex;gap:8px;margin:6px 0 20px">
+              <div style="flex:1;padding:11px 14px;border-radius:8px;border:1px dashed var(--line);color:var(--t3);font:400 14px Inter,sans-serif">Search to add a track&hellip;</div>
+              <button style="padding:11px 16px;border-radius:8px;border:1px solid var(--line);background:var(--surf);color:var(--t1);font:500 13px Inter,sans-serif;cursor:pointer" style-hover="border-color:var(--acc)">+ Rule</button>
+            </div>
+            <div style="padding:12px 14px;border-radius:8px;border:1px solid var(--playing);background:var(--tint);margin-bottom:16px;display:flex;gap:12px;align-items:center">
+              <span style="font:400 11px JetBrains Mono,monospace;color:var(--playing)">SMART RULE</span>
+              <span style="font:400 14px Inter,sans-serif;color:var(--t1)">Format is lossless</span>
+              <span style="font:400 12px JetBrains Mono,monospace;color:var(--t3)">AND</span>
+              <span style="font:400 14px Inter,sans-serif;color:var(--t1)">Added within 30 days</span>
+            </div>
+            <sc-for list="{{ rows }}" as="r" hint-placeholder-count="8">
+              <div style="display:grid;grid-template-columns:20px 1fr 130px 64px;gap:14px;align-items:center;padding:12px;border-radius:8px;border:1px solid transparent;cursor:grab" style-hover="background:var(--surf2);border-color:var(--line)">
+                <span style="font:400 13px Inter;color:var(--t3);letter-spacing:2px">&#8942;&#8942;</span>
+                <div><div style="font:400 14px Inter,sans-serif;color:var(--t1)">{{ r.title }}</div><div style="font:400 12px JetBrains Mono,monospace;color:var(--t3)">{{ r.artist }}</div></div>
+                <span style="font:400 12px JetBrains Mono,monospace;color:{{ r.fmtColor }}">{{ r.fmt }}</span>
+                <span style="font:400 12px JetBrains Mono,monospace;color:var(--t2);text-align:right">{{ r.dur }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- HEALTH -->
+        <sc-if value="{{ isHealth }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:860px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;gap:12px;margin:6px 0 14px">
+              <sc-for list="{{ healthStats }}" as="s" hint-placeholder-count="3">
+                <div style="flex:1;padding:16px;border-radius:16px;border:1px solid var(--line);background:var(--surf);box-shadow:var(--top)">
+                  <div style="font:400 12px JetBrains Mono,monospace;color:{{ s.color }};margin-bottom:8px">{{ s.count }}</div>
+                  <div style="font:600 16px Inter,sans-serif;color:var(--t1)">{{ s.label }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <sc-for list="{{ healthRows }}" as="h" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:8px 1fr 160px 110px;gap:14px;align-items:center;padding:14px;border-radius:8px;border:1px solid var(--line);background:var(--surf)">
+                <span style="width:8px;height:8px;border-radius:50%;background:{{ h.color }}"></span>
+                <div><div style="font:400 14px Inter,sans-serif;color:var(--t1)">{{ h.title }}</div><div style="font:400 12px JetBrains Mono,monospace;color:var(--t3)">{{ h.path }}</div></div>
+                <span style="font:400 12px JetBrains Mono,monospace;color:{{ h.color }}">{{ h.issue }}</span>
+                <button style="padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--t1);font:500 12px Inter,sans-serif;cursor:pointer" style-hover="border-color:var(--acc);background:var(--surf2)">{{ h.action }}</button>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+      </div>
+    </main>
+
+    <!-- right rail -->
+    <sc-if value="{{ queueOpen }}" hint-placeholder-val="{{ false }}">
+      <aside style="width:360px;flex:none;border-left:1px solid var(--line);background:var(--surf);display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:4px;padding:16px 16px 12px;border-bottom:1px solid var(--line)">
+          <sc-for list="{{ railTabs }}" as="t" hint-placeholder-count="3">
+            <button onClick="{{ t.go }}" style="padding:6px 10px;border-radius:4px;border:none;cursor:pointer;font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;background:{{ t.bg }};color:{{ t.fg }}">{{ t.label }}</button>
+          </sc-for>
+          <div style="flex:1"></div>
+          <button onClick="{{ closeQueue }}" style="border:none;background:transparent;color:var(--t3);cursor:pointer;font-size:15px" style-hover="color:var(--t1)">&times;</button>
+        </div>
+        <div style="flex:1;overflow:auto;padding:12px">
+          <div style="font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);padding:4px 8px 10px">Now playing</div>
+          <div style="display:flex;gap:12px;padding:8px;border-radius:8px;background:var(--surf2);margin-bottom:16px">
+            <div style="width:48px;height:48px;flex:none;border-radius:10px;background:repeating-linear-gradient(45deg,var(--hatchA),var(--hatchA) 4px,var(--hatchB) 4px,var(--hatchB) 8px)"></div>
+            <div style="min-width:0;flex:1">
+              <div style="font:400 14px Inter,sans-serif;color:var(--playing);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ cur.title }}</div>
+              <div style="font:400 12px JetBrains Mono,monospace;color:var(--t3)">{{ cur.artist }}</div>
+            </div>
+          </div>
+          <div style="font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);padding:4px 8px 10px">Up next &middot; drag to reorder</div>
+          <sc-for list="{{ queue }}" as="q" hint-placeholder-count="6">
+            <div style="display:grid;grid-template-columns:18px 1fr 56px;gap:10px;align-items:center;padding:10px 8px;border-radius:8px;cursor:grab" style-hover="background:var(--surf2)">
+              <span style="font:400 12px Inter;color:var(--t3);letter-spacing:2px">&#8942;&#8942;</span>
+              <div style="min-width:0"><div style="font:400 14px Inter,sans-serif;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ q.title }}</div><div style="font:400 12px JetBrains Mono,monospace;color:var(--t3)">{{ q.artist }}</div></div>
+              <span style="font:400 12px JetBrains Mono,monospace;color:var(--t3);text-align:right">{{ q.dur }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </aside>
+    </sc-if>
+  </div>
+
+  <!-- transport -->
+  <div style="flex:none;height:88px;display:flex;align-items:center;gap:24px;padding:0 24px;border-top:1px solid var(--line);background:var(--surf);box-shadow:0 -10px 30px rgba(20,15,10,.28)">
+    <div onClick="{{ openNP }}" style="display:flex;align-items:center;gap:12px;width:250px;flex:none;cursor:pointer">
+      <div style="width:56px;height:56px;border-radius:12px;overflow:hidden;flex:none;box-shadow:var(--artShadow);background:repeating-linear-gradient(45deg,var(--hatchA),var(--hatchA) 4px,var(--hatchB) 4px,var(--hatchB) 8px)"></div>
+      <div style="min-width:0">
+        <div style="font:400 14px Inter,sans-serif;color:{{ cur.color }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ cur.title }}</div>
+        <div style="font:400 12px JetBrains Mono,monospace;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ cur.artist }}</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;flex:none;color:var(--t2)">
+      <button style="border:none;background:transparent;color:var(--t2);cursor:pointer;font-size:15px" style-hover="color:var(--t1)">&#9198;</button>
+      <button onClick="{{ togglePlay }}" style="width:40px;height:40px;border-radius:50%;border:1px solid var(--acc);background:var(--acc);color:var(--onAcc);cursor:pointer;font-size:14px;display:grid;place-items:center;box-shadow:var(--top)" style-hover="background:var(--acc2)">{{ playIcon }}</button>
+      <button style="border:none;background:transparent;color:var(--t2);cursor:pointer;font-size:15px" style-hover="color:var(--t1)">&#9197;</button>
+    </div>
+    <div style="flex:1;min-width:0;display:flex;align-items:center;gap:12px">
+      <span style="font:400 12px JetBrains Mono,monospace;color:var(--t2);flex:none">{{ elapsed }}</span>
+      <div onClick="{{ seek }}" onMouseMove="{{ hover }}" onMouseLeave="{{ hoverOut }}" style="position:relative;flex:1;height:40px;display:flex;align-items:flex-end;gap:2px;cursor:pointer">
+        <sc-for list="{{ bars }}" as="b" hint-placeholder-count="60">
+          <div style="flex:1;border-radius:1px;height:{{ b.h }};background:{{ b.bg }}"></div>
+        </sc-for>
+        <sc-if value="{{ hovering }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;left:{{ hoverX }};bottom:44px;transform:translateX(-50%);padding:5px 8px;border-radius:4px;background:var(--bg);border:1px solid var(--line);box-shadow:var(--shadow);font:400 11px JetBrains Mono,monospace;color:var(--t1);white-space:nowrap">{{ hoverTime }}</div>
+        </sc-if>
+        <sc-if value="{{ hovering }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;left:{{ hoverX }};top:0;bottom:0;width:1px;background:var(--acc2)"></div>
+        </sc-if>
+      </div>
+      <span style="font:400 12px JetBrains Mono,monospace;color:var(--t3);flex:none">{{ cur.dur }}</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;flex:none">
+      <span style="font:400 11px JetBrains Mono,monospace;color:var(--ok)">{{ cur.fmt }}</span>
+      <div style="display:flex;align-items:center;gap:8px;color:var(--t2)"><span style="font-size:14px">&#128264;</span><div style="width:72px;height:3px;border-radius:2px;background:var(--surf2)"><div style="width:64%;height:100%;background:var(--t2);border-radius:2px"></div></div></div>
+      <button style="padding:6px 10px;border-radius:4px;border:1px solid var(--line);background:transparent;color:var(--t2);font:400 11px JetBrains Mono,monospace;cursor:pointer" style-hover="border-color:var(--acc);color:var(--t1)">Living&nbsp;Room&nbsp;&#9662;</button>
+      <button onClick="{{ toggleEq }}" style="display:flex;align-items:center;gap:7px;padding:7px 11px;border-radius:8px;border:1px solid {{ eqBtnBd }};background:transparent;color:{{ eqBtnFg }};font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;white-space:nowrap" style-hover="border-color:var(--acc)">EQ<span style="font:400 10px JetBrains Mono,monospace;text-transform:none;letter-spacing:0;color:var(--t3)">{{ eqSummary }}</span></button>
+      <button onClick="{{ toggleQueue }}" style="padding:7px 11px;border-radius:8px;border:1px solid {{ qBtnBd }};background:transparent;color:{{ qBtnFg }};font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;cursor:pointer">Queue</button>
+      <button onClick="{{ openNP }}" style="border:none;background:transparent;color:var(--t2);cursor:pointer;font-size:15px" style-hover="color:var(--t1)">&#11021;</button>
+    </div>
+  </div>
+
+  <!-- EQ panel -->
+  <sc-if value="{{ eqOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;right:24px;bottom:104px;z-index:45;width:560px;border-radius:16px;border:1px solid var(--line);background:var(--surf);box-shadow:var(--shadow);padding:18px 20px 16px;animation:lfrise 180ms cubic-bezier(.22,1.3,.4,1)">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <span style="font:600 11px Inter,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--t1)">Equaliser</span>
+        <span style="font:400 11px JetBrains Mono,monospace;color:var(--t3)">10 band &middot; &plusmn;12 dB</span>
+        <div style="flex:1"></div>
+        <button onClick="{{ toggleBypass }}" style="padding:6px 11px;border-radius:8px;border:1px solid {{ eqBypassBd }};background:{{ eqBypassBg }};color:{{ eqBypassFg }};font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;cursor:pointer">{{ eqBypassLabel }}</button>
+        <button onClick="{{ resetEq }}" style="padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--t2);font:400 11px JetBrains Mono,monospace;cursor:pointer" style-hover="border-color:var(--acc);color:var(--t1)">Reset</button>
+        <button onClick="{{ closeEq }}" style="border:none;background:transparent;color:var(--t3);cursor:pointer;font-size:15px;line-height:1" style-hover="color:var(--t1)">&times;</button>
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">
+        <sc-for list="{{ eqPresets }}" as="p" hint-placeholder-count="8">
+          <button onClick="{{ p.pick }}" style="padding:6px 10px;border-radius:6px;border:1px solid {{ p.bd }};background:{{ p.bg }};color:{{ p.fg }};font:500 11px Inter,sans-serif;cursor:pointer;white-space:nowrap" style-hover="border-color:var(--acc)">{{ p.name }}</button>
+        </sc-for>
+      </div>
+
+      <div style="opacity:{{ eqOpacity }}">
+        <div style="position:relative;height:44px;margin:0 4px 6px;border-radius:8px;border:1px solid var(--line);background:var(--surf2);overflow:hidden">
+          <div style="position:absolute;left:0;right:0;top:50%;height:1px;background:var(--line)"></div>
+          <svg viewBox="0 0 100 40" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%">
+            <polyline points="{{ eqCurve }}" fill="none" stroke="var(--playing)" stroke-width="1" vector-effect="non-scaling-stroke" stroke-linejoin="round"></polyline>
+          </svg>
+        </div>
+
+        <div style="display:flex;gap:4px;align-items:stretch">
+          <sc-for list="{{ eqBands }}" as="b" hint-placeholder-count="10">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px">
+              <span style="font:400 10px JetBrains Mono,monospace;color:{{ b.gainFg }}">{{ b.gain }}</span>
+              <div onClick="{{ b.set }}" style="position:relative;width:100%;height:132px;cursor:ns-resize">
+                <div style="position:absolute;left:50%;transform:translateX(-50%);top:0;bottom:0;width:4px;border-radius:2px;background:var(--surf2)"></div>
+                <div style="position:absolute;left:0;right:0;top:50%;height:1px;background:var(--line)"></div>
+                <div style="position:absolute;left:50%;transform:translateX(-50%);width:4px;border-radius:2px;bottom:{{ b.fillBottom }};height:{{ b.fillHeight }};background:{{ b.color }}"></div>
+                <div style="position:absolute;left:50%;bottom:{{ b.thumbBottom }};transform:translate(-50%,50%);width:20px;height:8px;border-radius:3px;background:{{ b.thumbBg }};box-shadow:var(--artShadow)"></div>
+              </div>
+              <span style="font:400 10px JetBrains Mono,monospace;color:var(--t3)">{{ b.freq }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:12px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
+          <span style="font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--t2);flex:none">Pre-amp</span>
+          <div onClick="{{ setPreamp }}" style="position:relative;flex:1;height:20px;cursor:ew-resize;display:flex;align-items:center">
+            <div style="width:100%;height:4px;border-radius:2px;background:var(--surf2)"></div>
+            <div style="position:absolute;left:50%;top:2px;bottom:2px;width:1px;background:var(--line)"></div>
+            <div style="position:absolute;left:{{ eqPreampPct }};transform:translateX(-50%);width:8px;height:20px;border-radius:3px;background:var(--playing)"></div>
+          </div>
+          <span style="font:400 11px JetBrains Mono,monospace;color:var(--t2);flex:none;width:62px;text-align:right">{{ eqPreampLabel }}</span>
+        </div>
+      </div>
+      <div style="margin-top:12px;font:400 11px/1.5 JetBrains Mono,monospace;color:var(--t3)">Click a fader to set its gain &middot; applies to Living Room output &middot; saved per device</div>
+    </div>
+  </sc-if>
+
+  <!-- NOW PLAYING overlay -->
+  <sc-if value="{{ npOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:0;z-index:40;display:flex;flex-direction:column;background:radial-gradient(120% 90% at 22% 12%,var(--glowA),transparent 60%),radial-gradient(90% 80% at 82% 78%,var(--glowB),transparent 62%),var(--glass);backdrop-filter:blur(48px) saturate(140%);animation:lfrise 220ms cubic-bezier(.22,1.3,.4,1)">
+      <div style="display:flex;align-items:center;padding:20px 32px">
+        <button onClick="{{ closeNP }}" style="padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surf2);color:var(--t1);font:500 12px Inter,sans-serif;cursor:pointer">&#8595; Collapse</button>
+        <div style="flex:1"></div>
+        <span style="font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--t2)">Playing from &middot; Late night crate</span>
+      </div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:56px;padding:0 64px;min-height:0">
+        <div style="width:380px;height:380px;flex:none;border-radius:24px;overflow:hidden;box-shadow:var(--artShadowLg);background:repeating-linear-gradient(45deg,var(--hatchA),var(--hatchA) 6px,var(--hatchB) 6px,var(--hatchB) 12px)">
+          <image-slot id="lf-np-art" shape="rounded" radius="24" placeholder="now playing sleeve" style="width:100%;height:100%"></image-slot>
+        </div>
+        <div style="max-width:520px">
+          <div style="font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--playing);margin-bottom:14px">Now playing</div>
+          <div style="font:500 40px/1.1 Fraunces,serif;color:var(--t1);margin-bottom:12px">{{ cur.title }}</div>
+          <div style="font:400 14px/1.5 Inter,sans-serif;color:var(--t2);margin-bottom:20px">{{ cur.artist }} &middot; {{ cur.album }}</div>
+          <div style="display:flex;gap:14px;font:400 12px JetBrains Mono,monospace;color:var(--t3);margin-bottom:28px"><span style="color:var(--ok)">{{ cur.fmt }}</span><span>{{ cur.kbps }}</span><span>{{ cur.dur }}</span></div>
+          <div onClick="{{ seek }}" style="display:flex;align-items:flex-end;gap:2px;height:88px;cursor:pointer;margin-bottom:12px">
+            <sc-for list="{{ bars }}" as="b" hint-placeholder-count="60">
+              <div style="flex:1;border-radius:1px;height:{{ b.h }};background:{{ b.bg }}"></div>
+            </sc-for>
+          </div>
+          <div style="display:flex;justify-content:space-between;font:400 12px JetBrains Mono,monospace;color:var(--t2);margin-bottom:28px"><span>{{ elapsed }}</span><span>-{{ remaining }}</span></div>
+          <div style="display:flex;align-items:center;gap:20px">
+            <button style="border:none;background:transparent;color:var(--t2);cursor:pointer;font-size:20px">&#9198;</button>
+            <button onClick="{{ togglePlay }}" style="width:60px;height:60px;border-radius:50%;border:1px solid var(--acc);background:var(--acc);color:var(--onAcc);cursor:pointer;font-size:19px;display:grid;place-items:center;box-shadow:0 10px 26px rgba(20,15,10,.4)">{{ playIcon }}</button>
+            <button style="border:none;background:transparent;color:var(--t2);cursor:pointer;font-size:20px">&#9197;</button>
+            <div style="flex:1"></div>
+            <button onClick="{{ toggleQueue }}" style="padding:9px 14px;border-radius:8px;border:1px solid var(--line);background:var(--surf2);color:var(--t1);font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;cursor:pointer">Up next &#8593;</button>
+          </div>
+        </div>
+      </div>
+      <div style="flex:none;padding:16px 32px 22px;text-align:center;font:400 11px JetBrains Mono,monospace;color:var(--t3)">Glassmorphism used here only &middot; backdrop-filter blur(48px) over art-derived warm glow</div>
+    </div>
+  </sc-if>
+
+  <!-- CMD-K -->
+  <sc-if value="{{ cmdkOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeCmdk }}" style="position:absolute;inset:0;z-index:60;background:rgba(12,11,10,.6);backdrop-filter:blur(3px);display:flex;justify-content:center;padding-top:120px">
+      <div style="width:640px;height:max-content;border-radius:24px;border:1px solid var(--line);background:var(--surf);box-shadow:var(--shadow);overflow:hidden;animation:lfrise 160ms ease">
+        <div style="display:flex;align-items:center;gap:12px;padding:18px 20px;border-bottom:1px solid var(--line)">
+          <span style="color:var(--t3)">&#9906;</span>
+          <span style="font:400 16px Inter,sans-serif;color:var(--t1)">gonna</span>
+          <div style="width:1px;height:18px;background:var(--acc)"></div>
+          <div style="flex:1"></div>
+          <span style="font:400 11px JetBrains Mono,monospace;color:var(--t3)">esc</span>
+        </div>
+        <div style="padding:8px">
+          <div style="font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);padding:10px 12px 8px">Tracks</div>
+          <sc-for list="{{ results }}" as="res" hint-placeholder-count="4">
+            <div style="display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:8px;background:{{ res.bg }};border:1px solid {{ res.bd }};cursor:pointer" style-hover="background:var(--surf2)">
+              <div style="width:34px;height:34px;flex:none;border-radius:8px;background:repeating-linear-gradient(45deg,var(--hatchA),var(--hatchA) 4px,var(--hatchB) 4px,var(--hatchB) 8px)"></div>
+              <div style="min-width:0;flex:1"><div style="font:400 14px Inter,sans-serif;color:var(--t1)">{{ res.title }}</div><div style="font:400 12px JetBrains Mono,monospace;color:var(--t3)">{{ res.sub }}</div></div>
+              <span style="font:400 11px JetBrains Mono,monospace;color:var(--t3)">{{ res.actions }}</span>
+            </div>
+          </sc-for>
+          <div style="display:flex;gap:16px;padding:12px;border-top:1px solid var(--line);margin-top:8px;font:400 11px JetBrains Mono,monospace;color:var(--t3)">
+            <span>&#8629; play</span><span>&#8984;&#8629; queue</span><span>&#8984;E edit tags</span><span>&#8984;R reveal in folder</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- TAG EDITOR -->
+  <sc-if value="{{ tagsOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeTags }}" style="position:absolute;inset:0;z-index:70;background:rgba(12,11,10,.6);backdrop-filter:blur(3px);display:grid;place-items:center">
+      <div style="width:720px;border-radius:24px;border:1px solid var(--line);background:var(--surf);box-shadow:var(--shadow);animation:lfrise 160ms ease">
+        <div style="display:flex;align-items:center;padding:20px 24px;border-bottom:1px solid var(--line)">
+          <div style="font:600 20px Inter,sans-serif;color:var(--t1)">Edit tags</div>
+          <span style="font:400 12px JetBrains Mono,monospace;color:var(--t3);margin-left:12px">9 files selected &middot; batch mode</span>
+          <div style="flex:1"></div><span style="color:var(--t3)">&times;</span>
+        </div>
+        <div style="display:flex;gap:24px;padding:24px">
+          <div style="width:160px;flex:none">
+            <div style="aspect-ratio:1;border-radius:20px;overflow:hidden;border:1px dashed var(--line)">
+              <image-slot id="lf-tag-art" shape="rounded" radius="20" placeholder="drag to replace art" style="width:100%;height:100%"></image-slot>
+            </div>
+          </div>
+          <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <sc-for list="{{ tagFields }}" as="fd" hint-placeholder-count="6">
+              <div style="grid-column:{{ fd.span }}">
+                <div style="font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);margin-bottom:7px">{{ fd.label }}</div>
+                <div style="padding:11px 12px;border-radius:8px;border:1px solid {{ fd.bd }};background:var(--bg);font:{{ fd.font }};color:{{ fd.fg }}">{{ fd.value }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;padding:16px 24px;border-top:1px solid var(--line)">
+          <button onClick="{{ closeTags }}" style="padding:10px 16px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--t1);font:500 13px Inter,sans-serif;cursor:pointer">Cancel</button>
+          <button onClick="{{ closeTags }}" style="padding:10px 18px;border-radius:8px;border:1px solid var(--acc);background:var(--acc);color:var(--onAcc);font:600 13px Inter,sans-serif;cursor:pointer">Write tags to 9 files</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- toast -->
+  <div style="position:absolute;left:264px;bottom:104px;z-index:30;display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:8px;border:1px solid var(--line);background:var(--surf);box-shadow:var(--shadow);animation:lfrise 300ms ease">
+    <div style="width:13px;height:13px;border-radius:50%;border:1.5px solid var(--playing);border-top-color:transparent;animation:lfspin 700ms linear infinite"></div>
+    <span style="font:400 14px Inter,sans-serif;color:var(--t1)">Scanning /Music/Soul</span>
+    <span style="font:400 12px JetBrains Mono,monospace;color:var(--t3)">412 / 1,208</span>
+  </div>
+</div>
+
+<div style="display:flex;gap:20px;flex-wrap:wrap;max-width:1440px;margin-top:6px">
+  <sc-for list="{{ notesA }}" as="n" hint-placeholder-count="4">
+    <div style="width:335px;padding-left:12px;border-left:1px solid var(--acc)">
+      <div style="font:400 10.5px JetBrains Mono,monospace;color:var(--accText);margin-bottom:5px">{{ n.tag }}</div>
+      <div style="font:400 11.5px/1.55 Inter,sans-serif;color:var(--canvasTxt);text-wrap:pretty">{{ n.text }}</div>
+    </div>
+  </sc-for>
+</div>
+</div>
+
+<!-- 1b first run -->
+<div style="display:flex;flex-direction:column;gap:14px;margin-bottom:44px">
+<div style="display:flex;align-items:center;gap:10px">
+<span style="font:600 10.5px ui-monospace,monospace;padding:3px 7px;background:var(--surf2);color:var(--accText);border-radius:5px">1b</span>
+<span style="font:400 11px Inter,sans-serif;color:var(--canvasTxt)">Desktop &mdash; first run, empty state &amp; drag-over</span>
+</div>
+<div style="width:1440px;height:560px;border-radius:16px;border:1px solid var(--line);background:var(--bg);box-shadow:var(--shadow);display:grid;place-items:center;padding:48px;box-sizing:border-box">
+  <div style="width:100%;max-width:820px;text-align:center">
+    <div style="display:flex;justify-content:center;gap:6px;align-items:flex-end;height:56px;margin-bottom:28px">
+      <div style="width:4px;height:22px;background:var(--t3);border-radius:2px"></div>
+      <div style="width:4px;height:44px;background:var(--acc);border-radius:2px"></div>
+      <div style="width:4px;height:32px;background:var(--t3);border-radius:2px"></div>
+      <div style="width:4px;height:56px;background:var(--playing);border-radius:2px"></div>
+      <div style="width:4px;height:28px;background:var(--t3);border-radius:2px"></div>
+      <div style="width:4px;height:40px;background:var(--acc);border-radius:2px"></div>
+      <div style="width:4px;height:18px;background:var(--t3);border-radius:2px"></div>
+    </div>
+    <div style="font:500 40px/1.1 Fraunces,serif;color:var(--t1);margin-bottom:14px">Your collection, back in your hands.</div>
+    <div style="font:400 14px/1.5 Inter,sans-serif;color:var(--t2);max-width:440px;margin:0 auto 32px">Point local-fi at a folder of music. Nothing leaves this machine.</div>
+    <div style="border:1.5px solid var(--acc);border-radius:16px;padding:44px;background:var(--tint);box-shadow:0 0 0 6px var(--ring)">
+      <div style="font:600 20px Inter,sans-serif;color:var(--t1);margin-bottom:8px">Drop it here</div>
+      <div style="font:400 12px JetBrains Mono,monospace;color:var(--accText)">3 folders &middot; 1,208 files detected</div>
+    </div>
+    <div style="margin-top:20px;font:400 12px JetBrains Mono,monospace;color:var(--t3)">or choose a folder&hellip;</div>
+  </div>
+</div>
+<div style="font:400 10.5px JetBrains Mono,monospace;color:var(--accText);padding-left:12px;border-left:1px solid var(--acc);max-width:700px">DRAG-OVER STATE &mdash; dashed hairline solidifies to 1.5px #D97B4F, 6px focus-ring glow at 10%, fill tint 7%. Headline is the only Fraunces moment outside Now Playing.</div>
+</div>
+
+<!-- 1c mobile -->
+<div style="display:flex;flex-direction:column;gap:14px;margin-bottom:44px">
+<div style="display:flex;align-items:center;gap:10px">
+<span style="font:600 10.5px ui-monospace,monospace;padding:3px 7px;background:var(--surf2);color:var(--accText);border-radius:5px">1c</span>
+<span style="font:400 11px Inter,sans-serif;color:var(--canvasTxt)">Mobile &mdash; iOS, static frames</span>
+</div>
+<div style="display:flex;gap:28px;flex-wrap:wrap">
+
+  <!-- m1 onboarding -->
+  <div style="display:flex;flex-direction:column;gap:9px">
+    <div style="width:390px;height:844px;border-radius:44px;border:1px solid var(--line);background:var(--bg);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box">
+      <div style="display:flex;justify-content:space-between;padding:16px 28px 0;font:500 12px JetBrains Mono,monospace;color:var(--t2)"><span>9:41</span><span>&#9679;&#9679;&#9679;&#9679;</span></div>
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:24px 16px;text-align:center">
+        <div style="display:flex;justify-content:center;gap:5px;align-items:flex-end;height:44px;margin-bottom:24px">
+          <div style="width:4px;height:18px;background:var(--t3);border-radius:2px"></div><div style="width:4px;height:36px;background:var(--acc);border-radius:2px"></div><div style="width:4px;height:26px;background:var(--t3);border-radius:2px"></div><div style="width:4px;height:44px;background:var(--playing);border-radius:2px"></div><div style="width:4px;height:22px;background:var(--acc);border-radius:2px"></div>
+        </div>
+        <div style="font:500 44px/1.1 Fraunces,serif;color:var(--t1);margin-bottom:14px">Your collection, back in your hands.</div>
+        <div style="font:400 14px/1.5 Inter,sans-serif;color:var(--t2);margin-bottom:28px">Point local-fi at a folder. Nothing leaves this phone.</div>
+        <div style="border:1px dashed var(--line);border-radius:16px;padding:28px;margin-bottom:12px">
+          <div style="font:600 15px Inter,sans-serif;color:var(--t1);margin-bottom:6px">Choose a folder</div>
+          <div style="font:400 12px JetBrains Mono,monospace;color:var(--t3)">Files &middot; iCloud &middot; local</div>
+        </div>
+        <div style="padding:14px;border-radius:8px;background:var(--acc);color:var(--onAcc);font:600 14px Inter,sans-serif">Import music</div>
+      </div>
+    </div>
+    <div style="font:400 11px Inter,sans-serif;color:var(--canvasTxt)">First run &middot; Fraunces 44/48</div>
+  </div>
+
+  <!-- m2 library -->
+  <div style="display:flex;flex-direction:column;gap:9px">
+    <div style="width:390px;height:844px;border-radius:44px;border:1px solid var(--line);background:var(--bg);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;position:relative">
+      <div style="display:flex;justify-content:space-between;padding:16px 28px 0;font:500 12px JetBrains Mono,monospace;color:var(--t2)"><span>9:41</span><span>&#9679;&#9679;&#9679;&#9679;</span></div>
+      <div style="padding:16px 16px 10px"><div style="font:700 24px/1.2 Inter,sans-serif;color:var(--t1)">Your Library</div></div>
+      <div style="display:flex;gap:6px;padding:0 16px 14px;overflow:hidden">
+        <span style="padding:6px 10px;border-radius:4px;background:var(--acc);color:var(--onAcc);font:500 11px Inter;letter-spacing:.04em;text-transform:uppercase">Albums</span>
+        <span style="padding:6px 10px;border-radius:4px;border:1px solid var(--line);color:var(--t2);font:500 11px Inter;letter-spacing:.04em;text-transform:uppercase">Artists</span>
+        <span style="padding:6px 10px;border-radius:4px;border:1px solid var(--line);color:var(--t2);font:500 11px Inter;letter-spacing:.04em;text-transform:uppercase">Folders</span>
+      </div>
+      <div style="flex:1;overflow:hidden;padding:0 16px 176px">
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px">
+          <sc-for list="{{ mobileAlbums }}" as="a" hint-placeholder-count="6">
+            <div>
+              <div style="aspect-ratio:1;border-radius:16px;overflow:hidden;box-shadow:var(--artShadow);background:repeating-linear-gradient(45deg,var(--hatchA),var(--hatchA) 5px,var(--hatchB) 5px,var(--hatchB) 10px);position:relative">
+                <sc-if value="{{ a.hero }}" hint-placeholder-val="{{ false }}">
+                  <image-slot id="{{ a.mslot }}" shape="rounded" radius="16" placeholder="sleeve" style="width:100%;height:100%"></image-slot>
+                </sc-if>
+                <sc-if value="{{ a.hatch }}" hint-placeholder-val="{{ true }}">
+                  <div style="position:absolute;inset:0;display:grid;place-items:center;padding:10px;text-align:center;font:400 10px/1.4 JetBrains Mono,monospace;color:var(--t3)">{{ a.hatchLabel }}</div>
+                </sc-if>
+              </div>
+              <div style="font:600 15px/1.4 Inter,sans-serif;color:var(--t1);margin-top:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.title }}</div>
+              <div style="font:400 12px JetBrains Mono,monospace;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.artist }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="position:absolute;left:12px;right:12px;bottom:92px;display:flex;align-items:center;gap:10px;height:64px;padding:0 12px;border-radius:16px;border:1px solid var(--line);background:var(--surf);box-shadow:var(--shadow);box-sizing:border-box">
+        <div style="width:44px;height:44px;border-radius:10px;background:repeating-linear-gradient(45deg,var(--hatchA),var(--hatchA) 4px,var(--hatchB) 4px,var(--hatchB) 8px)"></div>
+        <div style="flex:1;min-width:0"><div style="font:400 14px Inter,sans-serif;color:var(--playing);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">What&rsquo;s Going On</div><div style="font:400 12px JetBrains Mono,monospace;color:var(--t3)">Marvin Gaye</div></div>
+        <span style="font-size:16px;color:var(--t1)">&#10074;&#10074;</span>
+      </div>
+      <div style="position:absolute;left:0;right:0;bottom:0;height:84px;border-top:1px solid var(--line);background:var(--surf);display:flex;align-items:flex-start;padding-top:12px">
+        <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="5">
+          <div style="flex:1;text-align:center;color:{{ t.fg }}">
+            <div style="font-size:17px;line-height:1">{{ t.icon }}</div>
+            <div style="font:500 11px Inter,sans-serif;letter-spacing:.04em;margin-top:5px">{{ t.label }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="font:400 11px Inter,sans-serif;color:var(--canvasTxt)">Library grid &middot; mini-player 64px above tab bar</div>
+  </div>
+
+  <!-- m3 album detail -->
+  <div style="display:flex;flex-direction:column;gap:9px">
+    <div style="width:390px;height:844px;border-radius:44px;border:1px solid var(--line);background:var(--bg);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;position:relative">
+      <div style="display:flex;justify-content:space-between;padding:16px 28px 0;font:500 12px JetBrains Mono,monospace;color:var(--t2)"><span>9:41</span><span>&#9679;&#9679;&#9679;&#9679;</span></div>
+      <div style="padding:12px 16px 0;font:400 14px Inter,sans-serif;color:var(--accText)">&#8249; Library</div>
+      <div style="padding:16px;text-align:center">
+        <div style="width:200px;height:200px;margin:0 auto 18px;border-radius:16px;overflow:hidden;box-shadow:var(--artShadowLg);background:repeating-linear-gradient(45deg,var(--hatchA),var(--hatchA) 5px,var(--hatchB) 5px,var(--hatchB) 10px)">
+          <image-slot id="lf-m-detail" shape="rounded" radius="16" placeholder="sleeve" style="width:100%;height:100%"></image-slot>
+        </div>
+        <div style="font:500 24px/1.2 Fraunces,serif;color:var(--t1)">What&rsquo;s Going On</div>
+        <div style="font:400 14px Inter,sans-serif;color:var(--t2);margin-top:6px">Marvin Gaye &middot; 1971</div>
+        <div style="font:400 12px JetBrains Mono,monospace;color:var(--ok);margin-top:8px">FLAC 24/96 &middot; 35:32</div>
+        <div style="display:flex;gap:8px;margin-top:16px"><div style="flex:1;padding:12px;border-radius:8px;background:var(--acc);color:var(--onAcc);font:600 14px Inter">&#9654; Play</div><div style="flex:1;padding:12px;border-radius:8px;border:1px solid var(--line);color:var(--t1);font:500 14px Inter">Shuffle</div></div>
+      </div>
+      <div style="flex:1;overflow:hidden;padding:0 16px">
+        <sc-for list="{{ mobileTracks }}" as="r" hint-placeholder-count="6">
+          <div style="display:grid;grid-template-columns:20px 1fr 48px;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)">
+            <span style="font:400 12px JetBrains Mono,monospace;color:{{ r.numColor }}">{{ r.num }}</span>
+            <span style="font:400 14px Inter,sans-serif;color:{{ r.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.title }}</span>
+            <span style="font:400 12px JetBrains Mono,monospace;color:var(--t3);text-align:right">{{ r.dur }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="position:absolute;left:0;right:0;bottom:0;height:84px;border-top:1px solid var(--line);background:var(--surf)"></div>
+    </div>
+    <div style="font:400 11px Inter,sans-serif;color:var(--canvasTxt)">Album detail &middot; sticky back, centred sleeve</div>
+  </div>
+
+  <!-- m4 now playing -->
+  <div style="display:flex;flex-direction:column;gap:9px">
+    <div style="width:390px;height:844px;border-radius:44px;overflow:hidden;box-shadow:var(--shadow);position:relative;background:var(--bg);box-sizing:border-box;border:1px solid var(--line)">
+      <div style="position:absolute;inset:0;background:radial-gradient(110% 60% at 30% 14%,var(--glowA),transparent 62%),radial-gradient(90% 60% at 76% 82%,var(--glowB),transparent 60%),var(--glass);backdrop-filter:blur(48px)"></div>
+      <div style="position:relative;height:100%;display:flex;flex-direction:column;padding:16px 20px 0;box-sizing:border-box">
+        <div style="display:flex;justify-content:space-between;font:500 12px JetBrains Mono,monospace;color:var(--t2);padding:0 8px"><span>9:41</span><span>&#9679;&#9679;&#9679;&#9679;</span></div>
+        <div style="text-align:center;padding:14px 0 4px"><div style="width:44px;height:4px;border-radius:2px;background:var(--line);margin:0 auto"></div></div>
+        <div style="width:100%;aspect-ratio:1;border-radius:24px;overflow:hidden;margin:20px 0 32px;box-shadow:var(--artShadowLg);background:repeating-linear-gradient(45deg,var(--hatchA),var(--hatchA) 6px,var(--hatchB) 6px,var(--hatchB) 12px)">
+          <image-slot id="lf-m-np" shape="rounded" radius="24" placeholder="now playing sleeve" style="width:100%;height:100%"></image-slot>
+        </div>
+        <div style="font:500 24px/1.2 Fraunces,serif;color:var(--t1)">What&rsquo;s Going On</div>
+        <div style="font:400 14px Inter,sans-serif;color:var(--t2);margin-top:6px">Marvin Gaye &middot; What&rsquo;s Going On</div>
+        <div style="display:flex;align-items:flex-end;gap:2px;height:56px;margin:24px 0 8px">
+          <sc-for list="{{ mBars }}" as="b" hint-placeholder-count="40">
+            <div style="flex:1;border-radius:1px;height:{{ b.h }};background:{{ b.bg }}"></div>
+          </sc-for>
+        </div>
+        <div style="display:flex;justify-content:space-between;font:400 12px JetBrains Mono,monospace;color:var(--t2)"><span>1:42</span><span>-2:11</span></div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:28px;margin-top:24px">
+          <span style="font-size:20px;color:var(--t2)">&#9198;</span>
+          <div style="width:60px;height:60px;border-radius:50%;background:var(--acc);color:var(--onAcc);display:grid;place-items:center;font-size:18px;box-shadow:0 10px 24px rgba(20,15,10,.45)">&#10074;&#10074;</div>
+          <span style="font-size:20px;color:var(--t2)">&#9197;</span>
+        </div>
+        <div style="flex:1"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 4px 22px">
+          <span style="font:400 11px JetBrains Mono,monospace;color:var(--t2)">&#8593; Up next &middot; 6 tracks</span>
+          <span style="display:flex;align-items:center;gap:6px;padding:9px 12px;border-radius:8px;border:1px solid var(--acc);color:var(--accText);font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase">EQ<span style="font:400 10px JetBrains Mono,monospace;text-transform:none;letter-spacing:0;color:var(--t2)">{{ eqSummary }}</span></span>
+        </div>
+      </div>
+    </div>
+    <div style="font:400 11px Inter,sans-serif;color:var(--canvasTxt)">Now Playing sheet &middot; the one glass surface</div>
+  </div>
+
+  <!-- m5 EQ sheet -->
+  <div style="display:flex;flex-direction:column;gap:9px">
+    <div style="width:390px;height:844px;border-radius:44px;border:1px solid var(--line);background:var(--bg);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;position:relative">
+      <div style="display:flex;justify-content:space-between;padding:16px 28px 0;font:500 12px JetBrains Mono,monospace;color:var(--t2)"><span>9:41</span><span>&#9679;&#9679;&#9679;&#9679;</span></div>
+      <div style="flex:1;padding:0 20px;opacity:.28;pointer-events:none">
+        <div style="padding:16px 0 10px;font:700 24px/1.2 Inter,sans-serif;color:var(--t1)">Now Playing</div>
+        <div style="width:100%;aspect-ratio:1;border-radius:24px;background:repeating-linear-gradient(45deg,var(--hatchA),var(--hatchA) 6px,var(--hatchB) 6px,var(--hatchB) 12px)"></div>
+      </div>
+      <div style="position:absolute;left:0;right:0;bottom:0;border-radius:24px 24px 0 0;border-top:1px solid var(--line);background:var(--surf);box-shadow:var(--shadow);padding:12px 16px 26px;box-sizing:border-box">
+        <div style="width:44px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 16px"></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <span style="font:600 11px Inter,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--t1)">Equaliser</span>
+          <span style="font:400 11px JetBrains Mono,monospace;color:var(--t3)">10 band</span>
+          <div style="flex:1"></div>
+          <span onClick="{{ toggleBypass }}" style="padding:9px 13px;border-radius:8px;border:1px solid {{ eqBypassBd }};background:{{ eqBypassBg }};color:{{ eqBypassFg }};font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase">{{ eqBypassLabel }}</span>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:16px;overflow:hidden">
+          <sc-for list="{{ eqPresets }}" as="p" hint-placeholder-count="4">
+            <span onClick="{{ p.pick }}" style="padding:10px 12px;border-radius:8px;border:1px solid {{ p.bd }};background:{{ p.bg }};color:{{ p.fg }};font:500 12px Inter,sans-serif;white-space:nowrap;flex:none">{{ p.name }}</span>
+          </sc-for>
+        </div>
+        <div style="display:flex;gap:3px;align-items:stretch;opacity:{{ eqOpacity }}">
+          <sc-for list="{{ eqBands }}" as="b" hint-placeholder-count="10">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:7px">
+              <span style="font:400 10px JetBrains Mono,monospace;color:{{ b.gainFg }}">{{ b.gain }}</span>
+              <div onClick="{{ b.set }}" style="position:relative;width:100%;height:168px">
+                <div style="position:absolute;left:50%;transform:translateX(-50%);top:0;bottom:0;width:5px;border-radius:3px;background:var(--surf2)"></div>
+                <div style="position:absolute;left:0;right:0;top:50%;height:1px;background:var(--line)"></div>
+                <div style="position:absolute;left:50%;transform:translateX(-50%);width:5px;border-radius:3px;bottom:{{ b.fillBottom }};height:{{ b.fillHeight }};background:{{ b.color }}"></div>
+                <div style="position:absolute;left:50%;bottom:{{ b.thumbBottom }};transform:translate(-50%,50%);width:24px;height:10px;border-radius:4px;background:{{ b.thumbBg }};box-shadow:var(--artShadow)"></div>
+              </div>
+              <span style="font:400 9.5px JetBrains Mono,monospace;color:var(--t3)">{{ b.freq }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
+          <span style="font:500 11px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--t2);flex:none">Pre-amp</span>
+          <div onClick="{{ setPreamp }}" style="position:relative;flex:1;height:24px;display:flex;align-items:center">
+            <div style="width:100%;height:5px;border-radius:3px;background:var(--surf2)"></div>
+            <div style="position:absolute;left:50%;top:3px;bottom:3px;width:1px;background:var(--line)"></div>
+            <div style="position:absolute;left:{{ eqPreampPct }};transform:translateX(-50%);width:10px;height:24px;border-radius:4px;background:var(--playing)"></div>
+          </div>
+          <span style="font:400 11px JetBrains Mono,monospace;color:var(--t2);flex:none;width:58px;text-align:right">{{ eqPreampLabel }}</span>
+        </div>
+      </div>
+    </div>
+    <div style="font:400 11px Inter,sans-serif;color:var(--canvasTxt)">EQ sheet &middot; faders live, presets scroll horizontally</div>
+  </div>
+
+  <!-- m5 queue sheet -->
+  <div style="display:flex;flex-direction:column;gap:9px">
+    <div style="width:390px;height:844px;border-radius:44px;overflow:hidden;box-shadow:var(--shadow);position:relative;background:var(--bg);box-sizing:border-box;border:1px solid var(--line)">
+      <div style="position:absolute;inset:0;background:radial-gradient(110% 50% at 30% 10%,var(--glowA),transparent 60%),var(--glass)"></div>
+      <div style="position:relative;padding:16px 20px;display:flex;justify-content:space-between;font:500 12px JetBrains Mono,monospace;color:var(--t3)"><span>9:41</span><span>&#9679;&#9679;&#9679;&#9679;</span></div>
+      <div style="position:absolute;left:0;right:0;bottom:0;height:640px;border-radius:24px 24px 0 0;border:1px solid var(--line);border-bottom:none;background:var(--surf);box-shadow:0 -20px 50px rgba(20,15,10,.5);padding:0 16px;box-sizing:border-box">
+        <div style="text-align:center;padding:12px 0 8px"><div style="width:44px;height:4px;border-radius:2px;background:var(--line);margin:0 auto"></div></div>
+        <div style="display:flex;align-items:baseline;gap:10px;padding:8px 4px 14px"><div style="font:600 18px Inter,sans-serif;color:var(--t1)">Up next</div><span style="font:400 12px JetBrains Mono,monospace;color:var(--t3)">6 tracks &middot; 24:18</span></div>
+        <sc-for list="{{ queue }}" as="q" hint-placeholder-count="6">
+          <div style="display:grid;grid-template-columns:18px 1fr 52px;gap:12px;align-items:center;padding:14px 4px;border-bottom:1px solid var(--line)">
+            <span style="font:400 12px Inter;color:var(--t3);letter-spacing:2px">&#8942;&#8942;</span>
+            <div style="min-width:0"><div style="font:400 14px Inter,sans-serif;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ q.title }}</div><div style="font:400 12px JetBrains Mono,monospace;color:var(--t3)">{{ q.artist }}</div></div>
+            <span style="font:400 12px JetBrains Mono,monospace;color:var(--t3);text-align:right">{{ q.dur }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="font:400 11px Inter,sans-serif;color:var(--canvasTxt)">Queue bottom sheet &middot; swipe-to-remove rows</div>
+  </div>
+</div>
+</div>
+
+<!-- 1d component states -->
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;align-items:center;gap:10px">
+<span style="font:600 10.5px ui-monospace,monospace;padding:3px 7px;background:var(--surf2);color:var(--accText);border-radius:5px">1d</span>
+<span style="font:400 11px Inter,sans-serif;color:var(--canvasTxt)">Transport bar &mdash; isolated states</span>
+</div>
+<div style="display:flex;flex-direction:column;gap:20px;width:1080px">
+  <sc-for list="{{ barStates }}" as="s" hint-placeholder-count="3">
+    <div>
+      <div style="font:400 10.5px JetBrains Mono,monospace;color:var(--accText);margin-bottom:8px">{{ s.tag }}</div>
+      <div style="height:88px;display:flex;align-items:center;gap:20px;padding:0 20px;border-radius:16px;border:1px solid var(--line);background:var(--surf);box-shadow:var(--shadow);box-sizing:border-box">
+        <div style="width:56px;height:56px;flex:none;border-radius:12px;background:repeating-linear-gradient(45deg,var(--hatchA),var(--hatchA) 4px,var(--hatchB) 4px,var(--hatchB) 8px)"></div>
+        <div style="width:190px;flex:none;min-width:0">
+          <div style="font:400 14px Inter,sans-serif;color:{{ s.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.title }}</div>
+          <div style="font:400 12px JetBrains Mono,monospace;color:var(--t3)">{{ s.sub }}</div>
+        </div>
+        <div style="width:40px;height:40px;flex:none;border-radius:50%;background:{{ s.btnBg }};border:1px solid {{ s.btnBd }};color:{{ s.btnFg }};display:grid;place-items:center;font-size:14px">{{ s.icon }}</div>
+        <div style="position:relative;flex:1;height:40px;display:flex;align-items:flex-end;gap:2px">
+          <sc-for list="{{ s.bars }}" as="b" hint-placeholder-count="50">
+            <div style="flex:1;border-radius:1px;height:{{ b.h }};background:{{ b.bg }}"></div>
+          </sc-for>
+          <sc-if value="{{ s.tip }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;left:58%;bottom:46px;transform:translateX(-50%);padding:5px 8px;border-radius:4px;background:var(--bg);border:1px solid var(--line);box-shadow:var(--shadow);font:400 11px JetBrains Mono,monospace;color:var(--t1);white-space:nowrap">2:04</div>
+          </sc-if>
+          <sc-if value="{{ s.tip }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;left:58%;top:0;bottom:0;width:1px;background:var(--acc2)"></div>
+          </sc-if>
+        </div>
+        <span style="font:400 12px JetBrains Mono,monospace;color:var(--t3);flex:none">{{ s.time }}</span>
+      </div>
+    </div>
+  </sc-for>
+</div>
+<p style="margin:24px 0 0;font:400 11.5px/1.6 Inter,sans-serif;color:var(--canvasTxt);max-width:760px">Try next: &ldquo;make the light mode the default and check contrast&rdquo; &middot; &ldquo;show the search / A&ndash;Z index rail on mobile library&rdquo; &middot; &ldquo;tighten the grid to 5 columns and shrink the cards&rdquo;</p>
+</div>
+
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1560,&quot;height&quot;:1000}}">
+class Component extends DCLogic {
+  state = { theme: 'dark', view: 'grid', queueOpen: true, np: false, cmdk: false, tags: false,
+    playing: true, pos: 0.34, hoverPct: null, drag: true, tab: 'queue', chip: 'FLAC',
+    scheme: 'vinyl',
+    eqOpen: false, eqOn: true, eqPreset: 'Vinyl warmth', preamp: -1.5,
+    eq: [4,3,2,0.5,-1,-1.5,-1,0,-1,-2] };
+
+  eqFreqs = ['32','64','125','250','500','1k','2k','4k','8k','16k'];
+  eqPresets = {
+    'Flat':          [0,0,0,0,0,0,0,0,0,0],
+    'Vinyl warmth':  [4,3,2,0.5,-1,-1.5,-1,0,-1,-2],
+    'Bass boost':    [7,6,4.5,2.5,0.5,0,0,0,0,0],
+    'Vocal forward': [-2,-2,-1,0,2,3.5,3,1.5,0,-1],
+    'Late night':    [-3,-2.5,-1.5,0,1.5,2,1.5,0.5,-1.5,-3],
+    'Acoustic':      [2,1.5,0.5,0,1,1.5,2,2.5,2,1],
+    'Loudness':      [6,4.5,1,-1,-2,-1.5,0,1.5,4,5.5],
+    'Headphones':    [4,3,1,-1,-1.5,-0.5,1,2.5,3,2]
+  };
+
+  eqPct(g){ return ((g + 12) / 24 * 100); }
+  setBand(i, e){
+    const r = e.currentTarget.getBoundingClientRect();
+    const p = 1 - (e.clientY - r.top) / r.height;
+    const g = Math.max(-12, Math.min(12, Math.round((p * 24 - 12) * 2) / 2));
+    const eq = this.state.eq.slice(); eq[i] = g;
+    const match = Object.keys(this.eqPresets).find(k => this.eqPresets[k].every((v,j) => v === eq[j]));
+    this.setState({ eq, eqOn: true, eqPreset: match || 'Custom' });
+  }
+  eqVals(){
+    const st = this.state, dim = st.eqOn ? 1 : 0.4;
+    const bands = st.eq.map((g,i) => {
+      const pct = this.eqPct(g), zero = g === 0;
+      return { freq: this.eqFreqs[i], gain: (g > 0 ? '+' : '') + g.toFixed(1),
+        thumbBottom: pct.toFixed(1) + '%',
+        fillBottom: (g >= 0 ? 50 : pct).toFixed(1) + '%',
+        fillHeight: (Math.abs(pct - 50)).toFixed(1) + '%',
+        color: !st.eqOn ? 'var(--t3)' : zero ? 'var(--t2)' : 'var(--playing)',
+        thumbBg: !st.eqOn ? 'var(--t3)' : zero ? 'var(--t2)' : 'var(--playing)',
+        gainFg: !st.eqOn ? 'var(--t3)' : zero ? 'var(--t3)' : 'var(--playing)',
+        set: e => this.setBand(i, e) };
+    });
+    const presets = Object.keys(this.eqPresets).map(name => {
+      const on = st.eqPreset === name;
+      return { name, on, bg: on ? 'var(--tint)' : 'transparent', bd: on ? 'var(--acc)' : 'var(--line)',
+        fg: on ? 'var(--accText)' : 'var(--t2)',
+        pick: () => this.setState({ eq: this.eqPresets[name].slice(), eqPreset: name, eqOn: true }) };
+    });
+    const curve = st.eq.map((g,i) => (i / 9 * 100).toFixed(1) + ',' + (20 - g / 12 * 17).toFixed(2)).join(' ');
+    return { eqBands: bands, eqPresets: presets, eqCurve: curve, eqOpacity: dim,
+      eqOpen: st.eqOpen, eqOn: st.eqOn, eqPreset: st.eqPreset,
+      eqSummary: st.eqOn ? st.eqPreset : 'Bypassed',
+      eqBypassLabel: st.eqOn ? 'On' : 'Bypassed',
+      eqBypassBg: st.eqOn ? 'var(--acc)' : 'transparent',
+      eqBypassBd: st.eqOn ? 'var(--acc)' : 'var(--line)',
+      eqBypassFg: st.eqOn ? 'var(--onAcc)' : 'var(--t2)',
+      eqBtnBd: st.eqOpen ? 'var(--acc)' : 'var(--line)',
+      eqBtnFg: st.eqOpen ? 'var(--accText)' : 'var(--t2)',
+      eqPreampLabel: (st.preamp > 0 ? '+' : '') + st.preamp.toFixed(1) + ' dB',
+      eqPreampPct: (((st.preamp + 12) / 24) * 100).toFixed(1) + '%',
+      setPreamp: e => { const r = e.currentTarget.getBoundingClientRect();
+        const v = Math.max(-12, Math.min(12, Math.round(((e.clientX - r.left) / r.width * 24 - 12) * 2) / 2));
+        this.setState({ preamp: v }); },
+      openEq: () => this.setState({ eqOpen: true }), closeEq: () => this.setState({ eqOpen: false }),
+      toggleEq: () => this.setState({ eqOpen: !this.state.eqOpen }),
+      toggleBypass: () => this.setState({ eqOn: !this.state.eqOn }),
+      resetEq: () => this.setState({ eq: this.eqPresets.Flat.slice(), eqPreset: 'Flat', preamp: 0 }) };
+  }
+
+  amp = Array.from({length:88},(_,i)=>{
+    const v = Math.abs(Math.sin(i*0.62)*0.55 + Math.cos(i*0.21)*0.4 + Math.sin(i*1.7)*0.18);
+    return 0.16 + Math.min(0.84, v);
+  });
+
+  albums = [
+    {t:"What's Going On", a:'Marvin Gaye', y:1971, f:'FLAC'},
+    {t:'Nevermind', a:'Nirvana', y:1991, f:'FLAC'},
+    {t:'Highway 61 Revisited', a:'Bob Dylan', y:1965, f:'ALAC'},
+    {t:'Fear of a Black Planet', a:'Public Enemy', y:1990, f:'MP3'},
+    {t:'I Never Loved a Man the Way I Love You', a:'Aretha Franklin', y:1967, f:'FLAC'},
+    {t:"Ain't That Good News", a:'Sam Cooke', y:1964, f:'FLAC'},
+    {t:'Magical Mystery Tour', a:'The Beatles', y:1967, f:'ALAC'},
+    {t:'Miss E... So Addictive', a:'Missy Elliott', y:2001, f:'MP3'}
+  ];
+
+  tracks = [
+    {t:"What's Going On", a:'Marvin Gaye', al:"What's Going On", d:'3:53', f:'FLAC', k:'2304'},
+    {t:'Respect', a:'Aretha Franklin', al:'I Never Loved a Man…', d:'2:28', f:'FLAC', k:'1411'},
+    {t:'Fight the Power', a:'Public Enemy', al:'Fear of a Black Planet', d:'4:42', f:'MP3', k:'320'},
+    {t:'A Change Is Gonna Come', a:'Sam Cooke', al:"Ain't That Good News", d:'3:11', f:'FLAC', k:'1411'},
+    {t:'Like a Rolling Stone', a:'Bob Dylan', al:'Highway 61 Revisited', d:'6:13', f:'ALAC', k:'1411'},
+    {t:'Smells Like Teen Spirit', a:'Nirvana', al:'Nevermind', d:'5:01', f:'FLAC', k:'1411'},
+    {t:'Strawberry Fields Forever', a:'The Beatles', al:'Magical Mystery Tour', d:'4:05', f:'ALAC', k:'1411'},
+    {t:'Get Ur Freak On', a:'Missy Elliott', al:'Miss E... So Addictive', d:'3:56', f:'MP3', k:'256'},
+    {t:'Inner City Blues', a:'Marvin Gaye', al:"What's Going On", d:'5:26', f:'FLAC', k:'2304'}
+  ];
+
+  gaye = [
+    ["What's Going On",'3:53'],["What's Happening Brother",'2:43'],['Flyin\u2019 High (In the Friendly Sky)','3:49'],
+    ['Save the Children','4:03'],['God Is Love','1:41'],['Mercy Mercy Me (The Ecology)','3:16'],
+    ['Right On','7:31'],['Wholy Holy','3:08'],['Inner City Blues (Make Me Wanna Holler)','5:26']
+  ];
+
+  schemes = {
+    vinyl: { id:'2a', name:'Late-Night Vinyl', tag:'the spec as written', hues:'brown-black \u00b7 terracotta \u00b7 ember gold',
+      note:'current', cta:'In use',
+      dark:{ bg:'#121110',surf:'#1B1815',surf2:'#221E19',line:'#2E2925',t1:'#F5EFE4',t2:'#A89F91',t3:'#6B6358',
+        acc:'#D97B4F',acc2:'#E8935F',accText:'#D97B4F',onAcc:'#1B1815',gold:'#F2B705',playing:'#F2B705',ok:'#7C9473',warn:'#D9A441',err:'#C1543C',okDark:'#7C9473',warnDark:'#D9A441',glass:'rgba(18,17,16,.87)',artShadow:'0 8px 20px rgba(20,15,10,.32)',artShadowLg:'0 24px 56px rgba(20,15,10,.52)',
+        hatchA:'#221E19',hatchB:'#191612',canvas:'#0C0B0A',canvasTxt:'#8C8378',
+        tint:'rgba(217,123,79,.12)',ring:'rgba(232,147,95,.10)',glowA:'rgba(217,123,79,.30)',glowB:'rgba(242,183,5,.16)',
+        shadow:'0 18px 48px rgba(20,15,10,.35)' },
+      light:{ bg:'#FAF6EF',surf:'#FFFFFF',surf2:'#F3EDE3',line:'#E5DDD0',t1:'#221E19',t2:'#6B6358',
+        t3:'#6B6358',t4:'#A89F91',playing:'#8A5A00',accText:'#A0521F',glass:'rgba(250,246,239,.90)',artShadow:'0 8px 20px rgba(20,15,10,.14)',artShadowLg:'0 24px 56px rgba(20,15,10,.20)',ok:'#4F6B46',warn:'#8A6417',err:'#A33726',canvas:'#EDE6DA',canvasTxt:'#6B6358',hatchA:'#EFE8DC',hatchB:'#E3DACB',
+        shadow:'0 18px 48px rgba(20,15,10,.20)' } },
+
+    oxblood: { id:'2b', name:'Oxblood & Bone', tag:'warm, closest cousin to the original', hues:'wine-black \u00b7 oxblood \u00b7 dusty rose',
+      note:'red = the record itself', cta:'Apply to boards',
+      dark:{ bg:'#121011',surf:'#1B1618',surf2:'#231B1E',line:'#2F2529',t1:'#F4EEE7',t2:'#A99A96',t3:'#6C5D5B',
+        acc:'#B5384F',acc2:'#CC5068',accText:'#B5384F',onAcc:'#FFF4F6',gold:'#E8A7B8',playing:'#E8A7B8',ok:'#C0A28A',warn:'#C79A5B',err:'#E0576F',okDark:'#C0A28A',warnDark:'#C79A5B',glass:'rgba(18,16,17,.87)',artShadow:'0 8px 20px rgba(24,12,15,.34)',artShadowLg:'0 24px 56px rgba(24,12,15,.54)',
+        hatchA:'#231B1E',hatchB:'#1A1416',canvas:'#0C0A0B',canvasTxt:'#8C7E7B',
+        tint:'rgba(181,56,79,.13)',ring:'rgba(204,80,104,.12)',glowA:'rgba(181,56,79,.34)',glowB:'rgba(232,167,184,.16)',
+        shadow:'0 18px 48px rgba(24,12,15,.38)' },
+      light:{ bg:'#FAF5F3',surf:'#FFFFFF',surf2:'#F3EAE7',line:'#E8DBD8',t1:'#221A1C',t2:'#6C5D5B',t3:'#6C5D5B',t4:'#A99A96',
+        playing:'#8E2C40',accText:'#98304A',glass:'rgba(250,245,243,.90)',artShadow:'0 8px 20px rgba(24,12,15,.14)',artShadowLg:'0 24px 56px rgba(24,12,15,.20)',acc2:'#A93049',ok:'#7A5A3C',warn:'#7E5F26',err:'#B3313F',canvas:'#EBDEDB',canvasTxt:'#6C5D5B',hatchA:'#F0E7E4',hatchB:'#E4D8D5',
+        shadow:'0 18px 48px rgba(24,12,15,.20)' } },
+
+    violet: { id:'2c', name:'Ultraviolet Dub', tag:'night-club dark, one saturated hue', hues:'ink violet \u00b7 electric iris \u00b7 pale lilac',
+      note:'flat violet, never a gradient', cta:'Apply to boards',
+      dark:{ bg:'#121016',surf:'#1A1720',surf2:'#221E2A',line:'#2E2939',t1:'#EFEAF5',t2:'#A29BB0',t3:'#6A6478',
+        acc:'#8A5CF0',acc2:'#A47BFF',accText:'#8A5CF0',onAcc:'#FFFFFF',gold:'#C9A6FF',playing:'#C9A6FF',ok:'#9BB4E8',warn:'#D6B45C',err:'#E0566E',okDark:'#9BB4E8',warnDark:'#D6B45C',glass:'rgba(18,16,22,.87)',artShadow:'0 8px 20px rgba(14,10,24,.36)',artShadowLg:'0 24px 56px rgba(14,10,24,.56)',
+        hatchA:'#221E2A',hatchB:'#191622',canvas:'#0B0910',canvasTxt:'#8A8397',
+        tint:'rgba(138,92,240,.13)',ring:'rgba(164,123,255,.12)',glowA:'rgba(138,92,240,.32)',glowB:'rgba(201,166,255,.18)',
+        shadow:'0 18px 48px rgba(14,10,24,.42)' },
+      light:{ bg:'#F7F5FB',surf:'#FFFFFF',surf2:'#F0ECF8',line:'#E4DFEE',t1:'#1C1826',t2:'#665F78',t3:'#665F78',t4:'#A29BB0',
+        playing:'#5B2FBF',accText:'#6B3ACB',glass:'rgba(247,245,251,.90)',artShadow:'0 8px 20px rgba(14,10,24,.14)',artShadowLg:'0 24px 56px rgba(14,10,24,.20)',acc:'#7343DE',acc2:'#6435C9',ok:'#3F5F94',warn:'#7E6320',err:'#B23A50',canvas:'#E7E2F0',canvasTxt:'#665F78',hatchA:'#EFEAF7',hatchB:'#E3DCEF',
+        shadow:'0 18px 48px rgba(14,10,24,.18)' } },
+
+    steel: { id:'2d', name:'Blueprint Steel', tag:'cool departure \u2014 archival, technical', hues:'slate-black \u00b7 signal blue \u00b7 ice',
+      note:'reads as a file browser', cta:'Apply to boards',
+      dark:{ bg:'#0F1216',surf:'#171B21',surf2:'#1E242B',line:'#28303A',t1:'#E9EEF3',t2:'#94A0AD',t3:'#5D6874',
+        acc:'#3E7BFA',acc2:'#5E93FF',accText:'#3E7BFA',onAcc:'#FFFFFF',gold:'#7FD1FF',playing:'#7FD1FF',ok:'#8FB4D9',warn:'#D6B45C',err:'#E05A6B',okDark:'#8FB4D9',warnDark:'#D6B45C',glass:'rgba(15,18,22,.87)',artShadow:'0 8px 20px rgba(8,14,22,.36)',artShadowLg:'0 24px 56px rgba(8,14,22,.56)',
+        hatchA:'#1E242B',hatchB:'#151A20',canvas:'#090C10',canvasTxt:'#7C8896',
+        tint:'rgba(62,123,250,.13)',ring:'rgba(94,147,255,.12)',glowA:'rgba(62,123,250,.30)',glowB:'rgba(127,209,255,.18)',
+        shadow:'0 18px 48px rgba(8,14,22,.45)' },
+      light:{ bg:'#F4F7FA',surf:'#FFFFFF',surf2:'#EDF2F7',line:'#DBE3EC',t1:'#131A22',t2:'#5D6874',t3:'#5D6874',t4:'#94A0AD',
+        playing:'#14589E',accText:'#1F5FD1',glass:'rgba(244,247,250,.90)',artShadow:'0 8px 20px rgba(8,14,22,.14)',artShadowLg:'0 24px 56px rgba(8,14,22,.20)',acc:'#2B5FC7',acc2:'#2450AE',ok:'#2F6288',warn:'#7A5E1E',err:'#B23A4A',canvas:'#E3EAF1',canvasTxt:'#5D6874',hatchA:'#EDF2F7',hatchB:'#E1E8F0',
+        shadow:'0 18px 48px rgba(8,14,22,.18)' } }
+  };
+
+  vars(key, theme) {
+    const s = this.schemes[key] || this.schemes.vinyl;
+    return theme === 'light' ? Object.assign({}, s.dark, s.light) : s.dark;
+  }
+  applyScheme(key, theme) {
+    const v = this.vars(key, theme);
+    Object.keys(v).forEach(k => document.body.style.setProperty('--' + k, v[k]));
+    document.body.style.background = v.canvas;
+  }
+
+  componentDidMount() {
+    document.body.dataset.theme = this.state.theme;
+    this.applyScheme(this.state.scheme, this.state.theme);
+    this.timer = setInterval(() => {
+      if (this.state.playing && !this.state.dragScrub) {
+        this.setState(s => ({ pos: s.pos > 0.995 ? 0 : s.pos + 0.0018 }));
+      }
+    }, 90);
+    this.onKey = e => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); this.setState({cmdk:true}); }
+      if (e.key === 'Escape') this.setState({cmdk:false, np:false, tags:false, eqOpen:false});
+    };
+    window.addEventListener('keydown', this.onKey);
+  }
+  componentWillUnmount(){ clearInterval(this.timer); window.removeEventListener('keydown', this.onKey); }
+
+  set(p){ this.setState(p); }
+  fmtColor(f){ return f === 'MP3' ? 'var(--warn)' : 'var(--ok)'; }
+  fmtScrim(f){ return f === 'MP3' ? 'var(--warnDark)' : 'var(--okDark)'; }
+  mmss(sec){ const m = Math.floor(sec/60), s = Math.round(sec%60); return m + ':' + String(s).padStart(2,'0'); }
+
+  barsFor(pos, playedColor){
+    return this.amp.map((v,i) => ({
+      h: (v*100).toFixed(1) + '%',
+      bg: (i/this.amp.length) <= pos ? (playedColor || 'var(--playing)') : 'var(--t3)'
+    }));
+  }
+
+  renderVals() {
+    const st = this.state, total = 233;
+    const cur = { title: "What's Going On", artist: 'Marvin Gaye', album: "What's Going On",
+      dur: '3:53', fmt: 'FLAC 24/96', kbps: '2304 kbps', color: st.playing ? 'var(--playing)' : 'var(--t1)' };
+
+    const navDef = [['Home','\u2302','grid','1,208'],['Library','\u25A4','list','1,208'],['Folders','\u25B1','list','34'],['Playlists','\u2261','crate','12'],['Import','\u2191','upload','6']];
+    const nav = navDef.map(([label,icon,view,count]) => {
+      const on = st.view === view;
+      return { label, icon, count, go: () => this.set({view}),
+        bg: on ? 'var(--surf2)' : 'transparent', bd: on ? 'var(--line)' : '1px solid transparent'.slice(0,0) || 'transparent',
+        fg: on ? 'var(--t1)' : 'var(--t2)', font: (on ? '600' : '400') + ' 13px Inter, sans-serif' };
+    });
+
+    const crates = [['Late night','var(--acc)'],['Lossless only','var(--playing)'],['Added this month','var(--ok)'],['Bootlegs','var(--t3)']]
+      .map(([name,dot]) => ({ name, dot, go: () => this.set({view:'crate'}) }));
+
+    const albums = this.albums.map((a,i) => ({
+      title: a.t, artist: a.a, year: a.y, fmt: a.f, fmtColor: this.fmtColor(a.f),
+      hero: i < 6, hatch: i >= 6, slot: 'lf-alb-' + i, mslot: 'lf-malb-' + i,
+      slotHint: 'sleeve \u00b7 ' + a.a.split(' ')[0].toLowerCase(),
+      hatchLabel: 'no art \u00b7 ' + a.f.toLowerCase() + ' \u00b7 drop sleeve',
+      titleColor: i === 0 && st.playing ? 'var(--playing)' : 'var(--t1)',
+      open: () => this.set({view:'album'})
+    }));
+
+    const rows = this.tracks.map((t,i) => ({
+      num: String(i+1).padStart(2,'0'), title: t.t, artist: t.a, album: t.al, dur: t.d,
+      fmt: t.f + ' \u00b7 ' + (t.f === 'MP3' ? '16/44' : '24/96'), kbps: t.k, fmtColor: this.fmtColor(t.f),
+      numColor: i === 0 ? 'var(--playing)' : 'var(--t3)', titleColor: i === 0 ? 'var(--playing)' : 'var(--t1)',
+      play: () => this.set({ playing: true, pos: 0.02 })
+    }));
+
+    const albumRows = this.gaye.map(([t,d],i) => ({
+      num: String(i+1).padStart(2,'0'), title: t, dur: d, kbps: '2304 kbps',
+      numColor: i === 0 ? 'var(--playing)' : 'var(--t3)', titleColor: i === 0 ? 'var(--playing)' : 'var(--t1)',
+      play: () => this.set({ playing: true, pos: 0.02 })
+    }));
+
+    const chipDef = ['All','FLAC','ALAC','MP3','Lossless only','Added: 30d','Genre: Soul'];
+    const chips = chipDef.map(label => {
+      const on = st.chip === label;
+      return { label, toggle: () => this.set({chip: label}),
+        bg: on ? 'var(--tint)' : 'transparent', bd: on ? 'var(--acc)' : 'var(--line)',
+        fg: on ? 'var(--accText)' : 'var(--t2)' };
+    });
+
+    const ingest = [
+      ['01 Respect.flac','Imported','100%','FLAC','28.4 MB','var(--ok)','var(--playing)'],
+      ['02 Fight the Power.mp3','Imported','100%','MP3','11.2 MB','var(--ok)','var(--playing)'],
+      ['03 A Change Is Gonna Come.flac','Duplicate of existing file','100%','FLAC','31.9 MB','var(--warn)','var(--warn)'],
+      ['04 Like a Rolling Stone.alac','Imported','100%','ALAC','42.1 MB','var(--ok)','var(--playing)'],
+      ['05 Smells Like Teen Spirit.flac','Reading tags\u2026','62%','FLAC','38.7 MB','var(--playing)','var(--t3)'],
+      ['06 side-b-unknown.wav','Unsupported tag block','12%','WAV','—','var(--err)','var(--t3)']
+    ].map(([name,status,pct,fmt,size,stColor,wave]) => ({name,status,pct,fmt,size,stColor,wave}));
+
+    const results = [
+      ["A Change Is Gonna Come",'Sam Cooke \u00b7 FLAC \u00b7 3:11','\u21b5 play'],
+      ["What's Going On",'Marvin Gaye \u00b7 FLAC \u00b7 3:53','\u2318\u21b5 queue'],
+      ["Gonna Fly Now",'Bill Conti \u00b7 MP3 \u00b7 2:48','\u2318\u21b5 queue'],
+      ["I'm Gonna Move to the Outskirts of Town",'Ray Charles \u00b7 ALAC \u00b7 4:52','\u2318E tags']
+    ].map(([title,sub,actions],i) => ({ title, sub, actions,
+      bg: i === 0 ? 'var(--surf2)' : 'transparent', bd: i === 0 ? 'var(--acc)' : 'transparent' }));
+
+    const tagFields = [
+      ['Title',"What's Going On",'1'],['Artist','Marvin Gaye','1'],
+      ['Album',"What's Going On",'1'],['Album artist','Marvin Gaye','1'],
+      ['Year','1971','1'],['Genre','Soul','1'],
+      ['File path','/Music/Soul/Gaye_1971/01.flac','span 2']
+    ].map(([label,value,span],i) => ({ label, value, span,
+      bd: i === 0 ? 'var(--acc)' : 'var(--line)',
+      font: i === 6 ? '400 13px JetBrains Mono, monospace' : '400 14px Inter, sans-serif',
+      fg: i === 6 ? 'var(--t2)' : 'var(--t1)' }));
+
+    const healthStats = [['3','Duplicate files','var(--warn)'],['1','Missing file path','var(--err)'],['14','Below 192 kbps','var(--t2)']]
+      .map(([count,label,color]) => ({count,label,color}));
+    const healthRows = [
+      ['A Change Is Gonna Come','/Music/Soul/Cooke/03.flac','Duplicate','Keep lossless','var(--warn)'],
+      ['Get Ur Freak On','/Volumes/Old_Drive/missy/04.mp3','File not found','Relocate','var(--err)'],
+      ['Fight the Power','/Music/HipHop/PE/02.mp3','128 kbps','Replace source','var(--warn)'],
+      ['Strawberry Fields Forever','/Music/Beatles/MMT/08.alac','Healthy','Reveal','var(--ok)']
+    ].map(([title,path,issue,action,color]) => ({title,path,issue,action,color}));
+
+    const railTabs = [['Queue','queue'],['Now playing','np'],['Metadata','meta']].map(([label,id]) => {
+      const on = st.tab === id;
+      return { label, go: () => this.set({tab:id}), bg: on ? 'var(--surf2)' : 'transparent', fg: on ? 'var(--t1)' : 'var(--t3)' };
+    });
+
+    const queue = this.tracks.slice(1,7).map(t => ({ title: t.t, artist: t.a, dur: t.d }));
+
+    const tabs = [['Home','\u2302'],['Library','\u25A4'],['Import','\u2191'],['Search','\u2315'],['Settings','\u2699']]
+      .map(([label,icon],i) => ({ label, icon, fg: i === 1 ? 'var(--accText)' : 'var(--t3)' }));
+
+    const barStates = [
+      { tag: 'IDLE \u2014 no track loaded \u00b7 amplitude at 20% opacity, text --t3', title: 'Nothing playing', sub: 'pick a track or \u2318K',
+        titleColor: 'var(--t3)', btnBg: 'transparent', btnBd: 'var(--line)', btnFg: 'var(--t3)', icon: '\u25B6', time: '--:--',
+        bars: this.amp.map(v => ({ h: (v*100).toFixed(1)+'%', bg: 'var(--surf2)' })), tip: false },
+      { tag: 'PLAYING \u2014 played bars fill --gold #F2B705, title turns gold, button --acc #D97B4F', title: "What's Going On", sub: 'Marvin Gaye \u00b7 FLAC',
+        titleColor: 'var(--playing)', btnBg: 'var(--acc)', btnBd: 'var(--acc)', btnFg: 'var(--onAcc)', icon: '\u275A\u275A', time: '1:19',
+        bars: this.barsFor(0.34), tip: false },
+      { tag: 'HOVER-SCRUB \u2014 1px --acc2 playhead + monospace timestamp tooltip on 8px offset', title: "What's Going On", sub: 'Marvin Gaye \u00b7 FLAC',
+        titleColor: 'var(--playing)', btnBg: 'var(--acc2)', btnBd: 'var(--acc2)', btnFg: 'var(--onAcc)', icon: '\u275A\u275A', time: '1:19',
+        bars: this.barsFor(0.34), tip: true }
+    ];
+
+    const sch = this.schemes[st.scheme], dv = sch.dark;
+    const notesA = [
+      { tag: 'SHELL \u00b7 240 / 1fr / 360', text: 'Nav rail 240px, main pane on a 40px page margin, context rail 360px overlaying nothing \u2014 it takes width from main rather than pushing it off-canvas. Transport is 88px, pinned under all three.' },
+      { tag: 'TYPE \u00b7 3 faces, strict roles', text: 'Inter for all UI. JetBrains Mono for anything read off a file \u2014 duration, bitrate, path, counts. Fraunces appears only on empty states, album titles in detail, and Now Playing.' },
+      { tag: 'COLOR \u00b7 ' + sch.name.toUpperCase(), text: 'Playback colour ' + dv.playing + ' is reserved for sound: waveform fill, playing row, playing title (it darkens to ' + sch.light.playing + ' in Daylight Paper to hold 4.5:1). Action colour ' + dv.acc + ' is only ever an action \u2014 import, play, primary confirm.' },
+      { tag: 'EQ \u00b7 10 bands, \u00b112 dB', text: 'Bands are ISO third-octave centres 32 Hz\u201316 kHz, drawn as vertical faders around a 0 dB hairline. The curve strip above them is the same data, read left to right. Boost and cut both use the playback colour ' + dv.playing + ' \u2014 EQ is sound, not an action \u2014 and the whole rack drops to 40% opacity when bypassed.' },
+      { tag: 'DEPTH \u00b7 hairlines, not shadows', text: '1px ' + dv.line + ' defines every static surface. Tinted shadow ' + dv.shadow.split(' ').slice(3).join(' ') + ' only on the transport, modals, \u2318K and toasts. Glass appears exactly once, in Now Playing.' }
+    ];
+
+    const palettes = Object.keys(this.schemes).map(key => {
+      const s = this.schemes[key], v = this.vars(key, st.theme), on = st.scheme === key;
+      const amp = this.amp.filter((_,i) => i % 3 === 0);
+      return { id: s.id, name: s.name, tag: s.tag, hues: s.hues, note: on ? 'applied' : s.note,
+        cta: on ? 'In use' : 'Apply to boards',
+        bg: v.bg, surf: v.surf, surf2: v.surf2, line: v.line, t1: v.t1, t2: v.t2, t3: v.t3,
+        acc: v.acc, onAcc: v.onAcc, playing: v.playing, hatchA: v.hatchA, hatchB: v.hatchB,
+        badgeBg: on ? v.acc : 'rgba(128,128,128,.16)', badgeFg: on ? v.onAcc : 'var(--canvasTxt)',
+        cardBd: on ? v.acc : v.line, cardShadow: on ? v.shadow : 'none',
+        swatches: [['base',v.bg],['surface',v.surf],['line',v.line],['text',v.t1],['action',v.acc],['play',v.playing]]
+          .map(([role,hex]) => ({ role, hex, bd: v.line, label: v.t3 })),
+        bars: amp.map((x,i,arr) => ({ h: (x*100).toFixed(1)+'%', bg: (i/arr.length) <= 0.42 ? v.playing : v.t3 })),
+        apply: () => { this.applyScheme(key, st.theme); this.set({scheme:key}); } };
+    });
+
+    return Object.assign(this.eqVals(), {
+      palettes,
+      schemeName: this.schemes[st.scheme].name,
+      themeLabel: st.theme === 'dark' ? 'Light mode' : 'Dark mode',
+      toggleTheme: () => { const t = st.theme === 'dark' ? 'light' : 'dark'; document.body.dataset.theme = t; this.applyScheme(st.scheme, t); this.set({theme:t}); },
+      nav, crates, albums, rows, albumRows, chips, ingest, results, tagFields, healthStats, healthRows, railTabs, queue, tabs, barStates, notesA,
+      gridCols: st.queueOpen ? 'repeat(3,minmax(0,1fr))' : 'repeat(4,minmax(0,1fr))',
+      mobileAlbums: albums.slice(0,4),
+      mobileTracks: albumRows.slice(0,6),
+      pageTitle: { grid:'Your Library', list:'Your Library', album:'What\u2019s Going On', upload:'Import', crate:'Lossless only', health:'Library health' }[st.view] || 'Your Library',
+      pageMeta: { grid:'1,208 tracks \u00b7 34 folders \u00b7 214 GB', list:'1,208 tracks', album:'Marvin Gaye \u00b7 1971', upload:'6 files in tray', crate:'smart crate \u00b7 auto-updating', health:'last scan 4 min ago' }[st.view] || '',
+      isGrid: st.view === 'grid', isList: st.view === 'list', isAlbum: st.view === 'album',
+      isUpload: st.view === 'upload', isCrate: st.view === 'crate', isHealth: st.view === 'health',
+      goGrid: () => this.set({view:'grid'}), goList: () => this.set({view:'list'}),
+      goUpload: () => this.set({view:'upload'}), goHealth: () => this.set({view:'health'}),
+      gridTabBg: st.view === 'grid' ? 'var(--surf2)' : 'transparent', gridTabFg: st.view === 'grid' ? 'var(--t1)' : 'var(--t3)',
+      listTabBg: st.view === 'list' ? 'var(--surf2)' : 'transparent', listTabFg: st.view === 'list' ? 'var(--t1)' : 'var(--t3)',
+      listCount: this.tracks.length + ' of 1,208 shown',
+      scanLabel: 'Scanning library', scanPct: '68%',
+      queueOpen: st.queueOpen, npOpen: st.np, cmdkOpen: st.cmdk, tagsOpen: st.tags,
+      openQueue: () => this.set({queueOpen:true}), closeQueue: () => this.set({queueOpen:false}),
+      toggleQueue: () => this.set({queueOpen: !st.queueOpen}),
+      qBtnBd: st.queueOpen ? 'var(--acc)' : 'var(--line)', qBtnFg: st.queueOpen ? 'var(--accText)' : 'var(--t2)',
+      openNP: () => this.set({np:true}), closeNP: () => this.set({np:false}),
+      openCmdk: () => this.set({cmdk:true}), closeCmdk: () => this.set({cmdk:false}),
+      openTags: () => this.set({tags:true}), closeTags: () => this.set({tags:false}),
+      playAlbum: () => this.set({playing:true, pos:0.02}),
+      togglePlay: () => this.set({playing: !st.playing}),
+      playIcon: st.playing ? '\u275A\u275A' : '\u25B6',
+      cur, bars: this.barsFor(st.pos), mBars: this.amp.filter((_,i)=>i%2===0).map((v,i,arr)=>({ h:(v*100).toFixed(1)+'%', bg:(i/arr.length)<=0.44?'var(--playing)':'var(--t3)' })),
+      elapsed: this.mmss(total*st.pos), remaining: this.mmss(total*(1-st.pos)),
+      seek: e => { const r = e.currentTarget.getBoundingClientRect(); this.set({ pos: Math.min(1, Math.max(0,(e.clientX-r.left)/r.width)), playing: true }); },
+      hover: e => { const r = e.currentTarget.getBoundingClientRect(); this.set({ hoverPct: (e.clientX-r.left)/r.width }); },
+      hoverOut: () => this.set({hoverPct: null}),
+      hovering: st.hoverPct !== null,
+      hoverX: ((st.hoverPct || 0)*100).toFixed(1) + '%',
+      hoverTime: this.mmss(total*(st.hoverPct || 0)),
+      dzBorder: st.drag ? '1.5px solid var(--acc)' : '1.5px dashed var(--line)',
+      dzBg: st.drag ? 'var(--tint)' : 'var(--surf)',
+      dzGlow: st.drag ? '0 0 0 6px var(--ring)' : 'var(--top)',
+      dzTitle: st.drag ? 'Drop to import' : 'Drag music here',
+      dzSub: st.drag ? '14 files \u00b7 512 MB \u00b7 release to begin' : 'or click to choose a folder \u2014 files are copied, originals untouched',
+      toggleDrag: () => this.set({drag: !st.drag})
+    });
+  }
+}
+</script>
+</body>
+</html>

@@ -26,12 +26,12 @@ export function RightRail() {
   return (
     <aside
       aria-hidden={!isOpen}
-      className={`fixed inset-y-0 right-0 z-20 flex w-[360px] flex-col border-l border-line bg-surf pb-[88px] shadow-[var(--lf-shadow)] transition-transform duration-200 ${
+      className={`fixed inset-y-0 right-0 z-20 flex w-[360px] flex-col border-l border-line bg-surf pb-[88px] transition-transform duration-200 ${
         isOpen ? "translate-x-0" : "pointer-events-none translate-x-full"
       }`}
     >
-      <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-4">
-        <span className="text-sm font-medium text-t1">Queue</span>
+      <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-4">
+        <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-t1">Queue</span>
         <button
           type="button"
           onClick={closeQueue}
@@ -44,20 +44,20 @@ export function RightRail() {
 
       <div className="flex-1 overflow-y-auto">
         {currentTrack ? (
-          <div className="border-b border-line px-5 py-4">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-t3">Now Playing</p>
-            <div className="flex items-center gap-3">
-              <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-surf-2">
+          <div className="px-3 py-3">
+            <p className="mb-2.5 px-2 text-[11px] font-medium uppercase tracking-[0.04em] text-t3">Now playing</p>
+            <div className="flex items-center gap-3 rounded-lg bg-surf-2 p-2">
+              <div className="lf-hatch h-12 w-12 shrink-0 overflow-hidden rounded-[10px]">
                 {currentTrack.coverArtUrl && (
                   // eslint-disable-next-line @next/next/no-img-element -- local-only images
                   <img src={withAuthQuery(currentTrack.coverArtUrl)} alt="" className="h-full w-full object-cover" />
                 )}
               </div>
               <div className="min-w-0">
-                <p className={`truncate text-sm font-medium ${isPlaying ? "text-playing" : "text-t1"}`}>
+                <p className={`truncate text-sm ${isPlaying ? "text-playing" : "text-t1"}`}>
                   {currentTrack.title ?? "Untitled"}
                 </p>
-                <p className="truncate text-xs text-t2">{currentTrack.artistName ?? "Unknown artist"}</p>
+                <p className="truncate font-mono text-xs text-t3">{currentTrack.artistName ?? "Unknown artist"}</p>
               </div>
             </div>
           </div>
@@ -65,14 +65,14 @@ export function RightRail() {
           <p className="px-5 py-6 text-center text-sm text-t3">Nothing playing.</p>
         )}
 
-        <p className="px-5 pt-3 text-xs font-medium uppercase tracking-wide text-t3">
-          Up Next{upNext.length > 0 ? ` (${upNext.length})` : ""}
+        <p className="px-5 pt-3 text-[11px] font-medium uppercase tracking-[0.04em] text-t3">
+          Up next · drag to reorder{upNext.length > 0 ? ` · ${upNext.length}` : ""}
         </p>
 
         {upNext.length === 0 ? (
           <p className="px-5 py-3 text-sm text-t3">Queue is empty.</p>
         ) : (
-          <ul className="py-1">
+          <ul className="px-3 py-1">
             {upNext.map((track, i) => {
               const absoluteIndex = currentIndex + 1 + i;
               return (
@@ -98,7 +98,7 @@ export function RightRail() {
                     dragIndexRef.current = null;
                     setDragOverIndex(null);
                   }}
-                  className={`group flex items-center gap-2 px-5 py-2 hover:bg-surf-2 ${
+                  className={`group flex items-center gap-2.5 rounded-lg px-2 py-2.5 hover:bg-surf-2 ${
                     dragOverIndex === absoluteIndex ? "bg-[var(--lf-tint)]" : ""
                   }`}
                 >
@@ -107,7 +107,7 @@ export function RightRail() {
                   </span>
                   <button type="button" onClick={() => playFromQueue(absoluteIndex)} className="min-w-0 flex-1 text-left">
                     <p className="truncate text-sm text-t1">{track.title ?? "Untitled"}</p>
-                    <p className="truncate text-xs text-t2">{track.artistName ?? "Unknown artist"}</p>
+                    <p className="truncate font-mono text-xs text-t3">{track.artistName ?? "Unknown artist"}</p>
                   </button>
                   <span className="shrink-0 font-mono text-xs text-t3">{formatDuration(track.durationSeconds)}</span>
                   <button

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { fetchAlbums, fetchTracks } from "@/lib/api-client";
@@ -43,14 +44,22 @@ export function LibraryView() {
   if (anyTracksQuery.data?.items.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center">
-        <h1 className="font-serif text-3xl text-t1">Your library is empty</h1>
+        <h1 className="font-serif text-[40px] font-medium text-t1">Your library is empty</h1>
         <p className="max-w-sm text-sm text-t2">Import tracks to start building your collection.</p>
+        <Link
+          href="/import"
+          className="lf-top mt-5 rounded-lg border border-acc bg-acc px-5 py-2.5 text-[13px] font-semibold text-on-acc hover:border-acc-2 hover:bg-acc-2"
+        >
+          Import files
+        </Link>
       </div>
     );
   }
 
   const tracks = tracksQuery.data?.pages.flatMap((p) => p.items) ?? [];
   const albums = albumsQuery.data?.pages.flatMap((p) => p.items) ?? [];
+  const shownCount = viewMode === "grid" ? albums.length : tracks.length;
+  const meta = shownCount > 0 ? `${shownCount} shown` : undefined;
 
   return (
     <div className="flex h-full flex-col">
@@ -61,9 +70,10 @@ export function LibraryView() {
         onAlbumSortChange={setAlbumSort}
         losslessOnly={losslessOnly}
         onLosslessOnlyChange={setLosslessOnly}
+        meta={meta}
       />
 
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      <div className="flex-1 overflow-y-auto px-10 pb-8">
         {viewMode === "grid" ? (
           albums.length === 0 && !albumsQuery.isLoading ? (
             <EmptyAlbums />

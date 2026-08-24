@@ -19,7 +19,7 @@ export function ConditionChip({
   const allowedOps = RULE_OPS_BY_KIND[kind];
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-surf-2 px-3 py-2">
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-playing bg-[var(--lf-tint)] px-3.5 py-3">
       <select
         value={condition.field}
         onChange={(e) => onChange(defaultConditionForField(e.target.value as RuleField))}

@@ -29,13 +29,13 @@ export function ArtistDetailView({ artistId }: { artistId: number }) {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto px-8 py-8">
+    <div className="flex h-full flex-col overflow-y-auto px-10 py-8">
       <Link href="/" className="w-fit text-xs font-medium text-t3 hover:text-t1">
         ← Library
       </Link>
 
-      <h1 className="mt-4 font-serif text-3xl text-t1">{artist.name}</h1>
-      <p className="mt-1 text-sm text-t2">
+      <h1 className="mt-4 font-serif text-[40px] font-medium leading-[1.1] text-t1">{artist.name}</h1>
+      <p className="mt-2 font-mono text-xs text-t3">
         {artist.albums.length} album{artist.albums.length === 1 ? "" : "s"}
       </p>
 

@@ -103,7 +103,7 @@ export function TagEditorModal({ title, mode, trackIds, initialValues, onClose }
     >
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-md rounded-xl border border-line bg-surf p-6 shadow-[var(--lf-shadow)]"
+        className="w-full max-w-md rounded-3xl border border-line bg-surf p-6 shadow-[var(--lf-shadow)]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
@@ -137,7 +137,7 @@ export function TagEditorModal({ title, mode, trackIds, initialValues, onClose }
                     [field.key]: field.type === "number" ? (e.target.value === "" ? null : Number(e.target.value)) : e.target.value,
                   }))
                 }
-                className="rounded-md border border-line bg-surf-2 px-2 py-1.5 text-sm text-t1"
+                className="rounded-lg border border-line bg-surf-2 px-2 py-1.5 text-sm text-t1 focus:border-acc focus:outline-none"
               />
             </label>
           ))}
@@ -152,7 +152,7 @@ export function TagEditorModal({ title, mode, trackIds, initialValues, onClose }
           <button
             type="submit"
             disabled={mutation.isPending}
-            className="rounded-md bg-acc px-3 py-1.5 text-sm font-medium text-[var(--lf-on-acc)] hover:bg-acc-2 disabled:opacity-50"
+            className="rounded-lg bg-acc px-3 py-1.5 text-sm font-medium text-on-acc hover:bg-acc-2 disabled:opacity-50"
           >
             {mutation.isPending ? "Saving…" : "Save"}
           </button>

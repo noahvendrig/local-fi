@@ -103,7 +103,7 @@ export function SmartCrateBuilder({ playlist }: { playlist: PlaylistDetail }) {
           type="button"
           onClick={() => saveMutation.mutate()}
           disabled={!isDirty || saveMutation.isPending}
-          className="rounded-full bg-acc px-4 py-2 text-sm font-medium text-[var(--lf-on-acc)] hover:bg-acc-2 disabled:opacity-50"
+          className="lf-top rounded-lg border border-acc bg-acc px-5 py-2.5 text-[13px] font-semibold text-on-acc hover:border-acc-2 hover:bg-acc-2 disabled:opacity-50"
         >
           {saveMutation.isPending ? "Saving…" : "Save crate"}
         </button>

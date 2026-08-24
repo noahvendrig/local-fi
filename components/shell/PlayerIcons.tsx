@@ -6,7 +6,7 @@ type IconSizeProps = { size?: number };
 export function PlayIcon({ size = 14 }: IconSizeProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M7 5v14l12-7z" />
+      <path d="M5 3v18l16-9z" />
     </svg>
   );
 }
@@ -98,6 +98,16 @@ export function AlbumPlaceholderIcon() {
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="9" />
       <circle cx="12" cy="12" r="2.5" />
+    </svg>
+  );
+}
+
+export function EqIcon({ size = 14 }: IconSizeProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <rect x="4" y="10" width="3" height="10" rx="1" />
+      <rect x="10.5" y="4" width="3" height="16" rx="1" />
+      <rect x="17" y="8" width="3" height="12" rx="1" />
     </svg>
   );
 }

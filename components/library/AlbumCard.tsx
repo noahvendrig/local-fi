@@ -3,45 +3,42 @@ import { withAuthQuery } from "@/lib/api/http";
 import type { AlbumSummary } from "@/lib/api-client";
 import { FormatBadge } from "./FormatBadge";
 
-export function AlbumCard({ album }: { album: AlbumSummary }) {
+export function AlbumCard({ album, isPlaying }: { album: AlbumSummary; isPlaying?: boolean }) {
   return (
-    <Link href={`/albums/${album.id}`} className="group flex flex-col gap-2">
-      <div className="relative aspect-square overflow-hidden rounded-lg bg-surf-2 shadow-[var(--lf-art-shadow)]">
+    <Link
+      href={`/albums/${album.id}`}
+      className="lf-card group min-w-0 rounded-2xl p-4 transition-[background,border-color] duration-150 hover:border-t3 hover:bg-surf-2"
+    >
+      <div className="lf-hatch relative aspect-square overflow-hidden rounded-[20px] shadow-[var(--lf-art-shadow)]">
         {album.coverArtUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- local-only images, no benefit from next/image's remote optimization pipeline
           <img
             src={withAuthQuery(album.coverArtUrl)}
             alt=""
-            className="h-full w-full object-cover transition-transform group-hover:scale-105"
+            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-t3" aria-hidden>
-            <AlbumPlaceholderIcon />
+          <div className="absolute inset-0 grid place-items-center px-3 text-center" aria-hidden>
+            <span className="font-mono text-[10.5px] leading-[1.4] text-t3">no art · {album.format ?? "album"}</span>
           </div>
         )}
         {album.format && (
-          <div className="absolute left-2 top-2">
+          <div className="absolute left-2.5 top-2.5">
             <FormatBadge format={album.format} lossless={album.lossless} />
           </div>
         )}
       </div>
-      <div className="min-w-0">
-        <p className="truncate text-sm font-medium text-t1" title={album.title}>
-          {album.title}
-        </p>
-        <p className="truncate text-xs text-t2" title={album.albumArtistName}>
-          {album.albumArtistName}
-        </p>
+      <div className="mt-3.5 flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <p className={`truncate text-base font-semibold leading-[1.4] ${isPlaying ? "text-playing" : "text-t1"}`} title={album.title}>
+            {album.title}
+          </p>
+          <p className="truncate text-sm leading-[1.5] text-t2" title={album.albumArtistName}>
+            {album.albumArtistName}
+          </p>
+        </div>
+        {album.year ? <span className="pt-0.5 font-mono text-xs text-t3">{album.year}</span> : null}
       </div>
     </Link>
-  );
-}
-
-function AlbumPlaceholderIcon() {
-  return (
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9" />
-      <circle cx="12" cy="12" r="2.5" />
-    </svg>
   );
 }

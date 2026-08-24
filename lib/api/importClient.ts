@@ -1,5 +1,5 @@
 import { authHeaders, withAuthQuery } from "./http";
-import type { ImportJobWithFiles } from "./types";
+import type { ImportJob, ImportJobWithFiles } from "./types";
 
 export { withAuthQuery };
 
@@ -19,6 +19,13 @@ export async function submitImport(files: File[]): Promise<ImportJobWithFiles> {
   }
 
   return res.json();
+}
+
+export async function fetchImportJobs(limit = 20): Promise<ImportJob[]> {
+  const res = await fetch(`/api/v1/import/jobs?limit=${limit}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error(`Failed to fetch import jobs (${res.status})`);
+  const body = (await res.json()) as { items: ImportJob[] };
+  return body.items;
 }
 
 export async function fetchImportJob(jobId: number): Promise<ImportJobWithFiles> {

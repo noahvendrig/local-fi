@@ -38,12 +38,13 @@ export function WaveformScrubber({ waveform, currentTime, duration, onSeek, disa
     ctx.clearRect(0, 0, width, height);
 
     const style = getComputedStyle(container);
-    const playedColor = style.getPropertyValue("--lf-playing").trim() || "#8A5CF0";
+    const playedColor = style.getPropertyValue("--lf-playing").trim() || "#C9A6FF";
     const unplayedColor = style.getPropertyValue("--lf-t3").trim() || "#6A6478";
+    const idleColor = style.getPropertyValue("--lf-surf-2").trim() || "#221E2A";
 
     if (!waveform || waveform.peakCount === 0) {
-      ctx.fillStyle = unplayedColor;
-      ctx.globalAlpha = 0.4;
+      ctx.fillStyle = idleColor;
+      ctx.globalAlpha = 1;
       ctx.fillRect(0, height / 2 - 1, width, 2);
       ctx.globalAlpha = 1;
       return;
@@ -107,12 +108,18 @@ export function WaveformScrubber({ waveform, currentTime, duration, onSeek, disa
       >
         <canvas ref={canvasRef} className="h-full w-full" />
         {hoverRatio !== null && duration > 0 && (
-          <div
-            className="pointer-events-none absolute -top-8 -translate-x-1/2 rounded-md border border-line bg-surf-2 px-1.5 py-0.5 font-mono text-[11px] text-t1 shadow-[var(--lf-shadow)]"
-            style={{ left: `${hoverRatio * 100}%` }}
-          >
-            {formatDuration(hoverRatio * duration)}
-          </div>
+          <>
+            <div
+              className="pointer-events-none absolute inset-y-0 w-px bg-acc-2"
+              style={{ left: `${hoverRatio * 100}%` }}
+            />
+            <div
+              className="pointer-events-none absolute bottom-[46px] -translate-x-1/2 rounded border border-line bg-bg px-2 py-1 font-mono text-[11px] text-t1 shadow-[var(--lf-shadow)]"
+              style={{ left: `${hoverRatio * 100}%` }}
+            >
+              {formatDuration(hoverRatio * duration)}
+            </div>
+          </>
         )}
       </div>
       <span className="w-12 shrink-0 font-mono text-sm text-t3">{formatDuration(duration)}</span>

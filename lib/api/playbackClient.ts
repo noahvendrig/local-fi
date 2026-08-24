@@ -1,4 +1,5 @@
 import type { TrackSummary } from "@/lib/api-client";
+import type { EqState } from "@/lib/audio/eqConfig";
 import { authHeaders } from "./http";
 
 export type RepeatMode = "off" | "all" | "one";
@@ -12,6 +13,7 @@ export interface PlaybackStateDTO {
   volume: number;
   repeatMode: RepeatMode;
   shuffle: boolean;
+  eq: EqState;
   updatedAt: string | null;
 }
 
@@ -23,6 +25,7 @@ export interface PlaybackStatePatch {
   volume?: number;
   repeatMode?: RepeatMode;
   shuffle?: boolean;
+  eq?: EqState;
 }
 
 export async function fetchPlaybackState(): Promise<PlaybackStateDTO> {

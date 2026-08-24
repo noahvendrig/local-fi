@@ -32,14 +32,16 @@ export function HealthView() {
   const report = reportQuery.data;
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto px-8 py-8">
+    <div className="flex h-full flex-col overflow-y-auto px-10 py-8">
       <div className="flex items-center justify-between">
-        <h1 className="font-serif text-3xl text-t1">Library Health</h1>
+        <div>
+          <h1 className="text-[28px] font-bold leading-[1.2] text-t1">Library health</h1>
+        </div>
         <button
           type="button"
           onClick={() => scanMutation.mutate()}
           disabled={scanMutation.isPending}
-          className="rounded-full bg-acc px-4 py-2 text-sm font-medium text-[var(--lf-on-acc)] hover:bg-acc-2 disabled:opacity-50"
+          className="lf-top rounded-lg border border-acc bg-acc px-5 py-2.5 text-[13px] font-semibold text-on-acc hover:border-acc-2 hover:bg-acc-2 disabled:opacity-50"
         >
           {scanMutation.isPending ? "Scanning…" : "Rescan library"}
         </button>
@@ -59,7 +61,7 @@ export function HealthView() {
         ) : !missingQuery.data || missingQuery.data.items.length === 0 ? (
           <p className="mt-3 text-sm text-t3">Nothing missing.</p>
         ) : (
-          <ul className="mt-3 divide-y divide-line rounded-lg border border-line">
+          <ul className="mt-3 flex flex-col gap-2.5">
             {missingQuery.data.items.map((track) => (
               <MissingTrackRow key={track.id} track={track} />
             ))}
@@ -76,7 +78,7 @@ export function HealthView() {
         ) : (
           <div className="mt-3 flex flex-col gap-3">
             {duplicatesQuery.data.items.map((group) => (
-              <div key={group.key} className="rounded-lg border border-line p-3">
+              <div key={group.key} className="lf-card rounded-lg p-3.5">
                 <p className="mb-2 text-xs text-t3">
                   {group.tracks.length} tracks look like duplicates
                 </p>
@@ -102,9 +104,9 @@ export function HealthView() {
 
 function StatTile({ label, value, warn }: { label: string; value: number | undefined; warn: boolean }) {
   return (
-    <div className="rounded-xl border border-line bg-surf p-4">
-      <p className="text-xs text-t3">{label}</p>
-      <p className={`mt-1 font-mono text-2xl ${warn ? "text-warn" : "text-t1"}`}>{value ?? "—"}</p>
+    <div className="lf-card rounded-2xl p-4">
+      <p className={`mb-2 font-mono text-xs ${warn ? "text-warn" : "text-t2"}`}>{value ?? "—"}</p>
+      <p className="text-base font-semibold text-t1">{label}</p>
     </div>
   );
 }
@@ -129,17 +131,18 @@ function MissingTrackRow({ track }: { track: TrackSummary }) {
   });
 
   return (
-    <li className="flex flex-col gap-2 px-4 py-3">
-      <div className="flex items-center gap-3">
+    <li className="lf-card flex flex-col gap-2 rounded-lg px-3.5 py-3.5">
+      <div className="flex items-center gap-3.5">
+        <span className="h-2 w-2 shrink-0 rounded-full bg-err" aria-hidden />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm text-t1">{track.title ?? "Untitled"}</p>
-          <p className="truncate text-xs text-t3">{track.artistName ?? "Unknown artist"}</p>
+          <p className="truncate font-mono text-xs text-t3">{track.artistName ?? "Unknown artist"}</p>
         </div>
         <button
           type="button"
           onClick={() => (expanded ? relinkMutation.mutate() : setExpanded(true))}
           disabled={relinkMutation.isPending}
-          className="shrink-0 rounded-md border border-line px-3 py-1.5 text-xs text-t1 hover:bg-surf-2 disabled:opacity-50"
+          className="shrink-0 rounded-lg border border-line px-3 py-2 text-xs font-medium text-t1 hover:border-acc hover:bg-surf-2 disabled:opacity-50"
         >
           {relinkMutation.isPending ? "Relinking…" : expanded ? "Confirm relink" : "Relink"}
         </button>
@@ -147,7 +150,7 @@ function MissingTrackRow({ track }: { track: TrackSummary }) {
           type="button"
           onClick={() => removeMutation.mutate()}
           disabled={removeMutation.isPending}
-          className="shrink-0 rounded-md border border-line px-3 py-1.5 text-xs text-err hover:bg-surf-2 disabled:opacity-50"
+          className="shrink-0 rounded-lg border border-line px-3 py-2 text-xs font-medium text-err hover:border-err hover:bg-surf-2 disabled:opacity-50"
         >
           {removeMutation.isPending ? "Removing…" : "Remove"}
         </button>
@@ -158,7 +161,7 @@ function MissingTrackRow({ track }: { track: TrackSummary }) {
           value={relinkPath}
           onChange={(e) => setRelinkPath(e.target.value)}
           placeholder="Leave blank to re-check the original location, or paste a new path inside the data dir"
-          className="rounded-md border border-line bg-surf-2 px-2 py-1.5 text-xs text-t1"
+          className="rounded-lg border border-line bg-surf-2 px-2 py-1.5 text-xs text-t1"
         />
       )}
       {relinkMutation.isError && <p className="text-xs text-err">{(relinkMutation.error as Error).message}</p>}

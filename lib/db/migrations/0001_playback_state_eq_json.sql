@@ -1,0 +1,1 @@
+ALTER TABLE `playback_state` ADD `eq_json` text;

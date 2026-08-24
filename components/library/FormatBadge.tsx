@@ -1,10 +1,9 @@
-// Format badge — color-coded per ARCHITECTURE.md §9 semantic rules: `ok` marks a
-// meaningfully "good" state (lossless), everything else stays neutral (`t2`/`surf-2`).
+// Overlay-style format chip from Local-fi.dc.html: hairline surface, lossless → ok, lossy → warn.
 export function FormatBadge({ format, lossless }: { format: string; lossless: boolean }) {
   return (
     <span
-      className={`inline-flex items-center rounded-md px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wide ${
-        lossless ? "bg-ok/20 text-ok" : "bg-surf-2 text-t2"
+      className={`inline-flex items-center rounded border border-line bg-surf px-[7px] py-[3px] font-mono text-[10px] uppercase tracking-wide ${
+        lossless ? "text-ok" : "text-warn"
       }`}
     >
       {format}

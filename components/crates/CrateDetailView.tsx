@@ -59,14 +59,14 @@ export function CrateDetailView({ playlistId }: { playlistId: number }) {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto px-8 py-8">
+    <div className="flex h-full flex-col overflow-y-auto px-10 py-8">
       <Link href="/crates" className="w-fit text-xs font-medium text-t3 hover:text-t1">
         ← Crates
       </Link>
 
       <div className="mt-4 flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-t3">{playlist.type === "smart" ? "Smart Crate" : "Crate"}</p>
+          <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-t3">{playlist.type === "smart" ? "Smart crate" : "Crate"}</p>
           {isEditingName ? (
             <form
               onSubmit={(e) => {
@@ -85,7 +85,7 @@ export function CrateDetailView({ playlistId }: { playlistId: number }) {
             </form>
           ) : (
             <h1
-              className="mt-1 w-fit cursor-text truncate font-serif text-3xl text-t1"
+              className="mt-1 w-fit cursor-text truncate font-serif text-[40px] font-medium leading-[1.1] text-t1"
               onClick={() => {
                 setNameDraft(playlist.name);
                 setIsEditingName(true);
@@ -95,7 +95,7 @@ export function CrateDetailView({ playlistId }: { playlistId: number }) {
               {playlist.name}
             </h1>
           )}
-          <p className="mt-2 text-sm text-t2">
+          <p className="mt-2 font-mono text-xs text-t3">
             {playlist.tracks.length} track{playlist.tracks.length === 1 ? "" : "s"}
           </p>
         </div>
@@ -116,7 +116,7 @@ export function CrateDetailView({ playlistId }: { playlistId: number }) {
           type="button"
           onClick={() => playlist.tracks.length > 0 && playTrack(playlist.tracks[0], playlist.tracks)}
           disabled={playlist.tracks.length === 0}
-          className="flex items-center gap-2 rounded-full bg-acc px-4 py-2 text-sm font-medium text-[var(--lf-on-acc)] hover:bg-acc-2 disabled:opacity-50"
+          className="lf-top flex items-center gap-2 rounded-lg border border-acc bg-acc px-5 py-2.5 text-[13px] font-semibold text-on-acc hover:border-acc-2 hover:bg-acc-2 disabled:opacity-50"
         >
           <PlayIcon /> Play
         </button>
@@ -124,7 +124,7 @@ export function CrateDetailView({ playlistId }: { playlistId: number }) {
           type="button"
           onClick={() => enqueue(playlist.tracks)}
           disabled={playlist.tracks.length === 0}
-          className="rounded-full border border-line px-4 py-2 text-sm font-medium text-t1 hover:bg-surf-2 disabled:opacity-50"
+          className="rounded-lg border border-line px-4 py-2.5 text-[13px] font-medium text-t1 hover:border-acc hover:bg-surf-2 disabled:opacity-50"
         >
           Queue
         </button>

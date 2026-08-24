@@ -39,7 +39,7 @@ export function NewCrateModal({ onClose }: { onClose: () => void }) {
           e.preventDefault();
           if (name.trim()) createMutation.mutate();
         }}
-        className="w-full max-w-sm rounded-xl border border-line bg-surf p-6 shadow-[var(--lf-shadow)]"
+        className="w-full max-w-sm rounded-3xl border border-line bg-surf p-6 shadow-[var(--lf-shadow)]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
@@ -89,7 +89,7 @@ export function NewCrateModal({ onClose }: { onClose: () => void }) {
           <button
             type="submit"
             disabled={!name.trim() || createMutation.isPending}
-            className="rounded-md bg-acc px-3 py-1.5 text-sm font-medium text-[var(--lf-on-acc)] hover:bg-acc-2 disabled:opacity-50"
+            className="rounded-lg bg-acc px-3 py-1.5 text-sm font-medium text-on-acc hover:bg-acc-2 disabled:opacity-50"
           >
             {createMutation.isPending ? "Creating…" : "Create"}
           </button>

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb } from "@/lib/db/client";
 import { playbackState } from "@/lib/db/schema";
+import { parseEqJson, parseEqState } from "@/lib/audio/eqConfig";
 import { getTrackSummariesByIds } from "@/lib/db/trackSummary";
 
 // Single-player phase-1 case (ARCHITECTURE.md §3.8) — a real column, not a hardcoded
@@ -17,6 +18,14 @@ const PutSchema = z.object({
   volume: z.number().min(0).max(1).optional(),
   repeatMode: z.enum(["off", "all", "one"]).optional(),
   shuffle: z.boolean().optional(),
+  eq: z
+    .object({
+      enabled: z.boolean(),
+      gains: z.array(z.number().min(-12).max(12)).length(10),
+      preamp: z.number().min(-12).max(12),
+      preset: z.string(),
+    })
+    .optional(),
 });
 
 type Db = ReturnType<typeof getDb>;
@@ -39,6 +48,7 @@ function toResponseBody(db: Db) {
     volume: row?.volume ?? 1,
     repeatMode: row?.repeatMode ?? "off",
     shuffle: row ? row.shuffle === 1 : false,
+    eq: parseEqJson(row?.eqJson),
     updatedAt: row?.updatedAt ?? null,
   };
 }
@@ -73,6 +83,7 @@ export async function PUT(request: Request) {
     volume: patch.volume ?? existing?.volume ?? 1,
     repeatMode: patch.repeatMode ?? existing?.repeatMode ?? "off",
     shuffle: patch.shuffle !== undefined ? (patch.shuffle ? 1 : 0) : (existing?.shuffle ?? 0),
+    eqJson: patch.eq ? JSON.stringify(parseEqState(patch.eq)) : (existing?.eqJson ?? null),
     updatedAt: now,
   };
 

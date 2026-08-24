@@ -234,6 +234,7 @@ export const playbackState = sqliteTable("playback_state", {
   volume: real("volume").notNull().default(1.0),
   repeatMode: text("repeat_mode").notNull().default("off"),
   shuffle: integer("shuffle").notNull().default(0),
+  eqJson: text("eq_json"),
   updatedAt: text("updated_at").notNull(),
 }, (t) => [
   check("chk_playback_state_repeat_mode", sql`${t.repeatMode} IN ('off','all','one')`),
