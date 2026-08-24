@@ -11,9 +11,14 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.102.2",
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.2",
+    "fractional-indexing": "^4.0.0",
+    "music-metadata": "^11.15.0",
     "next": "16.3.2",
+    "node-taglib-sharp": "^6.0.3",
+    "p-queue": "^9.3.3",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "zod": "^4.4.3",

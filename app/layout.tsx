@@ -4,6 +4,14 @@ import { inter, jetbrainsMono, fraunces } from "./fonts";
 import { NavRail } from "@/components/shell/NavRail";
 import { RightRail } from "@/components/shell/RightRail";
 import { TransportBar } from "@/components/shell/TransportBar";
+import { NowPlayingOverlay } from "@/components/shell/NowPlayingOverlay";
+import { CommandPalette } from "@/components/shell/CommandPalette";
+import { AuthTokenProvider } from "@/components/auth/AuthTokenProvider";
+import { IngestTray } from "@/components/ingest/IngestTray";
+import { TrackTagEditorHost } from "@/components/library/TrackTagEditorHost";
+import { QueryProvider } from "@/components/providers/QueryProvider";
+import { PlaybackStateProvider } from "@/components/providers/PlaybackStateProvider";
+import { getAuthToken } from "@/lib/auth/token";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,6 +24,8 @@ export const metadata: Metadata = {
 const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('lf-theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
+  const token = getAuthToken();
+
   return (
     <html
       lang="en"
@@ -30,12 +40,20 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         />
       </head>
       <body className="flex h-full flex-col font-sans antialiased" suppressHydrationWarning>
-        <div className="flex flex-1 overflow-hidden pb-[88px]">
-          <NavRail />
-          <main className="flex-1 overflow-y-auto">{children}</main>
-        </div>
-        <RightRail />
-        <TransportBar />
+        <QueryProvider>
+          <AuthTokenProvider token={token} />
+          <PlaybackStateProvider />
+          <div className="flex flex-1 overflow-hidden pb-[88px]">
+            <NavRail />
+            <main className="flex-1 overflow-y-auto">{children}</main>
+          </div>
+          <RightRail />
+          <TransportBar />
+          <NowPlayingOverlay />
+          <IngestTray />
+          <CommandPalette />
+          <TrackTagEditorHost />
+        </QueryProvider>
       </body>
     </html>
   );
