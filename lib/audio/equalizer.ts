@@ -1,57 +1,48 @@
+import { equalPowerInCurve, equalPowerOutCurve } from "./crossfade";
 import { EQ_BAND_HZ, EQ_Q, dbToLinear, type EqState } from "./eqConfig";
 
+export type DeckId = 0 | 1;
+
 /**
- * One Web Audio graph for the app's single <audio> element.
- * createMediaElementSource can only be called once per element, so this stays
- * a module singleton and is never closed for the lifetime of the page.
+ * Dual-deck Web Audio graph. Two <audio> elements mix through per-deck fade gains
+ * (loudness match + crossfade), then the shared EQ / analyser / volume chain.
+ * createMediaElementSource can only run once per element, so this stays a module
+ * singleton and is never closed for the lifetime of the page.
+ *
+ * Graph: sourceA/B → fadeA/B → mixer → EQ filters → preamp → analyser → volume → destination
  */
 class PlaybackEqualizer {
   private audioContext: AudioContext | null = null;
-  private sourceNode: MediaElementAudioSourceNode | null = null;
+  private sourceNodes: [MediaElementAudioSourceNode | null, MediaElementAudioSourceNode | null] = [null, null];
+  private fadeNodes: [GainNode | null, GainNode | null] = [null, null];
+  private mixerNode: GainNode | null = null;
   private filterNodes: BiquadFilterNode[] = [];
   private preampNode: GainNode | null = null;
+  private analyserNode: AnalyserNode | null = null;
   private volumeNode: GainNode | null = null;
-  private connectedElement: HTMLAudioElement | null = null;
+  private connectedElements: [HTMLAudioElement | null, HTMLAudioElement | null] = [null, null];
   private pending: { eq: Pick<EqState, "enabled" | "gains" | "preamp">; volume: number } = {
     eq: { enabled: true, gains: EQ_BAND_HZ.map(() => 0), preamp: 0 },
     volume: 1,
   };
+  private pendingDeckGain: [number, number] = [1, 0];
 
-  connect(audio: HTMLAudioElement): void {
-    if (this.sourceNode && this.connectedElement === audio) return;
-    if (this.sourceNode) return;
+  connectDeck(audio: HTMLAudioElement, deck: DeckId): void {
+    if (this.sourceNodes[deck] && this.connectedElements[deck] === audio) return;
+    if (this.sourceNodes[deck]) return;
 
-    const AudioContextCtor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextCtor) return;
+    const ctx = this.ensureContext();
+    if (!ctx || !this.mixerNode) return;
 
-    const ctx = new AudioContextCtor();
     const source = ctx.createMediaElementSource(audio);
-    const filters = EQ_BAND_HZ.map((hz) => {
-      const filter = ctx.createBiquadFilter();
-      filter.type = "peaking";
-      filter.frequency.value = hz;
-      filter.Q.value = EQ_Q;
-      filter.gain.value = 0;
-      return filter;
-    });
-    const preamp = ctx.createGain();
-    const volume = ctx.createGain();
+    const fade = ctx.createGain();
+    fade.gain.value = this.pendingDeckGain[deck];
+    source.connect(fade);
+    fade.connect(this.mixerNode);
 
-    let previous: AudioNode = source;
-    for (const filter of filters) {
-      previous.connect(filter);
-      previous = filter;
-    }
-    previous.connect(preamp);
-    preamp.connect(volume);
-    volume.connect(ctx.destination);
-
-    this.audioContext = ctx;
-    this.sourceNode = source;
-    this.filterNodes = filters;
-    this.preampNode = preamp;
-    this.volumeNode = volume;
-    this.connectedElement = audio;
+    this.sourceNodes[deck] = source;
+    this.fadeNodes[deck] = fade;
+    this.connectedElements[deck] = audio;
     audio.volume = 1;
     this.applyPending();
   }
@@ -70,6 +61,84 @@ class PlaybackEqualizer {
   setVolume(volume: number): void {
     this.pending.volume = Math.min(1, Math.max(0, volume));
     this.applyPending();
+  }
+
+  getAnalyser(): AnalyserNode | null {
+    return this.analyserNode;
+  }
+
+  setDeckGain(deck: DeckId, linear: number): void {
+    const gain = Math.max(0, linear);
+    this.pendingDeckGain[deck] = gain;
+    const node = this.fadeNodes[deck];
+    const ctx = this.audioContext;
+    if (!node || !ctx) return;
+    const now = ctx.currentTime;
+    node.gain.cancelScheduledValues(now);
+    node.gain.setValueAtTime(gain, now);
+  }
+
+  crossfadeDecks(outDeck: DeckId, inDeck: DeckId, outLoudness: number, inLoudness: number, durationSec: number): void {
+    const outNode = this.fadeNodes[outDeck];
+    const inNode = this.fadeNodes[inDeck];
+    const ctx = this.audioContext;
+    if (!outNode || !inNode || !ctx) {
+      this.pendingDeckGain[outDeck] = 0;
+      this.pendingDeckGain[inDeck] = inLoudness;
+      return;
+    }
+
+    const duration = Math.max(0.05, durationSec);
+    const now = ctx.currentTime;
+    outNode.gain.cancelScheduledValues(now);
+    inNode.gain.cancelScheduledValues(now);
+    outNode.gain.setValueCurveAtTime(equalPowerOutCurve(outLoudness), now, duration);
+    inNode.gain.setValueCurveAtTime(equalPowerInCurve(inLoudness), now, duration);
+
+    this.pendingDeckGain[outDeck] = 0;
+    this.pendingDeckGain[inDeck] = inLoudness;
+  }
+
+  private ensureContext(): AudioContext | null {
+    if (this.audioContext) return this.audioContext;
+
+    const AudioContextCtor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextCtor) return null;
+
+    const ctx = new AudioContextCtor();
+    const mixer = ctx.createGain();
+    mixer.gain.value = 1;
+    const filters = EQ_BAND_HZ.map((hz) => {
+      const filter = ctx.createBiquadFilter();
+      filter.type = "peaking";
+      filter.frequency.value = hz;
+      filter.Q.value = EQ_Q;
+      filter.gain.value = 0;
+      return filter;
+    });
+    const preamp = ctx.createGain();
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.82;
+    const volume = ctx.createGain();
+
+    let previous: AudioNode = mixer;
+    for (const filter of filters) {
+      previous.connect(filter);
+      previous = filter;
+    }
+    previous.connect(preamp);
+    preamp.connect(analyser);
+    analyser.connect(volume);
+    volume.connect(ctx.destination);
+
+    this.audioContext = ctx;
+    this.mixerNode = mixer;
+    this.filterNodes = filters;
+    this.preampNode = preamp;
+    this.analyserNode = analyser;
+    this.volumeNode = volume;
+    return ctx;
   }
 
   private applyPending(): void {

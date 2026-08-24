@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatDuration } from "@/lib/format/track";
+import { getPlaybackEqualizer } from "@/lib/audio/equalizer";
+import { useSettingsStore } from "@/lib/store/settings";
 import type { WaveformData } from "@/lib/waveform/parse";
 
 interface WaveformScrubberProps {
@@ -12,16 +14,24 @@ interface WaveformScrubberProps {
   disabled: boolean;
 }
 
-/** Waveform-bar seek scrubber rendered from .lfpk peak data (ARCHITECTURE.md M4) — canvas-drawn, not a flat progress bar. */
+// Seek scrubber shared by the transport bar and Now Playing overlay. Style (waveform vs
+// thin bar vs live spectrum) and the right-hand time (duration vs remaining) come from settings.
 export function WaveformScrubber({ waveform, currentTime, duration, onSeek, disabled }: WaveformScrubberProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hoverRatio, setHoverRatio] = useState<number | null>(null);
   const draggingRef = useRef(false);
+  const progressStyle = useSettingsStore((s) => s.progressStyle);
+  const timeDisplay = useSettingsStore((s) => s.timeDisplay);
+  const palette = useSettingsStore((s) => s.palette);
+  const theme = useSettingsStore((s) => s.theme);
 
   const playedRatio = duration > 0 ? Math.min(1, currentTime / duration) : 0;
+  const remaining = Math.max(0, duration - currentTime);
+  const endLabel = timeDisplay === "remaining" ? `-${formatDuration(remaining)}` : formatDuration(duration);
 
   useEffect(() => {
+    if (progressStyle !== "waveform") return;
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
@@ -34,7 +44,7 @@ export function WaveformScrubber({ waveform, currentTime, duration, onSeek, disa
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.scale(dpr, dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
 
     const style = getComputedStyle(container);
@@ -44,9 +54,7 @@ export function WaveformScrubber({ waveform, currentTime, duration, onSeek, disa
 
     if (!waveform || waveform.peakCount === 0) {
       ctx.fillStyle = idleColor;
-      ctx.globalAlpha = 1;
       ctx.fillRect(0, height / 2 - 1, width, 2);
-      ctx.globalAlpha = 1;
       return;
     }
 
@@ -65,7 +73,66 @@ export function WaveformScrubber({ waveform, currentTime, duration, onSeek, disa
       ctx.fillRect(x, top, 1, Math.max(1, bottom - top));
     }
     ctx.globalAlpha = 1;
-  }, [waveform, playedRatio]);
+  }, [waveform, playedRatio, progressStyle, palette, theme]);
+
+  useEffect(() => {
+    if (progressStyle !== "spectrum") return;
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+
+    const bins = new Uint8Array(128);
+    let raf = 0;
+
+    const draw = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+      if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+      }
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        raf = requestAnimationFrame(draw);
+        return;
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+
+      const style = getComputedStyle(container);
+      const playedColor = style.getPropertyValue("--lf-playing").trim() || "#C9A6FF";
+      const idleColor = style.getPropertyValue("--lf-line").trim() || "#2E2939";
+      const analyser = getPlaybackEqualizer().getAnalyser();
+      if (analyser && analyser.frequencyBinCount === bins.length) {
+        analyser.getByteFrequencyData(bins);
+      } else {
+        bins.fill(0);
+      }
+
+      const barCount = Math.max(24, Math.floor(width / 4));
+      const gap = 1;
+      const barWidth = Math.max(1, (width - gap * (barCount - 1)) / barCount);
+      const usableBins = Math.floor(bins.length * 0.72);
+
+      for (let i = 0; i < barCount; i++) {
+        const binIndex = Math.min(usableBins - 1, Math.floor((i / barCount) * usableBins));
+        const value = (bins[binIndex] ?? 0) / 255;
+        const barHeight = Math.max(2, value * (height - 4));
+        const x = i * (barWidth + gap);
+        ctx.globalAlpha = 0.28 + value * 0.72;
+        ctx.fillStyle = playedColor;
+        ctx.fillRect(x, height - barHeight, barWidth, barHeight);
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = idleColor;
+      ctx.fillRect(0, height - 2, width, 2);
+      raf = requestAnimationFrame(draw);
+    };
+
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, [progressStyle, palette, theme]);
 
   const ratioFromClientX = useCallback((clientX: number) => {
     const container = containerRef.current;
@@ -105,8 +172,27 @@ export function WaveformScrubber({ waveform, currentTime, duration, onSeek, disa
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={() => !draggingRef.current && setHoverRatio(null)}
+        role="slider"
+        aria-label="Seek"
+        aria-valuemin={0}
+        aria-valuemax={Math.round(duration)}
+        aria-valuenow={Math.round(currentTime)}
+        aria-disabled={disabled}
       >
-        <canvas ref={canvasRef} className="h-full w-full" />
+        {progressStyle === "bar" ? (
+          <div className="absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 overflow-hidden rounded-full bg-line">
+            <div className="h-full rounded-full bg-playing" style={{ width: `${playedRatio * 100}%` }} />
+          </div>
+        ) : (
+          <>
+            <canvas ref={canvasRef} className="h-full w-full" />
+            {progressStyle === "spectrum" ? (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] overflow-hidden rounded-full bg-line">
+                <div className="h-full rounded-full bg-playing" style={{ width: `${playedRatio * 100}%` }} />
+              </div>
+            ) : null}
+          </>
+        )}
         {hoverRatio !== null && duration > 0 && (
           <>
             <div
@@ -122,7 +208,7 @@ export function WaveformScrubber({ waveform, currentTime, duration, onSeek, disa
           </>
         )}
       </div>
-      <span className="w-12 shrink-0 font-mono text-sm text-t3">{formatDuration(duration)}</span>
+      <span className="w-14 shrink-0 font-mono text-sm text-t3">{endLabel}</span>
     </div>
   );
 }

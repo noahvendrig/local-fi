@@ -22,7 +22,7 @@ export function CrateDetailView({ playlistId }: { playlistId: number }) {
     queryFn: () => fetchPlaylist(playlistId),
   });
 
-  const playTrack = usePlayerStore((s) => s.playTrack);
+  const playContext = usePlayerStore((s) => s.playContext);
   const enqueue = usePlayerStore((s) => s.enqueue);
 
   const [isEditingName, setIsEditingName] = useState(false);
@@ -114,7 +114,7 @@ export function CrateDetailView({ playlistId }: { playlistId: number }) {
       <div className="mt-4 flex items-center gap-2">
         <button
           type="button"
-          onClick={() => playlist.tracks.length > 0 && playTrack(playlist.tracks[0], playlist.tracks)}
+          onClick={() => playContext(playlist.tracks)}
           disabled={playlist.tracks.length === 0}
           className="lf-top flex items-center gap-2 rounded-lg border border-acc bg-acc px-5 py-2.5 text-[13px] font-semibold text-on-acc hover:border-acc-2 hover:bg-acc-2 disabled:opacity-50"
         >

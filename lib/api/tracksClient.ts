@@ -62,3 +62,8 @@ export function relinkTrack(id: number, path?: string): Promise<TrackDetail> {
 export function revealTrackInFolder(id: number): Promise<void> {
   return request(`/api/v1/tracks/${id}/reveal`, { method: "POST" });
 }
+
+/** POST /api/v1/tracks/:id/play — records a completed listen, powering the Home dashboard. */
+export function recordPlay(id: number): Promise<void> {
+  return request(`/api/v1/tracks/${id}/play`, { method: "POST" });
+}

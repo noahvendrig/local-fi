@@ -15,6 +15,20 @@
       "when": 1787573178402,
       "tag": "0001_playback_state_eq_json",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787582617216,
+      "tag": "0002_ambitious_captain_stacy",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1787586820715,
+      "tag": "0003_chemical_hiroim",
+      "breakpoints": true
     }
   ]
 }

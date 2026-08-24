@@ -87,6 +87,7 @@ export const importJobs = sqliteTable(
     totalFiles: integer("total_files").notNull().default(0),
     processedFiles: integer("processed_files").notNull().default(0),
     failedFiles: integer("failed_files").notNull().default(0),
+    createFolderPlaylists: integer("create_folder_playlists").notNull().default(0),
     startedAt: text("started_at"),
     finishedAt: text("finished_at"),
     createdAt: text("created_at").notNull(),
@@ -109,6 +110,8 @@ export const importJobFiles = sqliteTable(
       .references(() => importJobs.id, { onDelete: "cascade" }),
     originalFilename: text("original_filename").notNull(),
     stagedPath: text("staged_path"),
+    /** Immediate subfolder (of the imported root) this file came from, e.g. "Album A" — null if it sat directly in the imported folder. */
+    sourceFolder: text("source_folder"),
     trackId: integer("track_id").references(() => tracks.id, { onDelete: "set null" }),
     status: text("status").notNull().default("queued"),
     errorMessage: text("error_message"),
@@ -223,6 +226,21 @@ export const playlistTracks = sqliteTable(
     addedAt: text("added_at").notNull(),
   },
   (t) => [index("idx_playlist_tracks_order").on(t.playlistId, t.position)]
+);
+
+export const playEvents = sqliteTable(
+  "play_events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    trackId: integer("track_id")
+      .notNull()
+      .references(() => tracks.id, { onDelete: "cascade" }),
+    playedAt: text("played_at").notNull(),
+  },
+  (t) => [
+    index("idx_play_events_track").on(t.trackId),
+    index("idx_play_events_played_at").on(t.playedAt),
+  ]
 );
 
 export const playbackState = sqliteTable("playback_state", {

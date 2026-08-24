@@ -12,7 +12,7 @@ import { usePlayerStore } from "@/lib/store/player";
 import { useTagEditorStore } from "@/lib/store/tagEditor";
 import { PlayIcon } from "./PlayerIcons";
 
-type ResultGroupName = "Tracks" | "Albums" | "Artists" | "Crates";
+type ResultGroupName = "Tracks" | "Albums" | "Artists" | "Crates" | "Actions";
 
 interface FlatResult {
   group: ResultGroupName;
@@ -122,10 +122,23 @@ export function CommandPalette() {
       sublabel: c.type === "smart" ? "Smart crate" : `${c.trackCount} track${c.trackCount === 1 ? "" : "s"}`,
       href: `/crates/${c.id}`,
     }));
-    return { tracks, albums, artists, crates };
-  }, [tracksQuery.data, albumsQuery.data, artistsQuery.data, cratesQuery.data]);
+    const q = trimmed.toLowerCase();
+    const actions: FlatResult[] =
+      q.length === 0 || "settings".startsWith(q) || q.includes("set")
+        ? [
+            {
+              group: "Actions" as const,
+              key: "action-settings",
+              label: "Settings",
+              sublabel: "Palettes, progress bar, shortcuts",
+              href: "/settings",
+            },
+          ]
+        : [];
+    return { tracks, albums, artists, crates, actions };
+  }, [tracksQuery.data, albumsQuery.data, artistsQuery.data, cratesQuery.data, trimmed]);
 
-  const flat = [...groups.tracks, ...groups.albums, ...groups.artists, ...groups.crates];
+  const flat = [...groups.actions, ...groups.tracks, ...groups.albums, ...groups.artists, ...groups.crates];
 
   if (!isOpen) return null;
 
@@ -196,6 +209,7 @@ export function CommandPalette() {
   }
 
   const groupOrder: { name: ResultGroupName; items: FlatResult[] }[] = [
+    { name: "Actions", items: groups.actions },
     { name: "Tracks", items: groups.tracks },
     { name: "Albums", items: groups.albums },
     { name: "Artists", items: groups.artists },
@@ -230,7 +244,33 @@ export function CommandPalette() {
 
         <div className="flex-1 overflow-y-auto py-2">
           {trimmed.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-t3">Start typing to search your library.</p>
+            groupOrder.map(({ name, items }) => {
+              if (items.length === 0) return null;
+              return (
+                <div key={name} className="px-2 py-1">
+                  <p className="px-2 py-1 text-xs font-medium uppercase tracking-wide text-t3">{name}</p>
+                  {items.map((result) => (
+                    <button
+                      key={result.key}
+                      type="button"
+                      onMouseEnter={() => setActiveKey(result.key)}
+                      onClick={() => openResult(result)}
+                      className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left ${
+                        activeResult?.key === result.key
+                          ? "border-acc bg-surf-2"
+                          : "border-transparent hover:bg-surf-2"
+                      }`}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm text-t1">{result.label}</span>
+                        <span className="block truncate font-mono text-xs text-t3">{result.sublabel}</span>
+                      </span>
+                      <span className="shrink-0 font-mono text-xs text-t3">⌘,</span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })
           ) : isLoading && flat.length === 0 ? (
             <p className="px-4 py-8 text-center text-sm text-t3">Searching…</p>
           ) : flat.length === 0 ? (

@@ -18,6 +18,7 @@ export function ImportView() {
   const error = useIngestStore((s) => s.error);
   const submitFiles = useIngestStore((s) => s.submitFiles);
   const cancelJob = useIngestStore((s) => s.cancelJob);
+  const uploadProgress = useIngestStore((s) => s.uploadProgress);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -34,6 +35,7 @@ export function ImportView() {
     queryClient.invalidateQueries({ queryKey: ["tracks"] });
     queryClient.invalidateQueries({ queryKey: ["albums"] });
     queryClient.invalidateQueries({ queryKey: ["artists"] });
+    queryClient.invalidateQueries({ queryKey: ["playlists"] });
   }, [terminalKey, queryClient]);
 
   const files = jobs.flatMap((job) => job.files);
@@ -41,7 +43,11 @@ export function ImportView() {
   const processedFiles = jobs.reduce((sum, job) => sum + job.processedFiles, 0);
   const failedFiles = jobs.reduce((sum, job) => sum + job.failedFiles, 0);
   const activeJob = jobs.find((job) => job.status === "pending" || job.status === "running");
-  const meta = files.length > 0 ? `${files.length} file${files.length === 1 ? "" : "s"} in tray` : "drop a folder to begin";
+  const meta = uploadProgress
+    ? `copying ${uploadProgress.copied} of ${uploadProgress.total}`
+    : files.length > 0
+      ? `${files.length} file${files.length === 1 ? "" : "s"} in tray`
+      : "drop a folder to begin";
 
   function handleBrowse() {
     folderInputRef.current?.click();

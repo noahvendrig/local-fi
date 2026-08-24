@@ -9,7 +9,7 @@ export function AlbumGrid({ albums }: { albums: AlbumSummary[] }) {
   const isPlaying = usePlayerStore((s) => s.isPlaying);
 
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-6">
+    <div className="lf-album-grid grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-6">
       {albums.map((album) => (
         <AlbumCard
           key={album.id}

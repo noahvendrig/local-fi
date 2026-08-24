@@ -18,7 +18,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     );
   }
 
-  if (job.status === "pending" || job.status === "running") {
+  if (job.status === "pending") {
+    requestJobCancellation(jobId);
+    db.update(importJobs)
+      .set({ status: "cancelled", finishedAt: new Date().toISOString() })
+      .where(eq(importJobs.id, jobId))
+      .run();
+  } else if (job.status === "running") {
     requestJobCancellation(jobId);
   }
 

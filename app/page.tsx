@@ -1,5 +1,5 @@
-import { LibraryView } from "@/components/library/LibraryView";
+import { HomeView } from "@/components/home/HomeView";
 
 export default function Home() {
-  return <LibraryView />;
+  return <HomeView />;
 }

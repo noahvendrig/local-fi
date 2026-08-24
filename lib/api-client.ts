@@ -24,6 +24,8 @@ export interface TrackSummary {
   coverArtUrl: string | null;
   dateAdded: string;
   missing: boolean;
+  /** Mean-abs amplitude from the waveform pass, 0–1. Null if the sidecar wasn't generated. */
+  waveformAvgLevel: number | null;
 }
 
 export interface AlbumSummary {

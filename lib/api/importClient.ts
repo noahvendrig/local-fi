@@ -1,16 +1,27 @@
+import type { CollectedFile } from "../ingest/collectFiles";
 import { authHeaders, withAuthQuery } from "./http";
 import type { ImportJob, ImportJobWithFiles } from "./types";
 
 export { withAuthQuery };
 
-export async function submitImport(files: File[]): Promise<ImportJobWithFiles> {
+export async function submitImport(
+  files: CollectedFile[],
+  options: { jobUuid?: string; finalize?: boolean; createFolderPlaylists?: boolean; signal?: AbortSignal } = {},
+): Promise<ImportJobWithFiles> {
   const formData = new FormData();
-  for (const file of files) formData.append("files", file);
+  for (const { file, relativePath } of files) {
+    formData.append("files", file);
+    formData.append("relativePaths", relativePath);
+  }
+  if (options.jobUuid) formData.append("jobUuid", options.jobUuid);
+  formData.append("finalize", options.finalize === false ? "false" : "true");
+  if (options.createFolderPlaylists) formData.append("createFolderPlaylists", "true");
 
   const res = await fetch("/api/v1/import", {
     method: "POST",
     headers: authHeaders(),
     body: formData,
+    signal: options.signal,
   });
 
   if (!res.ok) {

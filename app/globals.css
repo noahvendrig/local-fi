@@ -67,6 +67,331 @@
   --lf-canvas: #e7e2f0;
 }
 
+/* Late-Night Vinyl */
+:root[data-theme="dark"][data-palette="vinyl"] {
+  --lf-bg: #121110;
+  --lf-surf: #1b1815;
+  --lf-surf-2: #221e19;
+  --lf-line: #2e2925;
+  --lf-t1: #f5efe4;
+  --lf-t2: #a89f91;
+  --lf-t3: #6b6358;
+  --lf-t4: #6b6358;
+  --lf-acc: #d97b4f;
+  --lf-acc-2: #e8935f;
+  --lf-acc-text: #d97b4f;
+  --lf-on-acc: #1b1815;
+  --lf-gold: #f2b705;
+  --lf-playing: #f2b705;
+  --lf-ok: #7c9473;
+  --lf-warn: #d9a441;
+  --lf-err: #c1543c;
+  --lf-glass: rgba(18, 17, 16, 0.87);
+  --lf-tint: rgba(217, 123, 79, 0.12);
+  --lf-ring: rgba(232, 147, 95, 0.1);
+  --lf-glow-a: rgba(217, 123, 79, 0.3);
+  --lf-glow-b: rgba(242, 183, 5, 0.16);
+  --lf-art-shadow: 0 8px 20px rgba(20, 15, 10, 0.32);
+  --lf-art-shadow-lg: 0 24px 56px rgba(20, 15, 10, 0.52);
+  --lf-shadow: 0 18px 48px rgba(20, 15, 10, 0.35);
+  --lf-transport-shadow: 0 -10px 30px rgba(20, 15, 10, 0.28);
+  --lf-hatch-a: #221e19;
+  --lf-hatch-b: #191612;
+  --lf-canvas: #0c0b0a;
+}
+
+:root[data-theme="light"][data-palette="vinyl"] {
+  --lf-bg: #faf6ef;
+  --lf-surf: #ffffff;
+  --lf-surf-2: #f3ede3;
+  --lf-line: #e5ddd0;
+  --lf-t1: #221e19;
+  --lf-t2: #6b6358;
+  --lf-t3: #6b6358;
+  --lf-t4: #a89f91;
+  --lf-acc: #d97b4f;
+  --lf-acc-2: #e8935f;
+  --lf-acc-text: #a0521f;
+  --lf-on-acc: #1b1815;
+  --lf-gold: #f2b705;
+  --lf-playing: #8a5a00;
+  --lf-ok: #4f6b46;
+  --lf-warn: #8a6417;
+  --lf-err: #a33726;
+  --lf-glass: rgba(250, 246, 239, 0.9);
+  --lf-tint: rgba(217, 123, 79, 0.12);
+  --lf-ring: rgba(232, 147, 95, 0.1);
+  --lf-glow-a: rgba(217, 123, 79, 0.3);
+  --lf-glow-b: rgba(242, 183, 5, 0.16);
+  --lf-art-shadow: 0 8px 20px rgba(20, 15, 10, 0.14);
+  --lf-art-shadow-lg: 0 24px 56px rgba(20, 15, 10, 0.2);
+  --lf-shadow: 0 18px 48px rgba(20, 15, 10, 0.2);
+  --lf-transport-shadow: 0 -8px 24px rgba(20, 15, 10, 0.1);
+  --lf-hatch-a: #efe8dc;
+  --lf-hatch-b: #e3dacb;
+  --lf-canvas: #ede6da;
+}
+
+/* Oxblood & Bone */
+:root[data-theme="dark"][data-palette="oxblood"] {
+  --lf-bg: #121011;
+  --lf-surf: #1b1618;
+  --lf-surf-2: #231b1e;
+  --lf-line: #2f2529;
+  --lf-t1: #f4eee7;
+  --lf-t2: #a99a96;
+  --lf-t3: #6c5d5b;
+  --lf-t4: #6c5d5b;
+  --lf-acc: #b5384f;
+  --lf-acc-2: #cc5068;
+  --lf-acc-text: #b5384f;
+  --lf-on-acc: #fff4f6;
+  --lf-gold: #e8a7b8;
+  --lf-playing: #e8a7b8;
+  --lf-ok: #c0a28a;
+  --lf-warn: #c79a5b;
+  --lf-err: #e0576f;
+  --lf-glass: rgba(18, 16, 17, 0.87);
+  --lf-tint: rgba(181, 56, 79, 0.13);
+  --lf-ring: rgba(204, 80, 104, 0.12);
+  --lf-glow-a: rgba(181, 56, 79, 0.34);
+  --lf-glow-b: rgba(232, 167, 184, 0.16);
+  --lf-art-shadow: 0 8px 20px rgba(24, 12, 15, 0.34);
+  --lf-art-shadow-lg: 0 24px 56px rgba(24, 12, 15, 0.54);
+  --lf-shadow: 0 18px 48px rgba(24, 12, 15, 0.38);
+  --lf-transport-shadow: 0 -10px 30px rgba(24, 12, 15, 0.28);
+  --lf-hatch-a: #231b1e;
+  --lf-hatch-b: #1a1416;
+  --lf-canvas: #0c0a0b;
+}
+
+:root[data-theme="light"][data-palette="oxblood"] {
+  --lf-bg: #faf5f3;
+  --lf-surf: #ffffff;
+  --lf-surf-2: #f3eae7;
+  --lf-line: #e8dbd8;
+  --lf-t1: #221a1c;
+  --lf-t2: #6c5d5b;
+  --lf-t3: #6c5d5b;
+  --lf-t4: #a99a96;
+  --lf-acc: #b5384f;
+  --lf-acc-2: #a93049;
+  --lf-acc-text: #98304a;
+  --lf-on-acc: #fff4f6;
+  --lf-gold: #e8a7b8;
+  --lf-playing: #8e2c40;
+  --lf-ok: #7a5a3c;
+  --lf-warn: #7e5f26;
+  --lf-err: #b3313f;
+  --lf-glass: rgba(250, 245, 243, 0.9);
+  --lf-tint: rgba(181, 56, 79, 0.13);
+  --lf-ring: rgba(204, 80, 104, 0.12);
+  --lf-glow-a: rgba(181, 56, 79, 0.34);
+  --lf-glow-b: rgba(232, 167, 184, 0.16);
+  --lf-art-shadow: 0 8px 20px rgba(24, 12, 15, 0.14);
+  --lf-art-shadow-lg: 0 24px 56px rgba(24, 12, 15, 0.2);
+  --lf-shadow: 0 18px 48px rgba(24, 12, 15, 0.2);
+  --lf-transport-shadow: 0 -8px 24px rgba(24, 12, 15, 0.1);
+  --lf-hatch-a: #f0e7e4;
+  --lf-hatch-b: #e4d8d5;
+  --lf-canvas: #ebdedb;
+}
+
+/* Blueprint Steel */
+:root[data-theme="dark"][data-palette="steel"] {
+  --lf-bg: #0f1216;
+  --lf-surf: #171b21;
+  --lf-surf-2: #1e242b;
+  --lf-line: #28303a;
+  --lf-t1: #e9eef3;
+  --lf-t2: #94a0ad;
+  --lf-t3: #5d6874;
+  --lf-t4: #5d6874;
+  --lf-acc: #3e7bfa;
+  --lf-acc-2: #5e93ff;
+  --lf-acc-text: #3e7bfa;
+  --lf-on-acc: #ffffff;
+  --lf-gold: #7fd1ff;
+  --lf-playing: #7fd1ff;
+  --lf-ok: #8fb4d9;
+  --lf-warn: #d6b45c;
+  --lf-err: #e05a6b;
+  --lf-glass: rgba(15, 18, 22, 0.87);
+  --lf-tint: rgba(62, 123, 250, 0.13);
+  --lf-ring: rgba(94, 147, 255, 0.12);
+  --lf-glow-a: rgba(62, 123, 250, 0.3);
+  --lf-glow-b: rgba(127, 209, 255, 0.18);
+  --lf-art-shadow: 0 8px 20px rgba(8, 14, 22, 0.36);
+  --lf-art-shadow-lg: 0 24px 56px rgba(8, 14, 22, 0.56);
+  --lf-shadow: 0 18px 48px rgba(8, 14, 22, 0.45);
+  --lf-transport-shadow: 0 -10px 30px rgba(8, 14, 22, 0.28);
+  --lf-hatch-a: #1e242b;
+  --lf-hatch-b: #151a20;
+  --lf-canvas: #090c10;
+}
+
+:root[data-theme="light"][data-palette="steel"] {
+  --lf-bg: #f4f7fa;
+  --lf-surf: #ffffff;
+  --lf-surf-2: #edf2f7;
+  --lf-line: #dbe3ec;
+  --lf-t1: #131a22;
+  --lf-t2: #5d6874;
+  --lf-t3: #5d6874;
+  --lf-t4: #94a0ad;
+  --lf-acc: #2b5fc7;
+  --lf-acc-2: #2450ae;
+  --lf-acc-text: #1f5fd1;
+  --lf-on-acc: #ffffff;
+  --lf-gold: #7fd1ff;
+  --lf-playing: #14589e;
+  --lf-ok: #2f6288;
+  --lf-warn: #7a5e1e;
+  --lf-err: #b23a4a;
+  --lf-glass: rgba(244, 247, 250, 0.9);
+  --lf-tint: rgba(62, 123, 250, 0.13);
+  --lf-ring: rgba(94, 147, 255, 0.12);
+  --lf-glow-a: rgba(62, 123, 250, 0.3);
+  --lf-glow-b: rgba(127, 209, 255, 0.18);
+  --lf-art-shadow: 0 8px 20px rgba(8, 14, 22, 0.14);
+  --lf-art-shadow-lg: 0 24px 56px rgba(8, 14, 22, 0.2);
+  --lf-shadow: 0 18px 48px rgba(8, 14, 22, 0.18);
+  --lf-transport-shadow: 0 -8px 24px rgba(8, 14, 22, 0.1);
+  --lf-hatch-a: #edf2f7;
+  --lf-hatch-b: #e1e8f0;
+  --lf-canvas: #e3eaf1;
+}
+
+/* Tape Forest */
+:root[data-theme="dark"][data-palette="forest"] {
+  --lf-bg: #10140f;
+  --lf-surf: #171c16;
+  --lf-surf-2: #1e261c;
+  --lf-line: #2a3328;
+  --lf-t1: #edf3e8;
+  --lf-t2: #9aab94;
+  --lf-t3: #64705f;
+  --lf-t4: #64705f;
+  --lf-acc: #6f9e4a;
+  --lf-acc-2: #88b85e;
+  --lf-acc-text: #6f9e4a;
+  --lf-on-acc: #10140f;
+  --lf-gold: #d4c06a;
+  --lf-playing: #d4c06a;
+  --lf-ok: #8fb37a;
+  --lf-warn: #d4c06a;
+  --lf-err: #d46a5a;
+  --lf-glass: rgba(16, 20, 15, 0.87);
+  --lf-tint: rgba(111, 158, 74, 0.14);
+  --lf-ring: rgba(136, 184, 94, 0.12);
+  --lf-glow-a: rgba(111, 158, 74, 0.3);
+  --lf-glow-b: rgba(212, 192, 106, 0.16);
+  --lf-art-shadow: 0 8px 20px rgba(10, 16, 8, 0.36);
+  --lf-art-shadow-lg: 0 24px 56px rgba(10, 16, 8, 0.54);
+  --lf-shadow: 0 18px 48px rgba(10, 16, 8, 0.42);
+  --lf-transport-shadow: 0 -10px 30px rgba(10, 16, 8, 0.28);
+  --lf-hatch-a: #1e261c;
+  --lf-hatch-b: #141a13;
+  --lf-canvas: #0a0d09;
+}
+
+:root[data-theme="light"][data-palette="forest"] {
+  --lf-bg: #f4f6ef;
+  --lf-surf: #ffffff;
+  --lf-surf-2: #e8eedf;
+  --lf-line: #dde4d4;
+  --lf-t1: #1a2118;
+  --lf-t2: #5c6a56;
+  --lf-t3: #5c6a56;
+  --lf-t4: #9aab94;
+  --lf-acc: #4f7a32;
+  --lf-acc-2: #3f6426;
+  --lf-acc-text: #3d6a24;
+  --lf-on-acc: #f4f6ef;
+  --lf-gold: #d4c06a;
+  --lf-playing: #7a6414;
+  --lf-ok: #3f6b32;
+  --lf-warn: #7a6414;
+  --lf-err: #a33c32;
+  --lf-glass: rgba(244, 246, 239, 0.9);
+  --lf-tint: rgba(111, 158, 74, 0.14);
+  --lf-ring: rgba(136, 184, 94, 0.12);
+  --lf-glow-a: rgba(111, 158, 74, 0.3);
+  --lf-glow-b: rgba(212, 192, 106, 0.16);
+  --lf-art-shadow: 0 8px 20px rgba(10, 16, 8, 0.14);
+  --lf-art-shadow-lg: 0 24px 56px rgba(10, 16, 8, 0.2);
+  --lf-shadow: 0 18px 48px rgba(10, 16, 8, 0.18);
+  --lf-transport-shadow: 0 -8px 24px rgba(10, 16, 8, 0.1);
+  --lf-hatch-a: #e8eedf;
+  --lf-hatch-b: #dce4d0;
+  --lf-canvas: #e4ead8;
+}
+
+/* Afterglow */
+:root[data-theme="dark"][data-palette="afterglow"] {
+  --lf-bg: #120e16;
+  --lf-surf: #1a1520;
+  --lf-surf-2: #241b2a;
+  --lf-line: #32283a;
+  --lf-t1: #f3eaf8;
+  --lf-t2: #b39ab8;
+  --lf-t3: #736078;
+  --lf-t4: #736078;
+  --lf-acc: #e23d8a;
+  --lf-acc-2: #f15aa0;
+  --lf-acc-text: #e23d8a;
+  --lf-on-acc: #ffffff;
+  --lf-gold: #5ce1e6;
+  --lf-playing: #5ce1e6;
+  --lf-ok: #7fd4c8;
+  --lf-warn: #e8c46a;
+  --lf-err: #e0566e;
+  --lf-glass: rgba(18, 14, 22, 0.87);
+  --lf-tint: rgba(226, 61, 138, 0.14);
+  --lf-ring: rgba(241, 90, 160, 0.12);
+  --lf-glow-a: rgba(226, 61, 138, 0.32);
+  --lf-glow-b: rgba(92, 225, 230, 0.18);
+  --lf-art-shadow: 0 8px 20px rgba(18, 8, 22, 0.36);
+  --lf-art-shadow-lg: 0 24px 56px rgba(18, 8, 22, 0.56);
+  --lf-shadow: 0 18px 48px rgba(18, 8, 22, 0.45);
+  --lf-transport-shadow: 0 -10px 30px rgba(18, 8, 22, 0.28);
+  --lf-hatch-a: #241b2a;
+  --lf-hatch-b: #17121c;
+  --lf-canvas: #0c0910;
+}
+
+:root[data-theme="light"][data-palette="afterglow"] {
+  --lf-bg: #f8f3f7;
+  --lf-surf: #ffffff;
+  --lf-surf-2: #f1e4ee;
+  --lf-line: #e7d8e4;
+  --lf-t1: #22141f;
+  --lf-t2: #736078;
+  --lf-t3: #736078;
+  --lf-t4: #b39ab8;
+  --lf-acc: #c21d6e;
+  --lf-acc-2: #a0185c;
+  --lf-acc-text: #b01764;
+  --lf-on-acc: #ffffff;
+  --lf-gold: #5ce1e6;
+  --lf-playing: #0e7a80;
+  --lf-ok: #2a7a70;
+  --lf-warn: #8a6417;
+  --lf-err: #b23a50;
+  --lf-glass: rgba(248, 243, 247, 0.9);
+  --lf-tint: rgba(226, 61, 138, 0.14);
+  --lf-ring: rgba(241, 90, 160, 0.12);
+  --lf-glow-a: rgba(226, 61, 138, 0.32);
+  --lf-glow-b: rgba(92, 225, 230, 0.18);
+  --lf-art-shadow: 0 8px 20px rgba(18, 8, 22, 0.14);
+  --lf-art-shadow-lg: 0 24px 56px rgba(18, 8, 22, 0.2);
+  --lf-shadow: 0 18px 48px rgba(18, 8, 22, 0.18);
+  --lf-transport-shadow: 0 -8px 24px rgba(18, 8, 22, 0.1);
+  --lf-hatch-a: #f1e4ee;
+  --lf-hatch-b: #e6d5e2;
+  --lf-canvas: #eadce8;
+}
+
 @theme {
   --color-bg: var(--lf-bg);
   --color-surf: var(--lf-surf);
@@ -145,4 +470,45 @@ body {
     opacity: 1;
     transform: none;
   }
+}
+
+html[data-density="compact"] .lf-album-grid {
+  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+  gap: 0.75rem;
+}
+
+html[data-density="compact"] .lf-album-card {
+  padding: 0.65rem;
+  border-radius: 12px;
+}
+
+html[data-density="compact"] .lf-track-row {
+  padding-block: 0.4rem;
+}
+
+html[data-motion="reduce"] *,
+html[data-motion="reduce"] *::before,
+html[data-motion="reduce"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+@keyframes lfspin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.lf-vinyl-spin {
+  animation: lfspin 9s linear infinite;
+}
+
+.lf-vinyl-spin.is-paused {
+  animation-play-state: paused;
+}
+
+html[data-motion="reduce"] .lf-vinyl-spin {
+  animation: none !important;
 }

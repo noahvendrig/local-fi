@@ -1,20 +1,31 @@
 import { create } from "zustand";
 import { cancelImportJob, fetchImportJob, fetchImportJobs, importJobEventsUrl, submitImport } from "@/lib/api/importClient";
 import type { ImportJobWithFiles } from "@/lib/api/types";
+import { chunkFilesForUpload } from "@/lib/ingest/chunkFiles";
+import { hasSubfolders, type CollectedFile } from "@/lib/ingest/collectFiles";
 
 const TERMINAL_STATUSES = new Set(["completed", "completed_with_errors", "failed", "cancelled"]);
 
 const eventSources = new Map<number, EventSource>();
+
+let uploadAbort: AbortController | null = null;
 
 interface IngestState {
   isDragActive: boolean;
   dragItemCount: number;
   jobs: ImportJobWithFiles[];
   error: string | null;
+  uploadProgress: { copied: number; total: number } | null;
+  /** Set when the collected files span subfolders — waiting on the user to pick per-folder playlists vs. a flat import. */
+  pendingFolderImport: CollectedFile[] | null;
   setDragActive: (active: boolean, itemCount?: number) => void;
   setError: (error: string | null) => void;
   hydrateJobs: () => Promise<void>;
-  submitFiles: (files: File[]) => Promise<void>;
+  /** Entry point for both the folder picker and drag-and-drop. Prompts first if the files span subfolders. */
+  submitFiles: (files: CollectedFile[]) => Promise<void>;
+  /** Resolves the folder-import prompt and proceeds with the pending files. */
+  resolveFolderImport: (createFolderPlaylists: boolean) => Promise<void>;
+  cancelFolderImport: () => void;
   cancelJob: (jobId: number) => void;
 }
 
@@ -53,11 +64,67 @@ function mergeJobs(incoming: ImportJobWithFiles[], existing: ImportJobWithFiles[
   return merged.sort((a, b) => b.id - a.id);
 }
 
-export const useIngestStore = create<IngestState>((set) => ({
+async function performSubmit(
+  files: CollectedFile[],
+  createFolderPlaylists: boolean,
+  set: (fn: (state: IngestState) => Partial<IngestState>) => void,
+): Promise<void> {
+  uploadAbort?.abort();
+  const abort = new AbortController();
+  uploadAbort = abort;
+  set(() => ({ error: null, uploadProgress: { copied: 0, total: files.length } }));
+
+  let jobUuid: string | undefined;
+  try {
+    const batches = chunkFilesForUpload(files);
+    let copied = 0;
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      const job = await submitImport(batch, {
+        jobUuid,
+        finalize: i === batches.length - 1,
+        createFolderPlaylists,
+        signal: abort.signal,
+      });
+      jobUuid = job.uuid;
+      copied += batch.length;
+      set((state) => ({
+        jobs: [job, ...state.jobs.filter((item) => item.id !== job.id)],
+        uploadProgress: { copied, total: files.length },
+      }));
+      subscribeToJobEvents(job.id, set);
+    }
+    set(() => ({ uploadProgress: null }));
+  } catch (err) {
+    if (jobUuid && abort.signal.aborted === false) {
+      try {
+        const job = await submitImport([], { jobUuid, finalize: true, signal: abort.signal });
+        set((state) => ({ jobs: [job, ...state.jobs.filter((item) => item.id !== job.id)] }));
+        subscribeToJobEvents(job.id, set);
+      } catch {
+        // Partial job stays pending; user can drop the folder again.
+      }
+    }
+    if (abort.signal.aborted) {
+      set(() => ({ uploadProgress: null }));
+      return;
+    }
+    set(() => ({
+      error: err instanceof Error ? err.message : "Import failed.",
+      uploadProgress: null,
+    }));
+  } finally {
+    if (uploadAbort === abort) uploadAbort = null;
+  }
+}
+
+export const useIngestStore = create<IngestState>((set, get) => ({
   isDragActive: false,
   dragItemCount: 0,
   jobs: [],
   error: null,
+  uploadProgress: null,
+  pendingFolderImport: null,
   setDragActive: (active, itemCount = 0) =>
     set({ isDragActive: active, dragItemCount: active ? itemCount : 0 }),
   setError: (error) => set({ error }),
@@ -77,17 +144,24 @@ export const useIngestStore = create<IngestState>((set) => ({
 
   submitFiles: async (files) => {
     if (files.length === 0) return;
-    set({ error: null });
-    try {
-      const job = await submitImport(files);
-      set((state) => ({ jobs: [job, ...state.jobs.filter((item) => item.id !== job.id)] }));
-      subscribeToJobEvents(job.id, set);
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Import failed." });
+    if (hasSubfolders(files)) {
+      set({ pendingFolderImport: files, error: null });
+      return;
     }
+    await performSubmit(files, false, set);
   },
 
+  resolveFolderImport: async (createFolderPlaylists) => {
+    const files = get().pendingFolderImport;
+    set({ pendingFolderImport: null });
+    if (!files || files.length === 0) return;
+    await performSubmit(files, createFolderPlaylists, set);
+  },
+
+  cancelFolderImport: () => set({ pendingFolderImport: null }),
+
   cancelJob: (jobId) => {
+    uploadAbort?.abort();
     void cancelImportJob(jobId);
   },
 }));

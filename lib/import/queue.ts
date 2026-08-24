@@ -4,6 +4,7 @@ import PQueue from "p-queue";
 import { getDb } from "../db/client";
 import { importJobFiles, importJobs } from "../db/schema";
 import { publishJobUpdate } from "./events";
+import { createFolderPlaylistsForJob } from "./folderPlaylists";
 import { processImportFile } from "./pipeline";
 
 // In-process worker pool, no external job-queue system — single process, single
@@ -44,6 +45,10 @@ function finishJobIfDone(jobId: number): void {
     .set({ status, finishedAt: new Date().toISOString() })
     .where(eq(importJobs.id, jobId))
     .run();
+
+  if ((status === "completed" || status === "completed_with_errors") && job.createFolderPlaylists) {
+    createFolderPlaylistsForJob(jobId);
+  }
 
   cancelledJobs.delete(jobId);
   pendingCounts.delete(jobId);

@@ -3,6 +3,12 @@
 // (.DS_Store, playlist files, etc.) out of the upload batch.
 const AUDIO_EXTENSIONS = [".mp3", ".flac", ".wav", ".aac", ".m4a", ".ogg", ".oga", ".aif", ".aiff"];
 
+/** A file paired with its path relative to the folder the user chose to import, e.g. "Imported Folder/Album A/track.mp3". */
+export interface CollectedFile {
+  file: File;
+  relativePath: string;
+}
+
 function isAudioFile(name: string): boolean {
   const lower = name.toLowerCase();
   return AUDIO_EXTENSIONS.some((ext) => lower.endsWith(ext));
@@ -16,10 +22,11 @@ function readDirectoryEntries(reader: FileSystemDirectoryReader): Promise<FileSy
   return new Promise((resolve, reject) => reader.readEntries(resolve, reject));
 }
 
-async function walkEntry(entry: FileSystemEntry, out: File[]): Promise<void> {
+async function walkEntry(entry: FileSystemEntry, out: CollectedFile[]): Promise<void> {
   if (entry.isFile) {
     if (isAudioFile(entry.name)) {
-      out.push(await readEntryAsFile(entry as FileSystemFileEntry));
+      const file = await readEntryAsFile(entry as FileSystemFileEntry);
+      out.push({ file, relativePath: entry.fullPath.replace(/^\/+/, "") });
     }
   } else if (entry.isDirectory) {
     const reader = (entry as FileSystemDirectoryEntry).createReader();
@@ -32,7 +39,7 @@ async function walkEntry(entry: FileSystemEntry, out: File[]): Promise<void> {
 }
 
 /** Recursively expands dropped files/folders (drag-and-drop of a folder uses the webkit entries API). */
-export async function collectDroppedFiles(dataTransfer: DataTransfer): Promise<File[]> {
+export async function collectDroppedFiles(dataTransfer: DataTransfer): Promise<CollectedFile[]> {
   const items = Array.from(dataTransfer.items);
   const entries = items
     .map((item) => item.webkitGetAsEntry?.())
@@ -40,14 +47,34 @@ export async function collectDroppedFiles(dataTransfer: DataTransfer): Promise<F
 
   if (entries.length === 0) {
     // Fallback for browsers/contexts without the entries API — flat file list only.
-    return Array.from(dataTransfer.files).filter((f) => isAudioFile(f.name));
+    return Array.from(dataTransfer.files)
+      .filter((f) => isAudioFile(f.name))
+      .map((file) => ({ file, relativePath: file.name }));
   }
 
-  const out: File[] = [];
+  const out: CollectedFile[] = [];
   for (const entry of entries) await walkEntry(entry, out);
   return out;
 }
 
-export function filterAudioFiles(files: FileList | File[]): File[] {
-  return Array.from(files).filter((f) => isAudioFile(f.name));
+/** Filters a `<input webkitdirectory>` file list down to audio files, keeping each file's folder-relative path. */
+export function filterAudioFiles(files: FileList | File[]): CollectedFile[] {
+  return Array.from(files)
+    .filter((f) => isAudioFile(f.name))
+    .map((file) => ({ file, relativePath: (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name }));
+}
+
+/**
+ * True when the collected files span more than one immediate subfolder of the
+ * imported root (or sit alongside one) — i.e. there's a real "which subfolder did
+ * this come from" question to ask the user about (AGENTS.md import behavior).
+ */
+export function hasSubfolders(files: CollectedFile[]): boolean {
+  return files.some((f) => sourceFolderOf(f) != null);
+}
+
+/** Mirrors the server's grouping in lib/import/folderPlaylists.ts, for client-side detection only. */
+export function sourceFolderOf(file: CollectedFile): string | null {
+  const segments = file.relativePath.split("/").filter(Boolean);
+  return segments.length > 2 ? segments[1] : null;
 }

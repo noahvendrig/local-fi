@@ -5,9 +5,12 @@ import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { fetchPlaylists } from "@/lib/api/playlistsClient";
+import { PALETTES } from "@/lib/theme/palettes";
+import { useSettingsStore } from "@/lib/store/settings";
 
 const NAV_ITEMS = [
-  { label: "Library", icon: LibraryIcon, href: "/", match: (path: string) => path === "/" || path.startsWith("/albums") || path.startsWith("/artists") },
+  { label: "Home", icon: HomeIcon, href: "/", match: (path: string) => path === "/" },
+  { label: "Library", icon: LibraryIcon, href: "/library", match: (path: string) => path.startsWith("/library") || path.startsWith("/albums") || path.startsWith("/artists") },
   { label: "Crates", icon: CratesIcon, href: "/crates", match: (path: string) => path.startsWith("/crates") },
   { label: "Import", icon: ImportIcon, href: "/import", match: (path: string) => path.startsWith("/import") },
 ] as const;
@@ -18,6 +21,8 @@ export function NavRail() {
   const pathname = usePathname();
   const cratesQuery = useQuery({ queryKey: ["playlists"], queryFn: () => fetchPlaylists() });
   const crates = cratesQuery.data?.items ?? [];
+  const palette = useSettingsStore((s) => s.palette);
+  const paletteName = PALETTES.find((p) => p.id === palette)?.name ?? "Palette";
 
   return (
     <nav className="flex w-[240px] shrink-0 flex-col border-r border-line bg-bg px-3 py-5">
@@ -86,22 +91,44 @@ export function NavRail() {
       <div className="mt-3 lf-card rounded-lg px-3 py-3">
         <div className="mb-1.5 flex items-center justify-between font-mono text-[11px] text-t2">
           <span>Theme</span>
+          <span className="truncate pl-2 text-t3">{paletteName}</span>
         </div>
         <ThemeToggle />
       </div>
 
       <Link
+        href="/settings"
+        className={`mt-3 flex items-center gap-2.5 rounded-lg border px-3 py-2 text-[13px] hover:bg-surf-2 hover:text-t1 ${
+          pathname.startsWith("/settings")
+            ? "border-line bg-surf-2 font-semibold text-t1"
+            : "border-transparent text-t2"
+        }`}
+      >
+        <SettingsIcon />
+        Settings
+      </Link>
+
+      <Link
         href="/health"
-        className={`mt-2.5 flex items-center gap-2.5 rounded-lg border px-3 py-2 text-[13px] hover:bg-surf-2 hover:text-t1 ${
+        className={`mt-1 flex items-center gap-2.5 rounded-lg border px-3 py-2 text-[13px] hover:bg-surf-2 hover:text-t1 ${
           pathname.startsWith("/health")
             ? "border-line bg-surf-2 font-semibold text-t1"
             : "border-transparent text-t2"
         }`}
       >
         <HealthIcon />
-        Settings & health
+        Health
       </Link>
     </nav>
+  );
+}
+
+function HomeIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 11l9-8 9 8" />
+      <path d="M5 10v10h14V10" />
+    </svg>
   );
 }
 
@@ -131,6 +158,15 @@ function CratesIcon() {
       <rect x="3" y="4" width="18" height="4" rx="1" />
       <rect x="3" y="10" width="18" height="4" rx="1" />
       <rect x="3" y="16" width="18" height="4" rx="1" />
+    </svg>
+  );
+}
+
+function SettingsIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
     </svg>
   );
 }

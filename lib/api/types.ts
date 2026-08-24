@@ -20,6 +20,7 @@ export interface ImportJobFile {
   jobId: number;
   originalFilename: string;
   stagedPath: string | null;
+  sourceFolder: string | null;
   trackId: number | null;
   status: ImportJobFileStatus;
   errorMessage: string | null;

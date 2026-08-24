@@ -7,11 +7,15 @@ import { TransportBar } from "@/components/shell/TransportBar";
 import { NowPlayingOverlay } from "@/components/shell/NowPlayingOverlay";
 import { CommandPalette } from "@/components/shell/CommandPalette";
 import { AuthTokenProvider } from "@/components/auth/AuthTokenProvider";
+import { FolderImportModal } from "@/components/ingest/FolderImportModal";
 import { IngestTray } from "@/components/ingest/IngestTray";
 import { TrackTagEditorHost } from "@/components/library/TrackTagEditorHost";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 import { PlaybackStateProvider } from "@/components/providers/PlaybackStateProvider";
+import { SettingsProvider } from "@/components/providers/SettingsProvider";
+import { HotkeysProvider } from "@/components/providers/HotkeysProvider";
 import { getAuthToken } from "@/lib/auth/token";
+import { PALETTE_IDS } from "@/lib/theme/palettes";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,9 +23,9 @@ export const metadata: Metadata = {
   description: "A local-first music library and player.",
 };
 
-// Runs before hydration to set data-theme from localStorage (or system preference)
-// so the correct token set is already applied on first paint — no flash of the wrong theme.
-const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('lf-theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();`;
+// Runs before hydration to set data-theme / palette / density from localStorage
+// (or system preference for theme) so the correct tokens are on first paint.
+const THEME_INIT_SCRIPT = `(function(){try{var s={};try{s=JSON.parse(localStorage.getItem('lf-settings')||'{}')||{}}catch(e){}var t=s.theme||localStorage.getItem('lf-theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}var palettes={${PALETTE_IDS.map((id) => `${id}:1`).join(",")}};var p=palettes[s.palette]?s.palette:'violet';var d=s.density==='compact'?'compact':'comfortable';var m=s.reducedMotion?'reduce':'full';var r=document.documentElement;r.setAttribute('data-theme',t);r.setAttribute('data-palette',p);r.setAttribute('data-density',d);r.setAttribute('data-motion',m);}catch(e){document.documentElement.setAttribute('data-theme','dark');document.documentElement.setAttribute('data-palette','violet');}})();`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   const token = getAuthToken();
@@ -30,6 +34,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       suppressHydrationWarning
+      data-theme="dark"
+      data-palette="violet"
+      data-density="comfortable"
+      data-motion="full"
       className={`${inter.variable} ${jetbrainsMono.variable} ${fraunces.variable} h-full`}
     >
       <head>
@@ -42,6 +50,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex h-full flex-col font-sans antialiased" suppressHydrationWarning>
         <QueryProvider>
           <AuthTokenProvider token={token} />
+          <SettingsProvider />
+          <HotkeysProvider />
           <PlaybackStateProvider />
           <div className="flex flex-1 overflow-hidden pb-[88px]">
             <NavRail />
@@ -51,6 +61,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <TransportBar />
           <NowPlayingOverlay />
           <IngestTray />
+          <FolderImportModal />
           <CommandPalette />
           <TrackTagEditorHost />
         </QueryProvider>

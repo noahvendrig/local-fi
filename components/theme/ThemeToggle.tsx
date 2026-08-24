@@ -1,21 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
-import { useThemeStore } from "@/lib/store/theme";
+import { useSettingsStore } from "@/lib/store/settings";
 
 export function ThemeToggle() {
-  const theme = useThemeStore((s) => s.theme);
-  const setTheme = useThemeStore((s) => s.setTheme);
-  const toggleTheme = useThemeStore((s) => s.toggleTheme);
-
-  // Sync the store with whatever ThemeScript already applied to the DOM pre-hydration.
-  useEffect(() => {
-    const current = document.documentElement.getAttribute("data-theme");
-    if (current === "light" || current === "dark") {
-      setTheme(current);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const theme = useSettingsStore((s) => s.theme);
+  const toggleTheme = useSettingsStore((s) => s.toggleTheme);
 
   return (
     <button

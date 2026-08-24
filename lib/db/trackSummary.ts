@@ -13,6 +13,7 @@ export const trackSummarySelectColumns = {
   artistName: artists.name,
   albumId: tracks.albumId,
   albumTitle: albums.title,
+  coverArtPath: tracks.coverArtPath,
   albumCoverArtPath: albums.coverArtPath,
   trackNumber: tracks.trackNumber,
   discNumber: tracks.discNumber,
@@ -24,6 +25,7 @@ export const trackSummarySelectColumns = {
   bitDepth: tracks.bitDepth,
   dateAdded: tracks.dateAdded,
   missingSince: tracks.missingSince,
+  waveformAvgLevel: tracks.waveformAvgLevel,
 };
 
 type TrackSummaryRow = {
@@ -34,6 +36,7 @@ type TrackSummaryRow = {
   artistName: string | null;
   albumId: number | null;
   albumTitle: string | null;
+  coverArtPath: string | null;
   albumCoverArtPath: string | null;
   trackNumber: number | null;
   discNumber: number | null;
@@ -45,6 +48,7 @@ type TrackSummaryRow = {
   bitDepth: number | null;
   dateAdded: string;
   missingSince: string | null;
+  waveformAvgLevel: number | null;
 };
 
 export function mapTrackSummaryRow(row: TrackSummaryRow): TrackSummary {
@@ -64,9 +68,10 @@ export function mapTrackSummaryRow(row: TrackSummaryRow): TrackSummary {
     bitrate: row.bitrate,
     sampleRate: row.sampleRate,
     bitDepth: row.bitDepth,
-    coverArtUrl: row.albumCoverArtPath ? `/api/v1/albums/${row.albumId}/cover` : null,
+    coverArtUrl: row.coverArtPath || row.albumCoverArtPath ? `/api/v1/tracks/${row.id}/cover` : null,
     dateAdded: row.dateAdded,
     missing: row.missingSince != null,
+    waveformAvgLevel: row.waveformAvgLevel,
   };
 }
 

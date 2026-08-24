@@ -21,7 +21,7 @@ export function ArtistDetailView({ artistId }: { artistId: number }) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center">
         <h1 className="font-serif text-2xl text-t1">Artist not found</h1>
-        <Link href="/" className="text-sm font-medium text-acc-text hover:underline">
+        <Link href="/library" className="text-sm font-medium text-acc-text hover:underline">
           Back to library
         </Link>
       </div>
@@ -30,7 +30,7 @@ export function ArtistDetailView({ artistId }: { artistId: number }) {
 
   return (
     <div className="flex h-full flex-col overflow-y-auto px-10 py-8">
-      <Link href="/" className="w-fit text-xs font-medium text-t3 hover:text-t1">
+      <Link href="/library" className="w-fit text-xs font-medium text-t3 hover:text-t1">
         ← Library
       </Link>
 

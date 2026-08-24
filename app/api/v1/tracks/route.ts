@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getDb } from "@/lib/db/client";
 import { cursorCondition, decodeCursor, encodeCursor } from "@/lib/db/pagination";
 import { albums, artists, tracks } from "@/lib/db/schema";
+import { mapTrackSummaryRow, trackSummarySelectColumns } from "@/lib/db/trackSummary";
 
 const TRACK_FORMATS = ["mp3", "flac", "wav", "aac", "m4a", "ogg", "alac", "aiff"] as const;
 
@@ -67,24 +68,7 @@ export async function GET(request: Request) {
 
   const rows = getDb()
     .select({
-      id: tracks.id,
-      uuid: tracks.uuid,
-      title: tracks.title,
-      artistId: tracks.artistId,
-      artistName: artists.name,
-      albumId: tracks.albumId,
-      albumTitle: albums.title,
-      albumCoverArtPath: albums.coverArtPath,
-      trackNumber: tracks.trackNumber,
-      discNumber: tracks.discNumber,
-      durationSeconds: tracks.durationSeconds,
-      format: tracks.format,
-      lossless: tracks.lossless,
-      bitrate: tracks.bitrate,
-      sampleRate: tracks.sampleRate,
-      bitDepth: tracks.bitDepth,
-      dateAdded: tracks.dateAdded,
-      missingSince: tracks.missingSince,
+      ...trackSummarySelectColumns,
       sortKey: sortCfg.expr,
     })
     .from(tracks)
@@ -100,26 +84,7 @@ export async function GET(request: Request) {
   const last = page[page.length - 1];
   const nextCursor = hasMore && last ? encodeCursor(last.sortKey as string | number, last.id) : null;
 
-  const items = page.map((row) => ({
-    id: row.id,
-    uuid: row.uuid,
-    title: row.title,
-    artistId: row.artistId,
-    artistName: row.artistName,
-    albumId: row.albumId,
-    albumTitle: row.albumTitle,
-    trackNumber: row.trackNumber,
-    discNumber: row.discNumber,
-    durationSeconds: row.durationSeconds,
-    format: row.format,
-    lossless: row.lossless === 1,
-    bitrate: row.bitrate,
-    sampleRate: row.sampleRate,
-    bitDepth: row.bitDepth,
-    coverArtUrl: row.albumCoverArtPath ? `/api/v1/albums/${row.albumId}/cover` : null,
-    dateAdded: row.dateAdded,
-    missing: row.missingSince != null,
-  }));
+  const items = page.map(mapTrackSummaryRow);
 
   return NextResponse.json({ items, nextCursor });
 }

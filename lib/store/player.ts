@@ -12,9 +12,28 @@ import type { WaveformData } from "@/lib/waveform/parse";
 
 const PERSIST_DEBOUNCE_MS = 400;
 
+function shuffleInPlace<T>(items: T[]): T[] {
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [items[i], items[j]] = [items[j], items[i]];
+  }
+  return items;
+}
+
+/** Keep the selected track first so Up Next is the shuffled remainder (what will actually play). */
+function shuffledQueueFrom(queue: TrackSummary[], currentIndex: number): { queue: TrackSummary[]; currentIndex: number } {
+  if (queue.length <= 1) return { queue, currentIndex };
+  const selected = queue[currentIndex];
+  const rest = [...queue.slice(0, currentIndex), ...queue.slice(currentIndex + 1)];
+  shuffleInPlace(rest);
+  return { queue: [selected, ...rest], currentIndex: 0 };
+}
+
 interface PlayerState {
   currentTrack: TrackSummary | null;
   queue: TrackSummary[];
+  /** Unshuffled crate/album order; used to rebuild the play queue when shuffle is toggled off. */
+  sourceQueue: TrackSummary[];
   currentIndex: number;
   isPlaying: boolean;
   volume: number;
@@ -30,6 +49,9 @@ interface PlayerState {
   isQueueOpen: boolean;
   isNowPlayingOpen: boolean;
   hydrated: boolean;
+  sleepEndsAt: number | null;
+  sleepAfterTrack: boolean;
+  sleepMinutes: 15 | 30 | 45 | 60 | null;
   eqEnabled: boolean;
   eqGains: number[];
   eqPreamp: number;
@@ -38,6 +60,8 @@ interface PlayerState {
   hydrate: () => Promise<void>;
   /** Selects a track; re-clicking the already-current track toggles play/pause instead of restarting it. */
   playTrack: (track: TrackSummary, queueContext?: TrackSummary[]) => void;
+  /** Plays a list from the start, or from a random track when shuffle is on. */
+  playContext: (tracks: TrackSummary[]) => void;
   /** Appends tracks to the end of the queue; if nothing is playing, starts playback instead. */
   enqueue: (tracks: TrackSummary[]) => void;
   togglePlay: () => void;
@@ -65,6 +89,9 @@ interface PlayerState {
   toggleQueue: () => void;
   openNowPlaying: () => void;
   closeNowPlaying: () => void;
+  setSleepTimer: (minutes: 15 | 30 | 45 | 60) => void;
+  setSleepAfterTrack: () => void;
+  clearSleepTimer: () => void;
 }
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -95,6 +122,7 @@ function schedulePersist(get: () => PlayerState) {
 export const usePlayerStore = create<PlayerState>((set, get) => ({
   currentTrack: null,
   queue: [],
+  sourceQueue: [],
   currentIndex: 0,
   isPlaying: false,
   volume: 1,
@@ -106,6 +134,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   isQueueOpen: false,
   isNowPlayingOpen: false,
   hydrated: false,
+  sleepEndsAt: null,
+  sleepAfterTrack: false,
+  sleepMinutes: null,
   eqEnabled: DEFAULT_EQ_STATE.enabled,
   eqGains: [...DEFAULT_EQ_STATE.gains],
   eqPreamp: DEFAULT_EQ_STATE.preamp,
@@ -118,6 +149,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       const currentTrack = data.queue[currentIndex] ?? null;
       set({
         queue: data.queue,
+        sourceQueue: data.queue,
         currentIndex,
         currentTrack,
         volume: data.volume,
@@ -138,18 +170,26 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   playTrack: (track, queueContext) => {
-    const { currentTrack, isPlaying } = get();
+    const { currentTrack, isPlaying, shuffle } = get();
     if (currentTrack?.id === track.id) {
       set({ isPlaying: !isPlaying });
       schedulePersist(get);
       return;
     }
-    const queue = queueContext && queueContext.length > 0 ? queueContext : [track];
-    const index = queue.findIndex((t) => t.id === track.id);
+    const sourceQueue = queueContext && queueContext.length > 0 ? [...queueContext] : [track];
+    let queue = [...sourceQueue];
+    let currentIndex = queue.findIndex((t) => t.id === track.id);
+    if (currentIndex < 0) currentIndex = 0;
+    if (shuffle) {
+      const shuffled = shuffledQueueFrom(queue, currentIndex);
+      queue = shuffled.queue;
+      currentIndex = shuffled.currentIndex;
+    }
     set({
       currentTrack: track,
       queue,
-      currentIndex: index >= 0 ? index : 0,
+      sourceQueue,
+      currentIndex,
       isPlaying: true,
       currentTime: 0,
       pendingSeekSeconds: null,
@@ -157,21 +197,38 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     schedulePersist(get);
   },
 
+  playContext: (tracks) => {
+    if (tracks.length === 0) return;
+    const startIndex = get().shuffle ? Math.floor(Math.random() * tracks.length) : 0;
+    get().playTrack(tracks[startIndex], tracks);
+  },
+
   enqueue: (tracksToAdd) => {
     if (tracksToAdd.length === 0) return;
-    const { queue, currentTrack } = get();
+    const { queue, sourceQueue, currentTrack, currentIndex, shuffle } = get();
+    const nextSource = [...sourceQueue, ...tracksToAdd];
     if (!currentTrack) {
       // Nothing playing: queuing starts playback, matching common player UX.
+      const nextQueue = shuffle ? shuffleInPlace([...tracksToAdd]) : [...tracksToAdd];
       set({
-        currentTrack: tracksToAdd[0],
-        queue: tracksToAdd,
+        currentTrack: nextQueue[0],
+        queue: nextQueue,
+        sourceQueue: [...tracksToAdd],
         currentIndex: 0,
         isPlaying: true,
         currentTime: 0,
         pendingSeekSeconds: null,
       });
+    } else if (shuffle) {
+      const nextQueue = queue.slice();
+      for (const added of shuffleInPlace([...tracksToAdd])) {
+        const upcomingSlots = nextQueue.length - currentIndex;
+        const insertAt = currentIndex + 1 + Math.floor(Math.random() * upcomingSlots);
+        nextQueue.splice(insertAt, 0, added);
+      }
+      set({ queue: nextQueue, sourceQueue: nextSource });
     } else {
-      set({ queue: [...queue, ...tracksToAdd] });
+      set({ queue: [...queue, ...tracksToAdd], sourceQueue: nextSource });
     }
     schedulePersist(get);
   },
@@ -246,9 +303,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   playPrevious: () => {
-    const { queue, currentIndex } = get();
+    const { queue, currentIndex, repeatMode } = get();
     if (queue.length === 0) return;
-    const prevIndex = currentIndex > 0 ? currentIndex - 1 : 0;
+    let prevIndex = currentIndex - 1;
+    if (prevIndex < 0) {
+      if (repeatMode !== "all") {
+        prevIndex = 0;
+      } else {
+        prevIndex = queue.length - 1;
+      }
+    }
     set({ currentIndex: prevIndex, currentTrack: queue[prevIndex], isPlaying: true, currentTime: 0, pendingSeekSeconds: null });
     schedulePersist(get);
   },
@@ -265,20 +329,24 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     schedulePersist(get);
   },
 
-  // Reshuffles the upcoming portion of the queue in place; toggling back off just flips the
-  // flag (original order isn't retained — matches common player behavior, not a schema need).
+  // Shuffle rebuilds play order from the unshuffled source (current track stays put). Toggling
+  // off restores that source order so Up Next updates immediately without stopping playback.
   toggleShuffle: () => {
-    const { shuffle, queue, currentIndex } = get();
+    const { shuffle, queue, sourceQueue, currentIndex } = get();
+    const source = sourceQueue.length > 0 ? sourceQueue : queue;
+    const current = queue[currentIndex] ?? source[currentIndex] ?? null;
+    if (!current) {
+      set({ shuffle: !shuffle });
+      schedulePersist(get);
+      return;
+    }
+    const sourceIndex = Math.max(0, source.findIndex((t) => t.id === current.id));
     if (!shuffle) {
-      const head = queue.slice(0, currentIndex + 1);
-      const tail = queue.slice(currentIndex + 1);
-      for (let i = tail.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [tail[i], tail[j]] = [tail[j], tail[i]];
-      }
-      set({ queue: [...head, ...tail], shuffle: true });
+      const shuffled = shuffledQueueFrom(source, sourceIndex >= 0 ? sourceIndex : 0);
+      set({ queue: shuffled.queue, currentIndex: shuffled.currentIndex, shuffle: true });
     } else {
-      set({ shuffle: false });
+      const restoredIndex = sourceIndex >= 0 ? sourceIndex : 0;
+      set({ queue: [...source], currentIndex: restoredIndex, shuffle: false });
     }
     schedulePersist(get);
   },
@@ -297,7 +365,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     else if (fromIndex < currentIndex && toIndex >= currentIndex) newCurrentIndex = currentIndex - 1;
     else if (fromIndex > currentIndex && toIndex <= currentIndex) newCurrentIndex = currentIndex + 1;
 
-    set({ queue: newQueue, currentIndex: newCurrentIndex });
+    const sourceQueue = get().shuffle ? get().sourceQueue : newQueue;
+    set({ queue: newQueue, sourceQueue, currentIndex: newCurrentIndex });
     schedulePersist(get);
   },
 
@@ -323,8 +392,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       if (!newCurrentTrack) isPlaying = false;
     }
 
+    const removed = queue[index];
+    const nextSource = get().sourceQueue.slice();
+    const sourceIndex = nextSource.findIndex((t) => t.id === removed.id);
+    if (sourceIndex >= 0) nextSource.splice(sourceIndex, 1);
+
     set({
       queue: newQueue,
+      sourceQueue: nextSource,
       currentIndex: Math.max(0, newCurrentIndex),
       currentTrack: newCurrentTrack,
       isPlaying,
@@ -358,4 +433,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   toggleQueue: () => set((s) => ({ isQueueOpen: !s.isQueueOpen })),
   openNowPlaying: () => set({ isNowPlayingOpen: true }),
   closeNowPlaying: () => set({ isNowPlayingOpen: false }),
+
+  setSleepTimer: (minutes) =>
+    set({
+      sleepEndsAt: Date.now() + minutes * 60_000,
+      sleepMinutes: minutes,
+      sleepAfterTrack: false,
+    }),
+  setSleepAfterTrack: () => set({ sleepEndsAt: null, sleepMinutes: null, sleepAfterTrack: true }),
+  clearSleepTimer: () => set({ sleepEndsAt: null, sleepMinutes: null, sleepAfterTrack: false }),
 }));
