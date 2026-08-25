@@ -70,7 +70,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     title: album.title,
     year: album.year,
     isCompilation: album.isCompilation === 1,
-    coverArtUrl: album.coverArtPath ? `/api/v1/albums/${album.id}/cover` : null,
+    coverArtUrl: album.coverArtPath ? `/api/v1/albums/${album.id}/cover?v=${encodeURIComponent(album.coverArtPath)}` : null,
     dateAdded: album.dateAdded,
     artists: creditedArtists,
     tracks: trackList,

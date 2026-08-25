@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { getDb } from "@/lib/db/client";
 import { albums, artists, tracks } from "@/lib/db/schema";
 import type { TrackSummary } from "@/lib/api-client";
@@ -24,6 +24,7 @@ export const trackSummarySelectColumns = {
   sampleRate: tracks.sampleRate,
   bitDepth: tracks.bitDepth,
   dateAdded: tracks.dateAdded,
+  dateModified: tracks.dateModified,
   missingSince: tracks.missingSince,
   waveformAvgLevel: tracks.waveformAvgLevel,
 };
@@ -47,9 +48,15 @@ type TrackSummaryRow = {
   sampleRate: number | null;
   bitDepth: number | null;
   dateAdded: string;
+  dateModified: string | null;
   missingSince: string | null;
   waveformAvgLevel: number | null;
 };
+
+function trackCoverUrl(trackId: number, coverArtPath: string | null, albumCoverArtPath: string | null, version: string): string | null {
+  if (!coverArtPath && !albumCoverArtPath) return null;
+  return `/api/v1/tracks/${trackId}/cover?v=${encodeURIComponent(version)}`;
+}
 
 export function mapTrackSummaryRow(row: TrackSummaryRow): TrackSummary {
   return {
@@ -68,7 +75,7 @@ export function mapTrackSummaryRow(row: TrackSummaryRow): TrackSummary {
     bitrate: row.bitrate,
     sampleRate: row.sampleRate,
     bitDepth: row.bitDepth,
-    coverArtUrl: row.coverArtPath || row.albumCoverArtPath ? `/api/v1/tracks/${row.id}/cover` : null,
+    coverArtUrl: trackCoverUrl(row.id, row.coverArtPath, row.albumCoverArtPath, row.dateModified ?? row.dateAdded),
     dateAdded: row.dateAdded,
     missing: row.missingSince != null,
     waveformAvgLevel: row.waveformAvgLevel,
@@ -78,7 +85,7 @@ export function mapTrackSummaryRow(row: TrackSummaryRow): TrackSummary {
 /**
  * Resolves a set of track ids into wire-shaped TrackSummary objects, in the order
  * the ids were given (needed for the playback queue, which is order-significant).
- * Ids with no matching row (e.g. a track deleted since the queue was saved) are dropped.
+ * Ids with no matching active row (deleted since the queue was saved) are dropped.
  */
 export function getTrackSummariesByIds(db: ReturnType<typeof getDb>, ids: number[]): TrackSummary[] {
   if (ids.length === 0) return [];
@@ -88,7 +95,7 @@ export function getTrackSummariesByIds(db: ReturnType<typeof getDb>, ids: number
     .from(tracks)
     .leftJoin(artists, eq(tracks.artistId, artists.id))
     .leftJoin(albums, eq(tracks.albumId, albums.id))
-    .where(inArray(tracks.id, ids))
+    .where(and(inArray(tracks.id, ids), isNull(tracks.deletedAt)))
     .all();
 
   const byId = new Map(rows.map((row) => [row.id, mapTrackSummaryRow(row)]));

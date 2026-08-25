@@ -501,6 +501,25 @@ html[data-motion="reduce"] *::after {
   }
 }
 
+@keyframes lfpulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes lfprogress-indeterminate {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(280%);
+  }
+}
+
 .lf-vinyl-spin {
   animation: lfspin 9s linear infinite;
 }
@@ -509,6 +528,21 @@ html[data-motion="reduce"] *::after {
   animation-play-state: paused;
 }
 
-html[data-motion="reduce"] .lf-vinyl-spin {
+.lf-index-spin {
+  animation: lfspin 0.8s linear infinite;
+}
+
+.lf-index-pulse {
+  animation: lfpulse 1.2s ease-in-out infinite;
+}
+
+.lf-progress-indeterminate > span {
+  animation: lfprogress-indeterminate 1.2s ease-in-out infinite;
+}
+
+html[data-motion="reduce"] .lf-vinyl-spin,
+html[data-motion="reduce"] .lf-index-spin,
+html[data-motion="reduce"] .lf-index-pulse,
+html[data-motion="reduce"] .lf-progress-indeterminate > span {
   animation: none !important;
 }

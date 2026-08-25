@@ -6,7 +6,7 @@ import { cursorCondition, decodeCursor, encodeCursor } from "@/lib/db/pagination
 import { albums, artists, tracks } from "@/lib/db/schema";
 import { mapTrackSummaryRow, trackSummarySelectColumns } from "@/lib/db/trackSummary";
 
-const TRACK_FORMATS = ["mp3", "flac", "wav", "aac", "m4a", "ogg", "alac", "aiff"] as const;
+const TRACK_FORMATS = ["mp3", "flac", "wav", "aac", "m4a", "ogg", "alac", "aiff", "webm"] as const;
 
 const TRACK_SORTS = {
   date_added_desc: { expr: tracks.dateAdded, dir: "desc" as const },

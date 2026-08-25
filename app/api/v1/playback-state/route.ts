@@ -38,11 +38,13 @@ function toResponseBody(db: Db) {
   const row = loadRow(db);
   const ids: number[] = row ? (JSON.parse(row.queueJson) as number[]) : [];
   const queue = getTrackSummariesByIds(db, ids);
+  const requestedId = row ? ids[row.currentIndex] : undefined;
+  const currentIndex = requestedId != null ? Math.max(0, queue.findIndex((t) => t.id === requestedId)) : 0;
 
   return {
     sessionKey: SESSION_KEY,
     queue,
-    currentIndex: row?.currentIndex ?? 0,
+    currentIndex: queue.length === 0 ? 0 : currentIndex,
     positionSeconds: row?.positionSeconds ?? 0,
     isPlaying: row ? row.isPlaying === 1 : false,
     volume: row?.volume ?? 1,

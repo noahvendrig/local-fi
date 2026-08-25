@@ -6,6 +6,7 @@ import { filterAudioFiles } from "@/lib/ingest/collectFiles";
 import { useCommandPaletteStore } from "@/lib/store/commandPalette";
 import { useIngestStore } from "@/lib/store/ingest";
 import { JobFileRow } from "./JobFileRow";
+import { LibraryFoldersSection } from "./LibraryFoldersSection";
 
 const TERMINAL_JOB = new Set(["completed", "completed_with_errors", "failed", "cancelled"]);
 
@@ -36,18 +37,23 @@ export function ImportView() {
     queryClient.invalidateQueries({ queryKey: ["albums"] });
     queryClient.invalidateQueries({ queryKey: ["artists"] });
     queryClient.invalidateQueries({ queryKey: ["playlists"] });
+    queryClient.invalidateQueries({ queryKey: ["library-roots"] });
   }, [terminalKey, queryClient]);
 
-  const files = jobs.flatMap((job) => job.files);
-  const totalFiles = jobs.reduce((sum, job) => sum + job.totalFiles, 0);
-  const processedFiles = jobs.reduce((sum, job) => sum + job.processedFiles, 0);
-  const failedFiles = jobs.reduce((sum, job) => sum + job.failedFiles, 0);
-  const activeJob = jobs.find((job) => job.status === "pending" || job.status === "running");
+  const trayJobs = jobs.filter((job) => job.type !== "folder_scan");
+  const files = trayJobs.flatMap((job) => job.files);
+  const totalFiles = trayJobs.reduce((sum, job) => sum + job.totalFiles, 0);
+  const processedFiles = trayJobs.reduce((sum, job) => sum + job.processedFiles, 0);
+  const failedFiles = trayJobs.reduce((sum, job) => sum + job.failedFiles, 0);
+  const activeJob = trayJobs.find((job) => job.status === "pending" || job.status === "running");
+  const indexingJob = jobs.find((job) => job.type === "folder_scan" && (job.status === "pending" || job.status === "running"));
   const meta = uploadProgress
     ? `copying ${uploadProgress.copied} of ${uploadProgress.total}`
-    : files.length > 0
-      ? `${files.length} file${files.length === 1 ? "" : "s"} in tray`
-      : "drop a folder to begin";
+    : indexingJob
+      ? `indexing ${indexingJob.processedFiles} of ${indexingJob.totalFiles}`
+      : files.length > 0
+        ? `${files.length} file${files.length === 1 ? "" : "s"} in tray`
+        : "drop a folder to begin";
 
   function handleBrowse() {
     folderInputRef.current?.click();
@@ -115,7 +121,7 @@ export function ImportView() {
                 : "release to begin"
               : "or click to choose a folder — files are copied, originals untouched"}
           </p>
-          <p className="mt-1.5 font-mono text-xs text-t3">FLAC · ALAC · MP3 · WAV · AIFF · OGG</p>
+          <p className="mt-1.5 font-mono text-xs text-t3">FLAC · ALAC · MP3 · WAV · AIFF · OGG · OPUS · WEBM</p>
         </button>
 
         {error ? <p className="mt-4 text-sm text-err">{error}</p> : null}
@@ -142,6 +148,8 @@ export function ImportView() {
             </ul>
           </section>
         ) : null}
+
+        <LibraryFoldersSection />
       </div>
     </div>
   );

@@ -70,7 +70,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       // name — this is what actually renders a compilation's multiple artists correctly.
       albumArtistName: formatArtistCredit(names),
       year: row.year,
-      coverArtUrl: row.coverArtPath ? `/api/v1/albums/${row.id}/cover` : null,
+      coverArtUrl: row.coverArtPath ? `/api/v1/albums/${row.id}/cover?v=${encodeURIComponent(row.coverArtPath)}` : null,
       trackCount: aggregate?.trackCount ?? 0,
       format: aggregate?.format ?? null,
       lossless: aggregate?.lossless ?? false,

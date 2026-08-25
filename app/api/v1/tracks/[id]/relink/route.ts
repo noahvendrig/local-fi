@@ -8,7 +8,9 @@ import { tracks } from "@/lib/db/schema";
 import { getTrackDetailRow, mapTrackDetailRow } from "@/lib/db/trackDetail";
 import { trackFingerprint } from "@/lib/import/fingerprint";
 import { toDataDirRelative } from "@/lib/import/paths";
+import { getLibraryRootById } from "@/lib/library/libraryRoots";
 import { getDataDir } from "@/lib/storage/dataDir";
+import { isPathInsideRoot, resolveTrackAbsPath, toRootRelative } from "@/lib/storage/resolveTrackPath";
 
 const NOT_FOUND = NextResponse.json({ error: { code: "not_found", message: "Track not found." } }, { status: 404 });
 
@@ -17,9 +19,10 @@ const BodySchema = z.object({ path: z.string().trim().min(1).optional() });
 /**
  * POST /api/v1/tracks/:id/relink — points a missing track at a re-located file (ARCHITECTURE.md
  * §7/M10). With no body, it just re-checks the track's recorded path (the common case: the user
- * copied the file back where it belonged). With `{ path }`, it re-points to that location instead —
- * which must resolve inside LOCALFI_DATA_DIR, preserving the "DB never stores paths outside the
- * managed data dir" invariant the rest of the app relies on.
+ * copied the file back where it belonged). With `{ path }`, a managed track's target must resolve
+ * inside LOCALFI_DATA_DIR (the "DB never stores paths outside the managed data dir" invariant);
+ * a watched track's target must instead resolve inside its own library root — watch-in-place
+ * tracks are never allowed to jump into the managed tree or another root.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -40,19 +43,32 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   let relativePath = existing.path;
+
   if (parsed.data.path) {
-    const dataDir = getDataDir();
     const resolved = path.resolve(parsed.data.path);
-    if (resolved !== dataDir && !resolved.startsWith(dataDir + path.sep)) {
-      return NextResponse.json(
-        { error: { code: "invalid_path", message: "Relink target must be inside the library's data directory." } },
-        { status: 422 }
-      );
+
+    if (existing.libraryRootId == null) {
+      const dataDir = path.resolve(getDataDir());
+      if (!isPathInsideRoot(resolved, dataDir)) {
+        return NextResponse.json(
+          { error: { code: "invalid_path", message: "Relink target must be inside the library's data directory." } },
+          { status: 422 }
+        );
+      }
+      relativePath = toDataDirRelative(resolved);
+    } else {
+      const root = getLibraryRootById(existing.libraryRootId);
+      if (!root || !isPathInsideRoot(resolved, root.path)) {
+        return NextResponse.json(
+          { error: { code: "invalid_path", message: "Relink target must be inside this track's watched library folder." } },
+          { status: 422 }
+        );
+      }
+      relativePath = toRootRelative(root.path, resolved);
     }
-    relativePath = toDataDirRelative(resolved);
   }
 
-  const absPath = path.join(getDataDir(), relativePath);
+  const absPath = resolveTrackAbsPath({ path: relativePath, libraryRootId: existing.libraryRootId });
   if (!existsSync(absPath)) {
     return NextResponse.json(
       { error: { code: "not_found_on_disk", message: "No file exists at that location." } },

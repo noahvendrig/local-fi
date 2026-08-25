@@ -123,18 +123,25 @@ export function CommandPalette() {
       href: `/crates/${c.id}`,
     }));
     const q = trimmed.toLowerCase();
-    const actions: FlatResult[] =
-      q.length === 0 || "settings".startsWith(q) || q.includes("set")
-        ? [
-            {
-              group: "Actions" as const,
-              key: "action-settings",
-              label: "Settings",
-              sublabel: "Palettes, progress bar, shortcuts",
-              href: "/settings",
-            },
-          ]
-        : [];
+    const actions: FlatResult[] = [];
+    if (q.length === 0 || "settings".startsWith(q) || q.includes("set")) {
+      actions.push({
+        group: "Actions",
+        key: "action-settings",
+        label: "Settings",
+        sublabel: "Palettes, progress bar, shortcuts",
+        href: "/settings",
+      });
+    }
+    if (q.length === 0 || "trash".startsWith(q) || q.includes("bin")) {
+      actions.push({
+        group: "Actions",
+        key: "action-trash",
+        label: "Trash",
+        sublabel: "Restore or permanently delete tracks",
+        href: "/trash",
+      });
+    }
     return { tracks, albums, artists, crates, actions };
   }, [tracksQuery.data, albumsQuery.data, artistsQuery.data, cratesQuery.data, trimmed]);
 

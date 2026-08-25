@@ -1,4 +1,5 @@
-import { File } from "node-taglib-sharp";
+import { ByteVector, File, Picture, PictureType } from "node-taglib-sharp";
+import type { CoverImage } from "./coverImage";
 
 export interface TrackTagWrite {
   title?: string;
@@ -27,6 +28,21 @@ export function writeTrackTags(absPath: string, patch: TrackTagWrite): void {
     if (patch.discNumber !== undefined) file.tag.disc = patch.discNumber ?? 0;
     if (patch.year !== undefined) file.tag.year = patch.year ?? 0;
     if (patch.genre !== undefined) file.tag.genres = patch.genre ? [patch.genre] : [];
+    file.save();
+  } finally {
+    file.dispose();
+  }
+}
+
+/** Embeds a front-cover picture in the audio file. Caller must only invoke this when the format can hold pictures. */
+export function writeTrackCoverArt(absPath: string, image: CoverImage): void {
+  const file = File.createFromPath(absPath);
+  try {
+    const picture = Picture.fromData(ByteVector.fromByteArray(image.bytes));
+    picture.type = PictureType.FrontCover;
+    picture.mimeType = image.mimeType;
+    picture.description = "Cover";
+    file.tag.pictures = [picture];
     file.save();
   } finally {
     file.dispose();

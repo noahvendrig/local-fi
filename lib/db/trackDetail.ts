@@ -1,5 +1,5 @@
 import { alias } from "drizzle-orm/sqlite-core";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { getDb } from "@/lib/db/client";
 import { albums, artists, tracks } from "@/lib/db/schema";
 import type { TrackDetail } from "@/lib/api/tracksClient";
@@ -97,7 +97,10 @@ export function mapTrackDetailRow(row: TrackDetailRow): TrackDetail {
     bitDepth: row.bitDepth,
     channels: row.channels,
     lossless: row.lossless === 1,
-    coverArtUrl: row.coverArtPath || row.albumCoverArtPath ? `/api/v1/tracks/${row.id}/cover` : null,
+    coverArtUrl:
+      row.coverArtPath || row.albumCoverArtPath
+        ? `/api/v1/tracks/${row.id}/cover?v=${encodeURIComponent(row.dateModified ?? row.dateAdded)}`
+        : null,
     waveformUrl: `/api/v1/tracks/${row.id}/waveform`,
     dateAdded: row.dateAdded,
     dateModified: row.dateModified,
@@ -113,6 +116,6 @@ export function getTrackDetailRow(db: ReturnType<typeof getDb>, trackId: number)
     .leftJoin(artists, eq(tracks.artistId, artists.id))
     .leftJoin(albums, eq(tracks.albumId, albums.id))
     .leftJoin(albumArtistAlias, eq(albums.albumArtistId, albumArtistAlias.id))
-    .where(eq(tracks.id, trackId))
+    .where(and(eq(tracks.id, trackId), isNull(tracks.deletedAt)))
     .get();
 }

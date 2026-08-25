@@ -5,7 +5,9 @@ import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { fetchPlaylists } from "@/lib/api/playlistsClient";
+import { fetchTrash } from "@/lib/api/trashClient";
 import { PALETTES } from "@/lib/theme/palettes";
+import { useIngestStore } from "@/lib/store/ingest";
 import { useSettingsStore } from "@/lib/store/settings";
 
 const NAV_ITEMS = [
@@ -20,7 +22,12 @@ const CRATE_DOTS = ["var(--lf-acc)", "var(--lf-playing)", "var(--lf-ok)", "var(-
 export function NavRail() {
   const pathname = usePathname();
   const cratesQuery = useQuery({ queryKey: ["playlists"], queryFn: () => fetchPlaylists() });
+  const trashQuery = useQuery({ queryKey: ["trash", "count"], queryFn: () => fetchTrash({ limit: 1 }) });
   const crates = cratesQuery.data?.items ?? [];
+  const trashCount = trashQuery.data?.total ?? 0;
+  const isIndexing = useIngestStore((s) =>
+    s.jobs.some((job) => job.status === "pending" || job.status === "running")
+  );
   const palette = useSettingsStore((s) => s.palette);
   const paletteName = PALETTES.find((p) => p.id === palette)?.name ?? "Palette";
 
@@ -56,6 +63,13 @@ export function NavRail() {
               >
                 <Icon />
                 {label}
+                {label === "Import" && isIndexing ? (
+                  <span
+                    className="lf-index-pulse ml-auto h-1.5 w-1.5 rounded-full bg-acc"
+                    title="Indexing library"
+                    aria-label="Indexing library"
+                  />
+                ) : null}
               </Link>
             </li>
           );
@@ -97,8 +111,21 @@ export function NavRail() {
       </div>
 
       <Link
-        href="/settings"
+        href="/trash"
         className={`mt-3 flex items-center gap-2.5 rounded-lg border px-3 py-2 text-[13px] hover:bg-surf-2 hover:text-t1 ${
+          pathname.startsWith("/trash")
+            ? "border-line bg-surf-2 font-semibold text-t1"
+            : "border-transparent text-t2"
+        }`}
+      >
+        <TrashIcon />
+        Trash
+        {trashCount > 0 ? <span className="ml-auto font-mono text-[11px] text-t3">{trashCount}</span> : null}
+      </Link>
+
+      <Link
+        href="/settings"
+        className={`mt-1 flex items-center gap-2.5 rounded-lg border px-3 py-2 text-[13px] hover:bg-surf-2 hover:text-t1 ${
           pathname.startsWith("/settings")
             ? "border-line bg-surf-2 font-semibold text-t1"
             : "border-transparent text-t2"
@@ -176,6 +203,18 @@ function HealthIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <circle cx="12" cy="12" r="9" />
       <path d="M12 8v4l3 3" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M19 6l-1 14H6L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
     </svg>
   );
 }

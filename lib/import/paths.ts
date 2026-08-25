@@ -22,6 +22,11 @@ export function artworkPathFor(trackUuid: string, ext: string): string {
   return path.join(getDataDir(), "artwork", shardOf(trackUuid), `${trackUuid}.${ext}`);
 }
 
+/** Soft-deleted audio lives at trash/<uuid>/<original-filename> (ARCHITECTURE.md §2). */
+export function trashDirFor(trackUuid: string): string {
+  return path.join(getDataDir(), "trash", trackUuid);
+}
+
 /** Strips path separators and other filesystem-hostile characters from a user-supplied filename. */
 export function sanitizeFilename(name: string): string {
   const base = name.replace(/[/\\]/g, "_").trim();

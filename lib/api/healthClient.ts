@@ -10,6 +10,7 @@ export interface HealthReport {
 
 export interface DuplicateGroup {
   key: string;
+  keeperId: number;
   tracks: TrackSummary[];
 }
 
@@ -34,8 +35,20 @@ export function fetchMissingTracks(cursor?: string): Promise<{ items: TrackSumma
   return request(`/api/v1/health/missing${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
 }
 
-export function fetchDuplicateGroups(cursor?: string): Promise<{ items: DuplicateGroup[]; nextCursor: string | null }> {
-  return request(`/api/v1/health/duplicates${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+export function fetchDuplicateGroups(params: { cursor?: string; limit?: number } = {}): Promise<{ items: DuplicateGroup[]; nextCursor: string | null }> {
+  const search = new URLSearchParams();
+  if (params.limit != null) search.set("limit", String(params.limit));
+  if (params.cursor) search.set("cursor", params.cursor);
+  const qs = search.toString();
+  return request(`/api/v1/health/duplicates${qs ? `?${qs}` : ""}`);
+}
+
+/** POST /api/v1/health/duplicates/remove — keep the best copy, move extras to trash. */
+export function removeDuplicateExtras(groupKey?: string): Promise<{ removed: number; removedIds: number[] }> {
+  return request("/api/v1/health/duplicates/remove", {
+    method: "POST",
+    body: JSON.stringify(groupKey ? { groupKey } : {}),
+  });
 }
 
 /** POST /api/v1/scan — triggers a library rescan; runs synchronously and returns the completed job. */

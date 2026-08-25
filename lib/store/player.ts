@@ -78,6 +78,10 @@ interface PlayerState {
   toggleShuffle: () => void;
   reorderQueue: (fromIndex: number, toIndex: number) => void;
   removeFromQueue: (index: number) => void;
+  /** Drops every occurrence of a library track from the queue (used when removing from the library). */
+  removeTrackById: (id: number) => void;
+  /** Refresh cover URLs in the live queue after a tag/cover edit. */
+  updateTrackCover: (trackId: number, coverArtUrl: string) => void;
   playFromQueue: (index: number) => void;
   setCurrentTime: (seconds: number) => void;
   setWaveform: (data: WaveformData | null) => void;
@@ -407,6 +411,26 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       currentTime,
     });
     schedulePersist(get);
+  },
+
+  removeTrackById: (id) => {
+    const indexes: number[] = [];
+    get().queue.forEach((track, index) => {
+      if (track.id === id) indexes.push(index);
+    });
+    for (let i = indexes.length - 1; i >= 0; i--) {
+      get().removeFromQueue(indexes[i]);
+    }
+  },
+
+  updateTrackCover: (trackId, coverArtUrl) => {
+    const patch = (track: TrackSummary) => (track.id === trackId ? { ...track, coverArtUrl } : track);
+    const current = get().currentTrack;
+    set({
+      currentTrack: current ? patch(current) : current,
+      queue: get().queue.map(patch),
+      sourceQueue: get().sourceQueue.map(patch),
+    });
   },
 
   setCurrentTime: (seconds) => set({ currentTime: seconds }),

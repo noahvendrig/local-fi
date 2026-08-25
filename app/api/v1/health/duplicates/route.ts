@@ -28,5 +28,8 @@ export async function GET(request: Request) {
   const page = groups.slice(startIndex, startIndex + limit);
   const nextCursor = startIndex + limit < groups.length ? Buffer.from(String(startIndex + limit)).toString("base64url") : null;
 
-  return NextResponse.json({ items: page.map((g) => ({ key: g.key, tracks: g.tracks })), nextCursor });
+  return NextResponse.json({
+    items: page.map((g) => ({ key: g.key, keeperId: g.keeperId, tracks: g.tracks })),
+    nextCursor,
+  });
 }

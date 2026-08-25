@@ -1,7 +1,7 @@
 // Client-side pre-filter only — the server is the real authority on what's
 // importable (ARCHITECTURE.md §3.1). This just keeps obvious non-audio junk
 // (.DS_Store, playlist files, etc.) out of the upload batch.
-const AUDIO_EXTENSIONS = [".mp3", ".flac", ".wav", ".aac", ".m4a", ".ogg", ".oga", ".aif", ".aiff"];
+const AUDIO_EXTENSIONS = [".mp3", ".flac", ".wav", ".aac", ".m4a", ".ogg", ".oga", ".opus", ".aif", ".aiff", ".webm"];
 
 /** A file paired with its path relative to the folder the user chose to import, e.g. "Imported Folder/Album A/track.mp3". */
 export interface CollectedFile {

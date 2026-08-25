@@ -21,6 +21,8 @@ export interface ImportJobFile {
   originalFilename: string;
   stagedPath: string | null;
   sourceFolder: string | null;
+  /** Set on `folder_scan` files — which watched library root this file belongs to. */
+  libraryRootId: number | null;
   trackId: number | null;
   status: ImportJobFileStatus;
   errorMessage: string | null;
@@ -33,7 +35,7 @@ export interface ImportJobFile {
 export interface ImportJob {
   id: number;
   uuid: string;
-  type: "upload" | "scan";
+  type: "upload" | "scan" | "folder_scan";
   status: ImportJobStatus;
   totalFiles: number;
   processedFiles: number;

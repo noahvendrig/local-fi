@@ -5,14 +5,13 @@ import { formatDuration, formatRate } from "@/lib/format/track";
 import type { TrackSummary } from "@/lib/api-client";
 import { usePlayerStore } from "@/lib/store/player";
 import { useSettingsStore } from "@/lib/store/settings";
-import { useTagEditorStore } from "@/lib/store/tagEditor";
 import { PlayingIcon } from "@/components/shell/PlayerIcons";
+import { TrackRowActions } from "./TrackRowActions";
 
 export function TrackList({ tracks }: { tracks: TrackSummary[] }) {
   const currentTrackId = usePlayerStore((s) => s.currentTrack?.id);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const playTrack = usePlayerStore((s) => s.playTrack);
-  const openTagEditor = useTagEditorStore((s) => s.open);
   const showFormatBadges = useSettingsStore((s) => s.showFormatBadges);
   const columns = showFormatBadges
     ? "grid-cols-[32px_1fr_200px_120px_84px_64px_32px]"
@@ -84,30 +83,10 @@ export function TrackList({ tracks }: { tracks: TrackSummary[] }) {
             ) : null}
             <span className="font-mono text-xs text-t3">{formatRate(track)}</span>
             <span className="text-right font-mono text-xs text-t2">{formatDuration(track.durationSeconds)}</span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                openTagEditor(track.id);
-              }}
-              aria-label="Edit tags"
-              title="Edit tags"
-              className="rounded-md p-1 text-t3 opacity-0 hover:bg-surf hover:text-t1 group-hover:opacity-100 focus:opacity-100"
-            >
-              <EditIcon />
-            </button>
+            <TrackRowActions track={track} />
           </div>
         );
       })}
     </div>
-  );
-}
-
-function EditIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 20h9" />
-      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-    </svg>
   );
 }

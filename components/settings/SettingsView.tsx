@@ -267,6 +267,18 @@ export function SettingsView() {
             Open health
           </Link>
         </div>
+        <div className="lf-card mt-3 flex items-center justify-between gap-4 rounded-2xl px-5 py-4">
+          <div>
+            <p className="text-sm font-semibold text-t1">Library folders</p>
+            <p className="mt-0.5 text-sm text-t2">Watch an existing music folder in place. Managed from the Import page, so progress is visible while it indexes.</p>
+          </div>
+          <Link
+            href="/import"
+            className="shrink-0 rounded-lg border border-line px-3 py-2 text-xs font-medium text-t1 hover:border-acc hover:bg-surf-2"
+          >
+            Open import
+          </Link>
+        </div>
       </section>
     </div>
   );

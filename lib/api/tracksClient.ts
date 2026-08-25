@@ -48,9 +48,42 @@ export function updateTrack(id: number, patch: TrackTagPatch): Promise<TrackDeta
   return request(`/api/v1/tracks/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
 }
 
-/** DELETE /api/v1/tracks/:id — soft-remove by default; `hard` permanently purges the row (M10). */
+export interface CoverUploadResult {
+  coverArtUrl: string | null;
+  coverEmbedded?: boolean;
+  embeddedCount?: number;
+  skippedCount?: number;
+}
+
+async function uploadCover(url: string, file: File): Promise<CoverUploadResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(url, { method: "PUT", headers: authHeaders(), body: formData });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error?.message ?? `Request failed (${res.status})`);
+  }
+  return res.json();
+}
+
+/** PUT /api/v1/tracks/:id/cover — embeds the image in the file when the format allows it. */
+export function uploadTrackCover(id: number, file: File): Promise<CoverUploadResult> {
+  return uploadCover(`/api/v1/tracks/${id}/cover`, file);
+}
+
+/** PUT /api/v1/albums/:id/cover — applies the image to every track in the album. */
+export function uploadAlbumCover(id: number, file: File): Promise<CoverUploadResult> {
+  return uploadCover(`/api/v1/albums/${id}/cover`, file);
+}
+
+/** DELETE /api/v1/tracks/:id — soft-remove by default; `hard` permanently purges the row. */
 export function deleteTrack(id: number, hard = false): Promise<void> {
   return request(`/api/v1/tracks/${id}${hard ? "?hard=true" : ""}`, { method: "DELETE" });
+}
+
+/** POST /api/v1/tracks/:id/restore — move a trashed track back into the library. */
+export function restoreTrack(id: number): Promise<TrackDetail> {
+  return request(`/api/v1/tracks/${id}/restore`, { method: "POST" });
 }
 
 /** POST /api/v1/tracks/:id/relink — re-verifies (or re-points) a missing track (M10). */

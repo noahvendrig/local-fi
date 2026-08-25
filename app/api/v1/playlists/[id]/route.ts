@@ -1,12 +1,13 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getDb } from "@/lib/db/client";
-import { albums, artists, playlistTracks, playlists, tracks } from "@/lib/db/schema";
-import { mapTrackSummaryRow, trackSummarySelectColumns } from "@/lib/db/trackSummary";
+import { deletePlaylistRecord } from "@/lib/crates/coverArt";
 import { evaluateSmartCrate } from "@/lib/crates/evaluateRules";
 import { RuleGroupSchema } from "@/lib/crates/rules";
 import { toPlaylistJson } from "@/lib/crates/serialize";
+import { getDb } from "@/lib/db/client";
+import { albums, artists, libraryRootCrates, libraryRoots, playlistTracks, playlists, tracks } from "@/lib/db/schema";
+import { mapTrackSummaryRow, trackSummarySelectColumns } from "@/lib/db/trackSummary";
 
 const NOT_FOUND = NextResponse.json({ error: { code: "not_found", message: "Playlist not found." } }, { status: 404 });
 
@@ -46,7 +47,17 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     trackList = evaluateSmartCrate(db, rules, playlist.sortField).map((t) => ({ ...t, entryId: null, position: null }));
   }
 
-  return NextResponse.json({ ...toPlaylistJson(playlist), tracks: trackList });
+  const syncLink = db
+    .select({ rootId: libraryRoots.id, rootName: libraryRoots.name, syncToCrate: libraryRoots.syncToCrate })
+    .from(libraryRootCrates)
+    .innerJoin(libraryRoots, eq(libraryRootCrates.libraryRootId, libraryRoots.id))
+    .where(eq(libraryRootCrates.playlistId, playlistId))
+    .get();
+  const librarySync = syncLink
+    ? { rootId: syncLink.rootId, rootName: syncLink.rootName, syncToCrate: syncLink.syncToCrate === 1 }
+    : null;
+
+  return NextResponse.json({ ...toPlaylistJson(playlist), tracks: trackList, librarySync });
 }
 
 /** PATCH /api/v1/playlists/:id — rename/describe/update rules (ARCHITECTURE.md §7). */
@@ -98,10 +109,6 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const playlistId = Number(id);
   if (!Number.isInteger(playlistId)) return NOT_FOUND;
 
-  const db = getDb();
-  const existing = db.select({ id: playlists.id }).from(playlists).where(eq(playlists.id, playlistId)).get();
-  if (!existing) return NOT_FOUND;
-
-  db.delete(playlists).where(eq(playlists.id, playlistId)).run();
+  if (!deletePlaylistRecord(playlistId)) return NOT_FOUND;
   return new NextResponse(null, { status: 204 });
 }

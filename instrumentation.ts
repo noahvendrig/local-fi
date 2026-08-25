@@ -6,11 +6,15 @@ export async function register() {
   const { getDb } = await import("./lib/db/client");
   const { isFfmpegAvailable } = await import("./lib/ffmpeg");
   const { sweepStaleImports } = await import("./lib/import/sweep");
+  const { sweepExpiredTrash } = await import("./lib/library/trash");
+  const { startAllWatchers } = await import("./lib/library/watcher");
 
   bootstrapDataDir();
   getAuthToken();
   getDb();
   sweepStaleImports();
+  sweepExpiredTrash();
+  startAllWatchers();
 
   if (!isFfmpegAvailable()) {
     console.warn(

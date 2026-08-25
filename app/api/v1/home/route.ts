@@ -73,7 +73,7 @@ export async function GET() {
     .innerJoin(tracks, eq(playEvents.trackId, tracks.id))
     .leftJoin(artists, eq(tracks.artistId, artists.id))
     .leftJoin(albums, eq(tracks.albumId, albums.id))
-    .where(gte(playEvents.playedAt, windowStart))
+    .where(and(gte(playEvents.playedAt, windowStart), isNull(tracks.deletedAt)))
     .groupBy(tracks.id)
     .orderBy(desc(sql`plays`))
     .limit(TOP_LIMIT)
@@ -96,7 +96,7 @@ export async function GET() {
     .from(playEvents)
     .innerJoin(tracks, eq(playEvents.trackId, tracks.id))
     .innerJoin(artists, eq(tracks.artistId, artists.id))
-    .where(gte(playEvents.playedAt, windowStart))
+    .where(and(gte(playEvents.playedAt, windowStart), isNull(tracks.deletedAt)))
     .groupBy(artists.id)
     .orderBy(desc(sql`plays`))
     .limit(TOP_LIMIT)
@@ -141,7 +141,7 @@ export async function GET() {
     })
     .from(playEvents)
     .innerJoin(tracks, eq(playEvents.trackId, tracks.id))
-    .where(gte(playEvents.playedAt, windowStart))
+    .where(and(gte(playEvents.playedAt, windowStart), isNull(tracks.deletedAt)))
     .groupBy(tracks.format)
     .orderBy(desc(sql`plays`))
     .all();
@@ -181,7 +181,7 @@ export async function GET() {
         .from(tracks)
         .leftJoin(artists, eq(tracks.artistId, artists.id))
         .leftJoin(albums, eq(tracks.albumId, albums.id))
-        .where(inArray(tracks.id, backInRotationIds))
+        .where(and(inArray(tracks.id, backInRotationIds), isNull(tracks.deletedAt)))
         .all()
     : [];
   const backInRotationTrackById = new Map(backInRotationTrackRows.map((r) => [r.id, mapTrackSummaryRow(r)]));

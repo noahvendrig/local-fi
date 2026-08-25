@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { fetchTrack } from "@/lib/api/tracksClient";
+import { formatSupportsEmbeddedPictures } from "@/lib/tags/coverFormats";
 import { useTagEditorStore } from "@/lib/store/tagEditor";
 import { TagEditorModal } from "./TagEditorModal";
 
@@ -20,6 +21,11 @@ export function TrackTagEditorHost() {
 
   if (trackId == null || !track) return null;
 
+  const formatLabel = track.format.toUpperCase();
+  const coverEmbedWarning = formatSupportsEmbeddedPictures(track.format)
+    ? null
+    : `${formatLabel} files can't store cover art in the file. The image will be kept in the library only.`;
+
   return (
     <TagEditorModal
       title="Edit track tags"
@@ -35,6 +41,8 @@ export function TrackTagEditorHost() {
         year: track.year,
         genre: track.genre,
       }}
+      coverArtUrl={track.coverArtUrl}
+      coverEmbedWarning={coverEmbedWarning}
       onClose={close}
     />
   );

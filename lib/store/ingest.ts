@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { cancelImportJob, fetchImportJob, fetchImportJobs, importJobEventsUrl, submitImport } from "@/lib/api/importClient";
-import type { ImportJobWithFiles } from "@/lib/api/types";
+import type { ImportJob, ImportJobWithFiles } from "@/lib/api/types";
 import { chunkFilesForUpload } from "@/lib/ingest/chunkFiles";
 import { hasSubfolders, type CollectedFile } from "@/lib/ingest/collectFiles";
 
@@ -27,6 +27,9 @@ interface IngestState {
   resolveFolderImport: (createFolderPlaylists: boolean) => Promise<void>;
   cancelFolderImport: () => void;
   cancelJob: (jobId: number) => void;
+  /** Adopts a job created elsewhere (e.g. a library-root add/rescan) into the tray so its
+   *  progress shows live and the terminal-status effect refreshes the right queries once it finishes. */
+  trackJob: (job: ImportJob) => void;
 }
 
 function subscribeToJobEvents(jobId: number, set: (fn: (state: IngestState) => Partial<IngestState>) => void) {
@@ -163,5 +166,18 @@ export const useIngestStore = create<IngestState>((set, get) => ({
   cancelJob: (jobId) => {
     uploadAbort?.abort();
     void cancelImportJob(jobId);
+  },
+
+  trackJob: (job) => {
+    set((state) => ({ jobs: mergeJobs([{ ...job, files: [] }], state.jobs) }));
+    if (TERMINAL_STATUSES.has(job.status)) return;
+    subscribeToJobEvents(job.id, set);
+    void fetchImportJob(job.id)
+      .then((detailed) => {
+        set((state) => ({ jobs: mergeJobs([detailed], state.jobs) }));
+      })
+      .catch(() => {
+        // SSE updates will still arrive; empty files until then.
+      });
   },
 }));

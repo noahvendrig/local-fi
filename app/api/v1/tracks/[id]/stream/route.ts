@@ -1,12 +1,11 @@
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { Readable } from "node:stream";
-import path from "node:path";
 import { and, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/client";
 import { tracks } from "@/lib/db/schema";
 import { contentTypeForFormat } from "@/lib/media/audioContentType";
-import { getDataDir } from "@/lib/storage/dataDir";
+import { resolveTrackAbsPath } from "@/lib/storage/resolveTrackPath";
 
 const NOT_FOUND = NextResponse.json({ error: { code: "not_found", message: "Track not found." } }, { status: 404 });
 
@@ -24,13 +23,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   if (!Number.isInteger(trackId)) return NOT_FOUND;
 
   const track = getDb()
-    .select({ path: tracks.path, format: tracks.format })
+    .select({ path: tracks.path, libraryRootId: tracks.libraryRootId, format: tracks.format })
     .from(tracks)
     .where(and(eq(tracks.id, trackId), isNull(tracks.deletedAt), isNull(tracks.missingSince)))
     .get();
   if (!track) return NOT_FOUND;
 
-  const absPath = path.join(getDataDir(), track.path);
+  let absPath: string;
+  try {
+    absPath = resolveTrackAbsPath(track);
+  } catch {
+    return NOT_FOUND;
+  }
   if (!existsSync(absPath)) return NOT_FOUND;
 
   const { size } = statSync(absPath);

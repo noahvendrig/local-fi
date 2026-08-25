@@ -75,7 +75,7 @@ export function IngestTray() {
       <div className="rounded-2xl border-[1.5px] border-solid border-acc bg-[var(--lf-tint)] px-10 py-8 text-center shadow-[0_0_0_6px_var(--lf-ring)]">
         <p className="font-serif text-[40px] font-medium leading-[1.1] text-t1">Drop to import</p>
         <p className="mt-3 text-sm text-t2">Audio files and folders are both supported.</p>
-        <p className="mt-1.5 font-mono text-xs text-t3">FLAC · ALAC · MP3 · WAV · AIFF · OGG</p>
+        <p className="mt-1.5 font-mono text-xs text-t3">FLAC · ALAC · MP3 · WAV · AIFF · OGG · OPUS · WEBM</p>
       </div>
     </div>
   );

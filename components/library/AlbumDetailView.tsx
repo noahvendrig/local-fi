@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { fetchAlbum } from "@/lib/api-client";
+import { fetchAlbum, type AlbumDetailTrack } from "@/lib/api-client";
 import { withAuthQuery } from "@/lib/api/http";
 import { formatDuration, formatRate } from "@/lib/format/track";
+import { formatSupportsEmbeddedPictures } from "@/lib/tags/coverFormats";
 import { usePlayerStore } from "@/lib/store/player";
 import { useSettingsStore } from "@/lib/store/settings";
 import { AlbumPlaceholderIcon, PlayIcon, PlayingIcon } from "@/components/shell/PlayerIcons";
 import { TagEditorModal } from "./TagEditorModal";
+import { TrackRowActions } from "./TrackRowActions";
 
 export function AlbumDetailView({ albumId }: { albumId: number }) {
   const {
@@ -146,7 +148,7 @@ export function AlbumDetailView({ albumId }: { albumId: number }) {
                   role="button"
                   tabIndex={track.missing ? -1 : 0}
                   aria-label={`Play ${track.title ?? "Untitled"}`}
-                  className={`lf-track-row grid grid-cols-[32px_1fr_120px_64px] items-center gap-4 rounded-lg border border-transparent px-3 py-3 ${
+                  className={`lf-track-row group grid grid-cols-[32px_1fr_120px_64px_32px] items-center gap-4 rounded-lg border border-transparent px-3 py-3 ${
                     track.missing ? "cursor-not-allowed opacity-40" : "cursor-pointer hover:border-line hover:bg-surf-2"
                   } ${isCurrent ? "bg-[var(--lf-tint)]" : ""}`}
                   title={track.missing ? "File missing on disk" : undefined}
@@ -159,6 +161,7 @@ export function AlbumDetailView({ albumId }: { albumId: number }) {
                   </span>
                   <span className="font-mono text-xs text-t3">{formatRate(track)}</span>
                   <span className="text-right font-mono text-xs text-t2">{formatDuration(track.durationSeconds)}</span>
+                  <TrackRowActions track={track} />
                 </div>
               );
             })}
@@ -169,15 +172,27 @@ export function AlbumDetailView({ albumId }: { albumId: number }) {
         <TagEditorModal
           title="Edit album tags"
           mode="album"
+          albumId={album.id}
           trackIds={album.tracks.map((t) => t.id)}
           initialValues={{
             album: album.title,
             albumArtist: album.artists.map((a) => a.name).join(", "),
             year: album.year,
           }}
+          coverArtUrl={album.coverArtUrl}
+          coverEmbedWarning={albumCoverEmbedWarning(album.tracks)}
           onClose={() => setIsEditingTags(false)}
         />
       )}
     </div>
   );
+}
+
+function albumCoverEmbedWarning(tracks: AlbumDetailTrack[]): string | null {
+  const skipped = tracks.filter((track) => !formatSupportsEmbeddedPictures(track.format));
+  if (skipped.length === 0) return null;
+  if (skipped.length === tracks.length) {
+    return "These files can't store cover art in the file. The image will be kept in the library only.";
+  }
+  return `${skipped.length} track${skipped.length === 1 ? "" : "s"} can't store cover art in the file. Those will keep the image in the library only.`;
 }

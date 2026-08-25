@@ -1,6 +1,6 @@
 import type { TrackSummary } from "@/lib/api-client";
 import type { RuleGroup } from "@/lib/crates/rules";
-import { authHeaders } from "./http";
+import { authHeaders, withAuthQuery } from "./http";
 
 export type PlaylistType = "manual" | "smart";
 
@@ -27,8 +27,16 @@ export interface PlaylistTrackItem extends TrackSummary {
   position: string | null;
 }
 
+/** Present when this crate mirrors a watched library folder (lib/library/syncCrates.ts) — either the whole-root crate or one immediate subfolder's crate. */
+export interface LibrarySyncInfo {
+  rootId: number;
+  rootName: string;
+  syncToCrate: boolean;
+}
+
 export interface PlaylistDetail extends Playlist {
   tracks: PlaylistTrackItem[];
+  librarySync: LibrarySyncInfo | null;
 }
 
 export interface PlaylistTrackEntry {
@@ -86,6 +94,32 @@ export function deletePlaylist(id: number): Promise<void> {
   return request(`/api/v1/playlists/${id}`, { method: "DELETE" });
 }
 
+/** Matches the server cap in lib/crates/coverArt.ts. */
+export const PLAYLIST_COVER_MAX_BYTES = 10 * 1024 * 1024;
+export const PLAYLIST_COVER_ACCEPT = "image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif";
+
+export async function uploadPlaylistCover(id: number, file: File): Promise<Playlist> {
+  if (file.size > PLAYLIST_COVER_MAX_BYTES) {
+    throw new Error("Cover image is too large (max 10 MB).");
+  }
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`/api/v1/playlists/${id}/cover`, {
+    method: "PUT",
+    headers: authHeaders(),
+    body: formData,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error?.message ?? `Request failed (${res.status})`);
+  }
+  return res.json();
+}
+
+export function removePlaylistCover(id: number): Promise<Playlist> {
+  return request(`/api/v1/playlists/${id}/cover`, { method: "DELETE" });
+}
+
 export function addTrackToPlaylist(playlistId: number, trackId: number, afterPosition?: string): Promise<PlaylistTrackEntry> {
   return request(`/api/v1/playlists/${playlistId}/tracks`, { method: "POST", body: JSON.stringify({ trackId, afterPosition }) });
 }
@@ -104,4 +138,38 @@ export function previewRules(
   sortField?: string
 ): Promise<{ items: TrackSummary[]; count: number }> {
   return request(`/api/v1/playlists/${playlistId}/preview-rules`, { method: "POST", body: JSON.stringify({ rulesJson, sortField }) });
+}
+
+type SaveFilePickerWindow = Window & {
+  showSaveFilePicker?: (options: {
+    suggestedName?: string;
+    types?: { description: string; accept: Record<string, string[]> }[];
+  }) => Promise<{ createWritable: () => Promise<WritableStream<Uint8Array>> }>;
+};
+
+/** Downloads the crate as a zip folder named after the playlist, with the audio files inside. */
+export async function downloadPlaylistExport(playlistId: number, suggestedName: string): Promise<void> {
+  const picker = window as SaveFilePickerWindow;
+  if (typeof picker.showSaveFilePicker === "function") {
+    const handle = await picker.showSaveFilePicker({
+      suggestedName,
+      types: [{ description: "Zip archive", accept: { "application/zip": [".zip"] } }],
+    });
+    const res = await fetch(`/api/v1/playlists/${playlistId}/export`, { headers: authHeaders() });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.error?.message ?? `Export failed (${res.status})`);
+    }
+    if (!res.body) throw new Error("Export failed (empty response).");
+    await res.body.pipeTo(await handle.createWritable());
+    return;
+  }
+
+  const link = document.createElement("a");
+  link.href = withAuthQuery(`/api/v1/playlists/${playlistId}/export`);
+  link.download = suggestedName;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }

@@ -4,7 +4,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/client";
 import { tracks } from "@/lib/db/schema";
-import { getDataDir } from "@/lib/storage/dataDir";
+import { resolveTrackAbsPath } from "@/lib/storage/resolveTrackPath";
 
 const NOT_FOUND = NextResponse.json({ error: { code: "not_found", message: "Track not found." } }, { status: 404 });
 
@@ -42,15 +42,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!Number.isInteger(trackId)) return NOT_FOUND;
 
   const track = getDb()
-    .select({ path: tracks.path })
+    .select({ path: tracks.path, libraryRootId: tracks.libraryRootId })
     .from(tracks)
     .where(and(eq(tracks.id, trackId), isNull(tracks.deletedAt)))
     .get();
   if (!track) return NOT_FOUND;
 
-  const absPath = path.join(getDataDir(), track.path);
-
   try {
+    const absPath = resolveTrackAbsPath(track);
     revealInOsFileExplorer(absPath);
   } catch (err) {
     return NextResponse.json(

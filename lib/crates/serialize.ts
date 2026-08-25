@@ -23,7 +23,9 @@ export function toPlaylistJson(row: typeof playlists.$inferSelect): PlaylistJson
     description: row.description,
     rulesJson: row.rulesJson ? (JSON.parse(row.rulesJson) as RuleGroup) : null,
     sortField: row.sortField,
-    coverArtUrl: row.coverArtPath ? `/api/v1/playlists/${row.id}/cover` : null,
+    coverArtUrl: row.coverArtPath
+      ? `/api/v1/playlists/${row.id}/cover?v=${encodeURIComponent(row.updatedAt)}`
+      : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

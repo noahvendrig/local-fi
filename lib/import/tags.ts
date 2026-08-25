@@ -2,7 +2,7 @@ import { parseFile } from "music-metadata";
 import path from "node:path";
 
 /** Formats validated end-to-end by the phase-1 import pipeline (ARCHITECTURE.md §3.1 note). */
-export const SUPPORTED_FORMATS = ["mp3", "flac", "wav", "aac", "m4a", "ogg", "alac", "aiff"] as const;
+export const SUPPORTED_FORMATS = ["mp3", "flac", "wav", "aac", "m4a", "ogg", "alac", "aiff", "webm"] as const;
 export type SupportedFormat = (typeof SUPPORTED_FORMATS)[number];
 
 const EXT_TO_FORMAT: Record<string, SupportedFormat> = {
@@ -13,8 +13,13 @@ const EXT_TO_FORMAT: Record<string, SupportedFormat> = {
   ".m4a": "m4a",
   ".ogg": "ogg",
   ".oga": "ogg",
+  // Opus audio is an Ogg-container codec — reuses the existing 'ogg' format bucket rather
+  // than a new tracks.format value (no schema/migration needed; music-metadata,
+  // node-taglib-sharp, and ffmpeg all already handle Opus-in-Ogg like any other Ogg file).
+  ".opus": "ogg",
   ".aif": "aiff",
   ".aiff": "aiff",
+  ".webm": "webm",
 };
 
 const LOSSLESS_FORMATS = new Set<SupportedFormat>(["flac", "wav", "alac", "aiff"]);

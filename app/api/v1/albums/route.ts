@@ -89,7 +89,7 @@ export async function GET(request: Request) {
       albumArtistId: row.albumArtistId,
       albumArtistName: row.albumArtistName ?? "Various Artists",
       year: row.year,
-      coverArtUrl: row.coverArtPath ? `/api/v1/albums/${row.id}/cover` : null,
+      coverArtUrl: row.coverArtPath ? `/api/v1/albums/${row.id}/cover?v=${encodeURIComponent(row.coverArtPath)}` : null,
       trackCount: aggregate?.trackCount ?? 0,
       format: aggregate?.format ?? null,
       lossless: aggregate?.lossless ?? false,

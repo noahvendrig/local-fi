@@ -102,6 +102,16 @@ export function AlbumPlaceholderIcon() {
   );
 }
 
+export function DownloadIcon({ size = 14 }: IconSizeProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v12" />
+      <path d="M7 11l5 5 5-5" />
+      <path d="M4 19h16" />
+    </svg>
+  );
+}
+
 export function EqIcon({ size = 14 }: IconSizeProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">

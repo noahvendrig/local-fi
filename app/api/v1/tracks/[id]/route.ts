@@ -1,5 +1,4 @@
-import { existsSync, mkdirSync, renameSync, statSync, unlinkSync } from "node:fs";
-import path from "node:path";
+import { statSync } from "node:fs";
 import { and, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -8,7 +7,8 @@ import { albums, artists, tracks } from "@/lib/db/schema";
 import { getTrackDetailRow, mapTrackDetailRow } from "@/lib/db/trackDetail";
 import { trackFingerprint } from "@/lib/import/fingerprint";
 import { ensureAlbumArtistLink, ensureTrackArtistLink, upsertAlbum, upsertArtist } from "@/lib/import/upsert";
-import { getDataDir } from "@/lib/storage/dataDir";
+import { purgeTrack, softDeleteTrack } from "@/lib/library/trash";
+import { resolveTrackAbsPath } from "@/lib/storage/resolveTrackPath";
 import { writeTrackTags } from "@/lib/tags/writeTags";
 
 const NOT_FOUND = NextResponse.json({ error: { code: "not_found", message: "Track not found." } }, { status: 404 });
@@ -71,7 +71,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     );
   }
 
-  const absPath = path.join(getDataDir(), existing.path);
+  const absPath = resolveTrackAbsPath(existing);
 
   try {
     writeTrackTags(absPath, patch);
@@ -141,7 +141,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
 /**
  * DELETE /api/v1/tracks/:id — soft-remove by default (moves the file to trash/, sets deletedAt);
- * `?hard=true` permanently purges the row and file (used by Health's "Remove missing entry", M10).
+ * `?hard=true` permanently purges the row and file (Trash "delete forever", Health "Remove missing entry").
  */
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -152,28 +152,31 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const hard = url.searchParams.get("hard") === "true";
 
   const db = getDb();
-  const existing = db.select().from(tracks).where(and(eq(tracks.id, trackId), isNull(tracks.deletedAt))).get();
+  const existing = db.select().from(tracks).where(eq(tracks.id, trackId)).get();
   if (!existing) return NOT_FOUND;
 
-  const absPath = path.join(getDataDir(), existing.path);
-  const now = new Date().toISOString();
-
-  if (hard) {
-    if (existsSync(absPath)) {
-      try {
-        unlinkSync(absPath);
-      } catch {
-        // Best-effort — a purged row shouldn't be blocked by a file the OS won't release.
+  try {
+    if (hard) {
+      purgeTrack(existing);
+    } else {
+      if (existing.deletedAt) {
+        return NextResponse.json(
+          { error: { code: "already_in_trash", message: "This track is already in the trash." } },
+          { status: 409 }
+        );
       }
+      softDeleteTrack(existing);
     }
-    db.delete(tracks).where(eq(tracks.id, trackId)).run();
-  } else {
-    if (!existing.missingSince && existsSync(absPath)) {
-      const trashPath = path.join(getDataDir(), "trash", existing.uuid, path.basename(absPath));
-      mkdirSync(path.dirname(trashPath), { recursive: true });
-      renameSync(absPath, trashPath);
-    }
-    db.update(tracks).set({ deletedAt: now }).where(eq(tracks.id, trackId)).run();
+  } catch (err) {
+    return NextResponse.json(
+      {
+        error: {
+          code: hard ? "purge_failed" : "delete_failed",
+          message: err instanceof Error ? err.message : "Couldn't remove this track.",
+        },
+      },
+      { status: 500 }
+    );
   }
 
   return new NextResponse(null, { status: 204 });

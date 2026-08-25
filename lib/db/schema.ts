@@ -77,6 +77,20 @@ export const trackArtists = sqliteTable(
   ]
 );
 
+/** A folder on disk the user points local-fi at and indexes in place, never copying audio out of it. */
+export const libraryRoots = sqliteTable("library_roots", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  uuid: text("uuid").notNull().unique(),
+  name: text("name").notNull(),
+  path: text("path").notNull().unique(),
+  /** Recognized-audio-file count from the last scan of this root — a cache refreshed on
+   *  add/rescan, not a live query, so it can drift from `tracks` until the next scan. */
+  totalFileCount: integer("total_file_count").notNull().default(0),
+  /** Opt-in at add-time: mirror this root (and each immediate subfolder) into manual crates. */
+  syncToCrate: integer("sync_to_crate").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
+
 export const importJobs = sqliteTable(
   "import_jobs",
   {
@@ -93,7 +107,7 @@ export const importJobs = sqliteTable(
     createdAt: text("created_at").notNull(),
   },
   (t) => [
-    check("chk_import_jobs_type", sql`${t.type} IN ('upload','scan')`),
+    check("chk_import_jobs_type", sql`${t.type} IN ('upload','scan','folder_scan')`),
     check(
       "chk_import_jobs_status",
       sql`${t.status} IN ('pending','running','completed','completed_with_errors','failed','cancelled')`
@@ -109,9 +123,12 @@ export const importJobFiles = sqliteTable(
       .notNull()
       .references(() => importJobs.id, { onDelete: "cascade" }),
     originalFilename: text("original_filename").notNull(),
+    /** Absolute staged temp path for `upload` jobs; the real in-place file path for `folder_scan` jobs (never moved). */
     stagedPath: text("staged_path"),
     /** Immediate subfolder (of the imported root) this file came from, e.g. "Album A" — null if it sat directly in the imported folder. */
     sourceFolder: text("source_folder"),
+    /** Set only for `folder_scan` files — which library root `stagedPath` is relative to. */
+    libraryRootId: integer("library_root_id").references(() => libraryRoots.id, { onDelete: "set null" }),
     trackId: integer("track_id").references(() => tracks.id, { onDelete: "set null" }),
     status: text("status").notNull().default("queued"),
     errorMessage: text("error_message"),
@@ -134,7 +151,10 @@ export const tracks = sqliteTable(
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     uuid: text("uuid").notNull().unique(),
-    path: text("path").notNull().unique(),
+    /** Relative to LOCALFI_DATA_DIR/originals when libraryRootId is null (managed); relative to that root's path otherwise (watched). */
+    path: text("path").notNull(),
+    /** NULL = managed (copy-on-import, lives under data/originals/). Non-null = watched in place under that library_roots row. */
+    libraryRootId: integer("library_root_id").references(() => libraryRoots.id, { onDelete: "set null" }),
     fingerprint: text("fingerprint").notNull(),
     fileMtime: text("file_mtime").notNull(),
     fileSizeBytes: integer("file_size_bytes").notNull(),
@@ -177,6 +197,11 @@ export const tracks = sqliteTable(
   },
   (t) => [
     uniqueIndex("idx_tracks_uuid").on(t.uuid),
+    // Scoped per root (not a single global unique(path)) so two watched roots — or a
+    // watched root and the managed originals/ tree — can't collide on relative path,
+    // while still making a rescan of the same root idempotent (ARCHITECTURE.md §2/§3.6).
+    uniqueIndex("idx_tracks_path_root").on(t.path, t.libraryRootId),
+    index("idx_tracks_library_root").on(t.libraryRootId),
     index("idx_tracks_fingerprint").on(t.fingerprint),
     index("idx_tracks_album").on(t.albumId, t.discNumber, t.trackNumber),
     index("idx_tracks_artist").on(t.artistId),
@@ -186,7 +211,7 @@ export const tracks = sqliteTable(
     index("idx_tracks_date_added").on(t.dateAdded),
     check(
       "chk_tracks_format",
-      sql`${t.format} IN ('mp3','flac','wav','aac','m4a','ogg','alac','aiff')`
+      sql`${t.format} IN ('mp3','flac','wav','aac','m4a','ogg','alac','aiff','webm')`
     ),
     check(
       "chk_tracks_waveform_status",
@@ -226,6 +251,27 @@ export const playlistTracks = sqliteTable(
     addedAt: text("added_at").notNull(),
   },
   (t) => [index("idx_playlist_tracks_order").on(t.playlistId, t.position)]
+);
+
+/**
+ * Links a "sync to playlist" library root to the manual crate(s) that mirror it — one row
+ * for the whole-root crate (`subfolderPath` = "") and one per immediate subfolder crate
+ * discovered so far. Membership within each crate is maintained by lib/library/syncCrates.ts
+ * as files are indexed; deleting the crate here is a plain playlist delete (cascades normally).
+ */
+export const libraryRootCrates = sqliteTable(
+  "library_root_crates",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    libraryRootId: integer("library_root_id")
+      .notNull()
+      .references(() => libraryRoots.id, { onDelete: "cascade" }),
+    playlistId: integer("playlist_id")
+      .notNull()
+      .references(() => playlists.id, { onDelete: "cascade" }),
+    subfolderPath: text("subfolder_path").notNull().default(""),
+  },
+  (t) => [uniqueIndex("idx_library_root_crates_scope").on(t.libraryRootId, t.subfolderPath)]
 );
 
 export const playEvents = sqliteTable(

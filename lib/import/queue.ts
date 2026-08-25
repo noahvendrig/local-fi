@@ -5,6 +5,7 @@ import { getDb } from "../db/client";
 import { importJobFiles, importJobs } from "../db/schema";
 import { publishJobUpdate } from "./events";
 import { createFolderPlaylistsForJob } from "./folderPlaylists";
+import { processFolderScanFile } from "./folderScanPipeline";
 import { processImportFile } from "./pipeline";
 
 // In-process worker pool, no external job-queue system — single process, single
@@ -59,6 +60,9 @@ function finishJobIfDone(jobId: number): void {
 /** Enqueues every `queued` file belonging to a freshly-created import job. */
 export function enqueueImportJob(jobId: number): void {
   const db = getDb();
+  const job = db.select().from(importJobs).where(eq(importJobs.id, jobId)).get();
+  if (!job) return;
+
   const files = db
     .select()
     .from(importJobFiles)
@@ -90,6 +94,8 @@ export function enqueueImportJob(jobId: number): void {
           .set({ failedFiles: sql`${importJobs.failedFiles} + 1`, processedFiles: sql`${importJobs.processedFiles} + 1` })
           .where(eq(importJobs.id, jobId))
           .run();
+      } else if (job.type === "folder_scan" && file.stagedPath && file.libraryRootId != null) {
+        await processFolderScanFile(jobId, file.id, file.stagedPath, file.originalFilename, file.libraryRootId);
       } else if (file.stagedPath) {
         await processImportFile(jobId, file.id, file.stagedPath, file.originalFilename);
       }

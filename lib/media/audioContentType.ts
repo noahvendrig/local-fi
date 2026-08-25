@@ -7,6 +7,7 @@ const FORMAT_TO_MIME: Record<string, string> = {
   ogg: "audio/ogg",
   alac: "audio/mp4",
   aiff: "audio/aiff",
+  webm: "audio/webm",
 };
 
 export function contentTypeForFormat(format: string): string {
