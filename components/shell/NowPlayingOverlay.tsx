@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { withAuthQuery } from "@/lib/api/http";
 import { usePlayerStore } from "@/lib/store/player";
 import { useSettingsStore } from "@/lib/store/settings";
@@ -112,7 +113,13 @@ export function NowPlayingOverlay() {
             {currentTrack.title ?? "Untitled"}
           </h1>
           <p className="mb-5 text-sm leading-[1.5] text-t2">
-            {currentTrack.artistName ?? "Unknown artist"}
+            {currentTrack.artistId ? (
+              <Link href={`/artists/${currentTrack.artistId}`} className="hover:text-acc-text">
+                {currentTrack.artistName ?? "Unknown artist"}
+              </Link>
+            ) : (
+              (currentTrack.artistName ?? "Unknown artist")
+            )}
             {currentTrack.albumTitle ? ` · ${currentTrack.albumTitle}` : ""}
           </p>
           {showFormatBadges ? (

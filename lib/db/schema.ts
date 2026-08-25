@@ -189,6 +189,14 @@ export const tracks = sqliteTable(
 
     rawTagsJson: text("raw_tags_json"),
 
+    bpm: real("bpm"),
+    bpmSource: text("bpm_source"),
+    key: text("key"),
+    keySource: text("key_source"),
+    analysisStatus: text("analysis_status").notNull().default("none"),
+    analysisError: text("analysis_error"),
+    analyzedAt: text("analyzed_at"),
+
     importJobId: integer("import_job_id").references(() => importJobs.id, { onDelete: "set null" }),
     dateAdded: text("date_added").notNull(),
     dateModified: text("date_modified"),
@@ -216,6 +224,59 @@ export const tracks = sqliteTable(
     check(
       "chk_tracks_waveform_status",
       sql`${t.waveformStatus} IN ('pending','processing','ready','failed')`
+    ),
+    check("chk_tracks_bpm_source", sql`${t.bpmSource} IS NULL OR ${t.bpmSource} IN ('tag','detected','manual')`),
+    check("chk_tracks_key_source", sql`${t.keySource} IS NULL OR ${t.keySource} IN ('tag','detected','manual')`),
+    check(
+      "chk_tracks_analysis_status",
+      sql`${t.analysisStatus} IN ('none','queued','analyzing','ready','failed')`
+    ),
+  ]
+);
+
+// On-demand BPM/key detection (DJ view §Phase 3) — separate job system from importJobs since
+// analysis never runs as part of a regular import; it's only triggered from the DJ view.
+export const analysisJobs = sqliteTable(
+  "analysis_jobs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    uuid: text("uuid").notNull().unique(),
+    status: text("status").notNull().default("pending"),
+    totalTracks: integer("total_tracks").notNull().default(0),
+    processedTracks: integer("processed_tracks").notNull().default(0),
+    failedTracks: integer("failed_tracks").notNull().default(0),
+    startedAt: text("started_at"),
+    finishedAt: text("finished_at"),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [
+    check(
+      "chk_analysis_jobs_status",
+      sql`${t.status} IN ('pending','running','completed','completed_with_errors','failed','cancelled')`
+    ),
+  ]
+);
+
+export const analysisJobTracks = sqliteTable(
+  "analysis_job_tracks",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => analysisJobs.id, { onDelete: "cascade" }),
+    trackId: integer("track_id")
+      .notNull()
+      .references(() => tracks.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("queued"),
+    errorMessage: text("error_message"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [
+    index("idx_analysis_job_tracks_job").on(t.jobId),
+    check(
+      "chk_analysis_job_tracks_status",
+      sql`${t.status} IN ('queued','analyzing','done','failed')`
     ),
   ]
 );

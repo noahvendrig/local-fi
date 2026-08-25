@@ -91,9 +91,9 @@ export function CrateCoverEditor({
           handleFile(e.dataTransfer.files[0]);
         }}
         aria-busy={isPending}
-        className={`lf-hatch relative h-[260px] w-[260px] overflow-hidden rounded-[20px] shadow-[var(--lf-art-shadow)] ${
+        className={`lf-hatch relative h-[260px] w-[260px] cursor-pointer overflow-hidden rounded-[20px] shadow-[var(--lf-art-shadow)] ${
           isDragging ? "ring-2 ring-acc" : ""
-        } ${coverArtUrl ? "" : "transition-transform duration-200 hover:scale-[1.03] focus-visible:scale-[1.03]"} disabled:opacity-60`}
+        } ${coverArtUrl ? "" : "transition-transform duration-200 hover:scale-[1.03] focus-visible:scale-[1.03]"} disabled:cursor-not-allowed disabled:opacity-60`}
       >
         {coverArtUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- local-only images
@@ -112,7 +112,7 @@ export function CrateCoverEditor({
           onClick={() => removeMutation.mutate()}
           aria-label="Remove cover"
           title="Remove cover"
-          className="absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-md bg-black/55 text-white opacity-0 transition-opacity duration-150 hover:bg-err group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 disabled:opacity-50"
+          className="absolute right-2.5 top-2.5 flex h-7 w-7 cursor-pointer items-center justify-center rounded-md bg-black/55 text-white opacity-0 transition-opacity duration-150 hover:bg-err group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <TrashIcon />
         </button>

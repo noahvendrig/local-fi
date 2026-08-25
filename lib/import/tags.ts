@@ -1,5 +1,6 @@
 import { parseFile } from "music-metadata";
 import path from "node:path";
+import { normalizeToCamelot } from "@/lib/tags/camelotKey";
 
 /** Formats validated end-to-end by the phase-1 import pipeline (ARCHITECTURE.md §3.1 note). */
 export const SUPPORTED_FORMATS = ["mp3", "flac", "wav", "aac", "m4a", "ogg", "alac", "aiff", "webm"] as const;
@@ -45,6 +46,9 @@ export interface ExtractedTags {
   lossless: boolean;
   coverArt: { data: Buffer; format: string } | null;
   rawTagsJson: string;
+  bpm: number | null;
+  /** Camelot notation (e.g. "8A"); null if absent or the raw tag text couldn't be parsed. */
+  key: string | null;
 }
 
 export class UnsupportedFormatError extends Error {}
@@ -111,5 +115,7 @@ export async function extractTags(stagedPath: string, originalFilename: string):
     lossless: LOSSLESS_FORMATS.has(resolvedFormat),
     coverArt: picture ? { data: Buffer.from(picture.data), format: picture.format } : null,
     rawTagsJson: JSON.stringify(common),
+    bpm: common.bpm ?? null,
+    key: common.key ? normalizeToCamelot(common.key) : null,
   };
 }

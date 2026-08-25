@@ -9,6 +9,7 @@ import { trackFingerprint } from "@/lib/import/fingerprint";
 import { ensureAlbumArtistLink, ensureTrackArtistLink, upsertAlbum, upsertArtist } from "@/lib/import/upsert";
 import { purgeTrack, softDeleteTrack } from "@/lib/library/trash";
 import { resolveTrackAbsPath } from "@/lib/storage/resolveTrackPath";
+import { isCamelotKey, normalizeCamelotCasing } from "@/lib/tags/camelotKey";
 import { writeTrackTags } from "@/lib/tags/writeTags";
 
 const NOT_FOUND = NextResponse.json({ error: { code: "not_found", message: "Track not found." } }, { status: 404 });
@@ -22,6 +23,13 @@ const PatchSchema = z.object({
   discNumber: z.number().int().min(0).max(999).nullable().optional(),
   year: z.number().int().min(0).max(9999).nullable().optional(),
   genre: z.string().trim().max(200).nullable().optional(),
+  bpm: z.number().min(20).max(400).nullable().optional(),
+  key: z
+    .string()
+    .trim()
+    .refine(isCamelotKey, { message: "Key must be Camelot notation, e.g. \"8A\"." })
+    .nullable()
+    .optional(),
 });
 
 /** GET /api/v1/tracks/:id — full detail incl. resolved artist/album/album-artist (ARCHITECTURE.md §7). */
@@ -63,6 +71,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: { code: "invalid_request", message: "No fields to update." } }, { status: 400 });
   }
+  if (patch.key) patch.key = normalizeCamelotCasing(patch.key);
 
   if (existing.missingSince) {
     return NextResponse.json(
@@ -126,6 +135,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         discNumber: patch.discNumber !== undefined ? patch.discNumber : existing.discNumber,
         year: patch.year !== undefined ? patch.year : existing.year,
         genre: patch.genre !== undefined ? patch.genre : existing.genre,
+        bpm: patch.bpm !== undefined ? patch.bpm : existing.bpm,
+        bpmSource: patch.bpm !== undefined ? (patch.bpm != null ? "manual" : null) : existing.bpmSource,
+        key: patch.key !== undefined ? patch.key : existing.key,
+        keySource: patch.key !== undefined ? (patch.key != null ? "manual" : null) : existing.keySource,
         fileMtime: new Date(stat.mtimeMs).toISOString(),
         fileSizeBytes: stat.size,
         fingerprint,

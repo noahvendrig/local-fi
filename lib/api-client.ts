@@ -26,6 +26,10 @@ export interface TrackSummary {
   missing: boolean;
   /** Mean-abs amplitude from the waveform pass, 0–1. Null if the sidecar wasn't generated. */
   waveformAvgLevel: number | null;
+  bpm: number | null;
+  /** Camelot notation, e.g. "8A". */
+  key: string | null;
+  analysisStatus: "none" | "queued" | "analyzing" | "ready" | "failed";
 }
 
 export interface AlbumSummary {
@@ -75,6 +79,8 @@ export interface ArtistDetail {
   uuid: string;
   name: string;
   sortName: string | null;
+  /** 1-based all-time listening rank among all artists, capped to the top 10; null outside it. */
+  topRank: number | null;
   albums: AlbumSummary[];
 }
 

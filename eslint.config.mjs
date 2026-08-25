@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored AudioWorklet processor bundle (@soundtouchjs/audio-worklet) — pre-built, not source we own.
+    "public/soundtouch-processor.js",
   ]),
 ]);
 

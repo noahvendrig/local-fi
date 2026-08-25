@@ -27,6 +27,9 @@ export const trackSummarySelectColumns = {
   dateModified: tracks.dateModified,
   missingSince: tracks.missingSince,
   waveformAvgLevel: tracks.waveformAvgLevel,
+  bpm: tracks.bpm,
+  key: tracks.key,
+  analysisStatus: tracks.analysisStatus,
 };
 
 type TrackSummaryRow = {
@@ -51,6 +54,9 @@ type TrackSummaryRow = {
   dateModified: string | null;
   missingSince: string | null;
   waveformAvgLevel: number | null;
+  bpm: number | null;
+  key: string | null;
+  analysisStatus: string;
 };
 
 function trackCoverUrl(trackId: number, coverArtPath: string | null, albumCoverArtPath: string | null, version: string): string | null {
@@ -79,6 +85,9 @@ export function mapTrackSummaryRow(row: TrackSummaryRow): TrackSummary {
     dateAdded: row.dateAdded,
     missing: row.missingSince != null,
     waveformAvgLevel: row.waveformAvgLevel,
+    bpm: row.bpm,
+    key: row.key,
+    analysisStatus: row.analysisStatus as TrackSummary["analysisStatus"],
   };
 }
 

@@ -1,4 +1,5 @@
 import { ByteVector, File, Picture, PictureType } from "node-taglib-sharp";
+import { camelotToWriteableKey } from "@/lib/tags/camelotKey";
 import type { CoverImage } from "./coverImage";
 
 export interface TrackTagWrite {
@@ -10,6 +11,9 @@ export interface TrackTagWrite {
   discNumber?: number | null;
   year?: number | null;
   genre?: string | null;
+  bpm?: number | null;
+  /** Camelot notation (e.g. "8A"); converted to standard key text before writing. */
+  key?: string | null;
 }
 
 /**
@@ -28,6 +32,8 @@ export function writeTrackTags(absPath: string, patch: TrackTagWrite): void {
     if (patch.discNumber !== undefined) file.tag.disc = patch.discNumber ?? 0;
     if (patch.year !== undefined) file.tag.year = patch.year ?? 0;
     if (patch.genre !== undefined) file.tag.genres = patch.genre ? [patch.genre] : [];
+    if (patch.bpm !== undefined) file.tag.beatsPerMinute = patch.bpm ?? 0;
+    if (patch.key !== undefined) file.tag.initialKey = patch.key ? (camelotToWriteableKey(patch.key) ?? "") : "";
     file.save();
   } finally {
     file.dispose();

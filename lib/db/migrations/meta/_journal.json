@@ -50,6 +50,20 @@
       "when": 1787647569242,
       "tag": "0006_fast_mulholland_black",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1787662478360,
+      "tag": "0007_cuddly_eternity",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1787666740823,
+      "tag": "0008_large_luminals",
+      "breakpoints": true
     }
   ]
 }

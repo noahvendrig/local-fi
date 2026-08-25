@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import { waveformUrl } from "@/lib/api-client";
 import { withAuthQuery } from "@/lib/api/http";
 import { fetchWaveform } from "@/lib/waveform/parse";
 import { usePlayerStore } from "@/lib/store/player";
+import { useDjStore } from "@/lib/store/dj";
 import { useSettingsStore } from "@/lib/store/settings";
 import { WaveformScrubber } from "./WaveformScrubber";
 import { EqualizerPopover } from "./EqualizerPopover";
@@ -49,17 +51,32 @@ export function TransportBar() {
   const clearSleepTimer = usePlayerStore((s) => s.clearSleepTimer);
   const showFormatBadges = useSettingsStore((s) => s.showFormatBadges);
 
+  const djTrack = useDjStore((s) => s.currentTrack);
+  const djIsPlaying = useDjStore((s) => s.isPlaying);
+  const djCurrentTime = useDjStore((s) => s.currentTime);
+  const setDjPlaying = useDjStore((s) => s.setDjPlaying);
+  const djSeekTo = useDjStore((s) => s.seekTo);
+
   const { audioARef, audioBRef, handleTimeUpdate, handleEnded, handlePlay, handlePause } = usePlaybackEngine();
 
-  const duration = currentTrack?.durationSeconds ?? 0;
+  // The DJ deck has no queue of its own, so it "wins" the bar whenever it's actually making
+  // sound, or when it's the only thing loaded at all — otherwise the regular player keeps
+  // showing, same as before DJ mode existed.
+  const djActive = djTrack != null && (djIsPlaying || (!isPlaying && !currentTrack));
+  const displayTrack = djActive ? djTrack : currentTrack;
+  const displayIsPlaying = djActive ? djIsPlaying : isPlaying;
+  const displayCurrentTime = djActive ? djCurrentTime : currentTime;
+  const displayTogglePlay = djActive ? () => setDjPlaying(!djIsPlaying) : togglePlay;
+  const displaySeek = djActive ? djSeekTo : seekTo;
+  const duration = displayTrack?.durationSeconds ?? 0;
 
-  // Fetch the new track's peak sidecar whenever the track changes (currentTime itself is
+  // Fetch the displayed track's peak sidecar whenever it changes (currentTime itself is
   // reset to 0 by the store action that changed the track, not here — see lib/store/player.ts).
   useEffect(() => {
     setWaveform(null);
-    if (!currentTrack) return;
+    if (!displayTrack) return;
     let cancelled = false;
-    fetchWaveform(waveformUrl(currentTrack.id))
+    fetchWaveform(waveformUrl(displayTrack.id))
       .then((data) => {
         if (!cancelled) setWaveform(data);
       })
@@ -70,7 +87,7 @@ export function TransportBar() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- setWaveform is a stable store action
-  }, [currentTrack?.id]);
+  }, [displayTrack?.id]);
 
   return (
     <footer className="fixed inset-x-0 bottom-0 z-30 flex h-[88px] items-center gap-6 overflow-visible border-t border-line bg-surf px-6 shadow-[var(--lf-transport-shadow)]">
@@ -93,19 +110,26 @@ export function TransportBar() {
         onPause={() => handlePause(1)}
       />
 
-      {currentTrack ? (
+      {displayTrack ? (
         <>
-          <button
-            type="button"
-            onClick={openNowPlaying}
-            className="group relative flex w-[250px] shrink-0 items-center gap-3 text-left"
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => !djActive && openNowPlaying()}
+            onKeyDown={(e) => {
+              if (!djActive && (e.key === "Enter" || e.key === " ")) {
+                e.preventDefault();
+                openNowPlaying();
+              }
+            }}
+            className={`group relative flex w-[250px] shrink-0 items-center gap-3 text-left ${djActive ? "cursor-default" : "cursor-pointer"}`}
             aria-label="Now Playing"
           >
-            <HoverTip text="Now Playing" />
+            {!djActive && <HoverTip text="Now Playing" />}
             <div className="lf-hatch h-14 w-14 shrink-0 overflow-hidden rounded-xl shadow-[var(--lf-art-shadow)]">
-              {currentTrack.coverArtUrl ? (
+              {displayTrack.coverArtUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element -- local-only images
-                <img src={withAuthQuery(currentTrack.coverArtUrl)} alt="" className="h-full w-full object-cover" />
+                <img src={withAuthQuery(displayTrack.coverArtUrl)} alt="" className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center text-t3" aria-hidden>
                   <AlbumPlaceholderIcon />
@@ -113,40 +137,60 @@ export function TransportBar() {
               )}
             </div>
             <div className="min-w-0">
+              {djActive && (
+                <p className="truncate font-mono text-[10px] uppercase tracking-[0.06em] text-acc-text">DJ deck</p>
+              )}
               <p
-                className={`truncate text-sm ${isPlaying ? "text-playing" : "text-t1"}`}
-                title={currentTrack.title ?? undefined}
+                className={`truncate text-sm ${displayIsPlaying ? "text-playing" : "text-t1"}`}
+                title={displayTrack.title ?? undefined}
               >
-                {currentTrack.title ?? "Untitled"}
+                {displayTrack.title ?? "Untitled"}
               </p>
-              <p className="truncate font-mono text-xs text-t3" title={currentTrack.artistName ?? undefined}>
-                {currentTrack.artistName ?? "Unknown artist"}
-              </p>
+              {displayTrack.artistId ? (
+                <Link
+                  href={`/artists/${displayTrack.artistId}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-block max-w-full truncate font-mono text-xs text-t3 hover:text-acc-text"
+                  title={displayTrack.artistName ?? undefined}
+                >
+                  {displayTrack.artistName ?? "Unknown artist"}
+                </Link>
+              ) : (
+                <p className="truncate font-mono text-xs text-t3" title={displayTrack.artistName ?? undefined}>
+                  {displayTrack.artistName ?? "Unknown artist"}
+                </p>
+              )}
             </div>
-          </button>
+          </div>
 
           <div className="flex shrink-0 items-center gap-1.5">
-            <IconButton onClick={playPrevious} label="Previous" size="lg">
+            <IconButton onClick={playPrevious} label="Previous" size="lg" disabled={djActive}>
               <PreviousIcon size={26} />
             </IconButton>
             <button
               type="button"
-              onClick={togglePlay}
-              aria-label={isPlaying ? "Pause" : "Play"}
+              onClick={displayTogglePlay}
+              aria-label={displayIsPlaying ? "Pause" : "Play"}
               className="lf-top group relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-acc bg-acc text-on-acc hover:border-acc-2 hover:bg-acc-2"
             >
-              {isPlaying ? <PauseIcon size={20} /> : <PlayIcon size={26} />}
-              <HoverTip text={isPlaying ? "Pause" : "Play"} />
+              {displayIsPlaying ? <PauseIcon size={20} /> : <PlayIcon size={26} />}
+              <HoverTip text={displayIsPlaying ? "Pause" : "Play"} />
             </button>
-            <IconButton onClick={playNext} label="Next" size="lg">
+            <IconButton onClick={playNext} label="Next" size="lg" disabled={djActive}>
               <NextIcon size={26} />
             </IconButton>
           </div>
 
-          <WaveformScrubber waveform={waveform} currentTime={currentTime} duration={duration} onSeek={seekTo} disabled={false} />
+          <WaveformScrubber
+            waveform={waveform}
+            currentTime={displayCurrentTime}
+            duration={duration}
+            onSeek={displaySeek}
+            disabled={false}
+          />
 
           <div className="flex shrink-0 items-center gap-1.5">
-            <IconButton onClick={toggleShuffle} label="Shuffle" active={shuffle} size="lg">
+            <IconButton onClick={toggleShuffle} label="Shuffle" active={shuffle} size="lg" disabled={djActive}>
               <ShuffleIcon size={24} />
             </IconButton>
             <IconButton
@@ -154,6 +198,7 @@ export function TransportBar() {
               label={repeatMode === "one" ? "Repeat one" : repeatMode === "all" ? "Repeat all" : "Repeat"}
               active={repeatMode !== "off"}
               size="lg"
+              disabled={djActive}
             >
               {repeatMode === "one" ? <RepeatOneIcon size={24} /> : <RepeatIcon size={24} />}
             </IconButton>
@@ -183,7 +228,7 @@ export function TransportBar() {
               </button>
             )}
             {showFormatBadges ? (
-              <span className="hidden font-mono text-[11px] text-ok xl:inline">{currentTrack.format.toUpperCase()}</span>
+              <span className="hidden font-mono text-[11px] text-ok xl:inline">{displayTrack.format.toUpperCase()}</span>
             ) : null}
             <button
               type="button"

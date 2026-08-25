@@ -1,7 +1,15 @@
+// Type-only import: SoundTouchNode's class body does `extends AudioWorkletNode` at module scope,
+// which throws (AudioWorkletNode is undefined) if this module is ever evaluated server-side
+// during SSR — as it always is, since this file is imported by the globally-mounted
+// TransportBar. A real value import must stay dynamic (see connectDjSource below); this type
+// import is erased at compile time, so it's safe.
+import type { SoundTouchNode } from "@soundtouchjs/audio-worklet";
 import { equalPowerInCurve, equalPowerOutCurve } from "./crossfade";
 import { EQ_BAND_HZ, EQ_Q, dbToLinear, type EqState } from "./eqConfig";
 
 export type DeckId = 0 | 1;
+
+const SOUNDTOUCH_PROCESSOR_URL = "/soundtouch-processor.js";
 
 /**
  * Dual-deck Web Audio graph. Two <audio> elements mix through per-deck fade gains
@@ -12,6 +20,7 @@ export type DeckId = 0 | 1;
  * Graph: sourceA/B → fadeA/B → mixer → EQ filters → preamp → analyser → volume → destination
  */
 class PlaybackEqualizer {
+  readonly debugId = Math.random().toString(36).slice(2, 8);
   private audioContext: AudioContext | null = null;
   private sourceNodes: [MediaElementAudioSourceNode | null, MediaElementAudioSourceNode | null] = [null, null];
   private fadeNodes: [GainNode | null, GainNode | null] = [null, null];
@@ -26,6 +35,20 @@ class PlaybackEqualizer {
     volume: 1,
   };
   private pendingDeckGain: [number, number] = [1, 0];
+
+  // DJ view (§Phase 4) — a parallel source feeding the same mixer/EQ/volume chain as the
+  // regular decks, so DJ-mode playback gets identical EQ/volume behavior for free. Kept
+  // entirely separate from connectDeck/crossfadeDecks so normal playback is never touched.
+  private djSourceNode: MediaElementAudioSourceNode | null = null;
+  private djStNode: SoundTouchNode | null = null;
+  private djGainNode: GainNode | null = null;
+  private djConnectedElement: HTMLAudioElement | null = null;
+  private djProcessorRegistered: Promise<void> | null = null;
+  // createMediaElementSource may only ever be called once per element for its entire lifetime
+  // (Web Audio API constraint) — reconnecting the DJ chain must reuse a cached source rather than
+  // recreate one, or React Strict Mode's dev-only double effect invoke (mount/cleanup/mount on
+  // the same element) throws InvalidStateError on the second connect.
+  private djSourceCache = new WeakMap<HTMLAudioElement, MediaElementAudioSourceNode>();
 
   connectDeck(audio: HTMLAudioElement, deck: DeckId): void {
     if (this.sourceNodes[deck] && this.connectedElements[deck] === audio) return;
@@ -99,6 +122,71 @@ class PlaybackEqualizer {
     this.pendingDeckGain[inDeck] = inLoudness;
   }
 
+  /** Connects a dedicated DJ-mode `<audio>` element through a SoundTouch time-stretch node into the shared mixer. Safe to call again with a new element (e.g. DJ view remount) — the previous DJ chain is torn down first. Also safe to call again with the *same* element (React Strict Mode's double effect invoke) — reuses that element's cached source node instead of trying to create a second one. */
+  async connectDjSource(audio: HTMLAudioElement): Promise<void> {
+    if (this.djConnectedElement === audio && this.djSourceNode) return;
+
+    const ctx = this.ensureContext();
+    if (!ctx || !this.mixerNode) return;
+
+    // Dynamic import: SoundTouchNode extends AudioWorkletNode at module scope, which throws if
+    // evaluated outside a browser (see the type-only import note above). Deferring the real
+    // import to here — only ever called client-side, from a useEffect — keeps this file SSR-safe.
+    const { SoundTouchNode: SoundTouchNodeCtor } = await import("@soundtouchjs/audio-worklet");
+
+    if (!this.djProcessorRegistered) {
+      this.djProcessorRegistered = SoundTouchNodeCtor.register(ctx, SOUNDTOUCH_PROCESSOR_URL);
+    }
+    await this.djProcessorRegistered;
+
+    this.djStNode?.disconnect();
+    this.djGainNode?.disconnect();
+    this.djSourceNode?.disconnect();
+
+    let source = this.djSourceCache.get(audio) ?? null;
+    if (!source) {
+      source = ctx.createMediaElementSource(audio);
+      this.djSourceCache.set(audio, source);
+    }
+    const stNode = new SoundTouchNodeCtor({ context: ctx });
+    const gain = ctx.createGain();
+    gain.gain.value = 1;
+    source.connect(stNode);
+    stNode.connect(gain);
+    gain.connect(this.mixerNode);
+
+    this.djSourceNode = source;
+    this.djStNode = stNode;
+    this.djGainNode = gain;
+    this.djConnectedElement = audio;
+    audio.volume = 1;
+  }
+
+  disconnectDjSource(): void {
+    this.djSourceNode?.disconnect();
+    this.djStNode?.disconnect();
+    this.djGainNode?.disconnect();
+    this.djSourceNode = null;
+    this.djStNode = null;
+    this.djGainNode = null;
+    this.djConnectedElement = null;
+  }
+
+  /**
+   * Applies a live tempo/pitch adjustment to the DJ source. `tempoRatio` must also be set on the
+   * `<audio>` element's own `playbackRate` by the caller — SoundTouch mirrors it to compensate
+   * pitch (see @soundtouchjs/audio-worklet's docs: this is what keeps pitch fixed while tempo
+   * moves). `pitchSemitones` is an additional independent shift on top, used to land on a target
+   * key; it's a no-op (0) when key lock is off, so pitch is left to follow tempo naturally.
+   */
+  setDjTempoPitch(tempoRatio: number, pitchSemitones: number): void {
+    const ctx = this.audioContext;
+    const stNode = this.djStNode;
+    if (!ctx || !stNode) return;
+    stNode.playbackRate.setValueAtTime(tempoRatio, ctx.currentTime);
+    stNode.pitchSemitones.setValueAtTime(pitchSemitones, ctx.currentTime);
+  }
+
   private ensureContext(): AudioContext | null {
     if (this.audioContext) return this.audioContext;
 
@@ -150,11 +238,34 @@ class PlaybackEqualizer {
     this.preampNode.gain.value = enabled ? dbToLinear(preamp) : 1;
     this.volumeNode.gain.value = this.pending.volume;
   }
+
+  /** Dev-only introspection for debugging the audio graph from the console. */
+  debugSnapshot() {
+    return {
+      audioContextState: this.audioContext?.state ?? null,
+      mixerGain: this.mixerNode?.gain.value ?? null,
+      preampGain: this.preampNode?.gain.value ?? null,
+      volumeGain: this.volumeNode?.gain.value ?? null,
+      pendingVolume: this.pending.volume,
+      deckGains: this.pendingDeckGain,
+      djGain: this.djGainNode?.gain.value ?? null,
+      djStPlaybackRate: this.djStNode?.playbackRate.value ?? null,
+      djStPitch: this.djStNode?.pitch.value ?? null,
+      djStPitchSemitones: this.djStNode?.pitchSemitones.value ?? null,
+      djStMetrics: this.djStNode?.metrics ?? null,
+      djConnected: this.djConnectedElement != null,
+    };
+  }
 }
 
 let instance: PlaybackEqualizer | null = null;
 
 export function getPlaybackEqualizer(): PlaybackEqualizer {
-  if (!instance) instance = new PlaybackEqualizer();
+  if (!instance) {
+    instance = new PlaybackEqualizer();
+    if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
+      (window as unknown as { __lfEqualizer: PlaybackEqualizer }).__lfEqualizer = instance;
+    }
+  }
   return instance;
 }

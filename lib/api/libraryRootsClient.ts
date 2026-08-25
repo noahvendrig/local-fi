@@ -8,8 +8,10 @@ export interface LibraryRoot {
   path: string;
   createdAt: string;
   trackCount: number;
+  /** Every file ever indexed for this root and not fully purged, including soft-deleted duplicates — compare against totalFileCount to know whether a rescan would find anything new. */
+  indexedFileCount: number;
   missingCount: number;
-  /** Recognized-audio-file count from the last scan of this folder — may exceed trackCount (unsupported formats, soft-deleted duplicates); refreshes on add/rescan. */
+  /** Recognized-audio-file count from the last scan of this folder — may exceed indexedFileCount (unsupported formats not yet scanned); refreshes on add/rescan. */
   totalFileCount: number;
   syncToCrate: boolean;
   /** The whole-folder synced crate's playlist id, if syncToCrate is on and it's been created yet. */

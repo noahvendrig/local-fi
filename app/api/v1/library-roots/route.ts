@@ -56,7 +56,15 @@ export async function POST(request: Request) {
   const importJob = enqueueFolderScanJob(root, newFiles);
 
   return NextResponse.json(
-    { ...root, syncToCrate: root.syncToCrate === 1, trackCount: 0, missingCount: 0, rootCrateId: null, importJob },
+    {
+      ...root,
+      syncToCrate: root.syncToCrate === 1,
+      trackCount: 0,
+      indexedFileCount: 0,
+      missingCount: 0,
+      rootCrateId: null,
+      importJob,
+    },
     { status: 201 }
   );
 }

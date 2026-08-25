@@ -298,9 +298,9 @@ function LibraryRootRow({
             </p>
           ) : (
             <p className="mt-1 font-mono text-xs text-t2">
-              {root.trackCount} of {root.totalFileCount} file{root.totalFileCount === 1 ? "" : "s"} indexed
+              {root.indexedFileCount} of {root.totalFileCount} file{root.totalFileCount === 1 ? "" : "s"} indexed
               {root.missingCount > 0 ? ` · ${root.missingCount} missing` : ""}
-              {root.trackCount < root.totalFileCount ? " · rescan to pick up the rest" : ""}
+              {root.indexedFileCount < root.totalFileCount ? " · rescan to pick up the rest" : ""}
             </p>
           )}
           {root.rootCrateId != null ? (

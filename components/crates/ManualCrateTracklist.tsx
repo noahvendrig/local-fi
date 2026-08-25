@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { generateKeyBetween } from "fractional-indexing";
@@ -125,7 +126,17 @@ export function ManualCrateTracklist({ playlist }: { playlist: PlaylistDetail })
                   <td className="py-2 pr-2 font-mono text-xs text-t3">{isCurrent && isPlaying ? <PlayingIcon /> : i + 1}</td>
                   <td className={`min-w-0 max-w-0 truncate py-2 pr-4 ${isCurrent ? "text-playing" : "text-t1"}`}>
                     {track.title ?? "Untitled"}
-                    <span className="ml-2 truncate text-t3">{track.artistName}</span>
+                    {track.artistId ? (
+                      <Link
+                        href={`/artists/${track.artistId}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="ml-2 truncate text-t3 hover:text-acc-text"
+                      >
+                        {track.artistName}
+                      </Link>
+                    ) : (
+                      <span className="ml-2 truncate text-t3">{track.artistName}</span>
+                    )}
                   </td>
                   <td className="py-2 pr-4">
                     <FormatBadge format={track.format} lossless={track.lossless} />

@@ -38,6 +38,12 @@ export const trackDetailSelectColumns = {
   dateModified: tracks.dateModified,
   missingSince: tracks.missingSince,
   waveformAvgLevel: tracks.waveformAvgLevel,
+  bpm: tracks.bpm,
+  bpmSource: tracks.bpmSource,
+  key: tracks.key,
+  keySource: tracks.keySource,
+  analysisStatus: tracks.analysisStatus,
+  analysisError: tracks.analysisError,
 };
 
 type TrackDetailRow = {
@@ -70,6 +76,12 @@ type TrackDetailRow = {
   dateModified: string | null;
   missingSince: string | null;
   waveformAvgLevel: number | null;
+  bpm: number | null;
+  bpmSource: string | null;
+  key: string | null;
+  keySource: string | null;
+  analysisStatus: string;
+  analysisError: string | null;
 };
 
 export function mapTrackDetailRow(row: TrackDetailRow): TrackDetail {
@@ -106,6 +118,12 @@ export function mapTrackDetailRow(row: TrackDetailRow): TrackDetail {
     dateModified: row.dateModified,
     missing: row.missingSince != null,
     waveformAvgLevel: row.waveformAvgLevel,
+    bpm: row.bpm,
+    bpmSource: row.bpmSource as TrackDetail["bpmSource"],
+    key: row.key,
+    keySource: row.keySource as TrackDetail["keySource"],
+    analysisStatus: row.analysisStatus as TrackDetail["analysisStatus"],
+    analysisError: row.analysisError,
   };
 }
 

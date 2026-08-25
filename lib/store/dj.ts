@@ -1,0 +1,63 @@
+import { create } from "zustand";
+import type { TrackSummary } from "@/lib/api-client";
+
+/**
+ * DJ-view session state: target BPM/key for matching tracks in a crate's DJ view, plus the
+ * single DJ-deck's current track/playback state. Deliberately separate from usePlayerStore and
+ * not persisted to /playback-state — this is ephemeral per session, not something to restore
+ * into a page load that never opens the DJ view. Regular playback (usePlayerStore,
+ * usePlaybackEngine) is untouched by any of this. The bottom transport bar reads both stores
+ * to show whichever deck is actually active — see TransportBar's `djActive` logic.
+ */
+interface DjState {
+  targetBpm: number | null;
+  targetKey: string | null;
+  keyLockEnabled: boolean;
+  setTargetBpm: (bpm: number | null) => void;
+  bumpTargetBpm: (delta: number) => void;
+  setTargetKey: (key: string | null) => void;
+  toggleKeyLock: () => void;
+
+  currentTrack: TrackSummary | null;
+  isPlaying: boolean;
+  /** Selects a track on the DJ deck; re-clicking the already-loaded track toggles play/pause instead of restarting it. */
+  playDjTrack: (track: TrackSummary) => void;
+  setDjPlaying: (playing: boolean) => void;
+
+  /** Mirrors the DJ deck's <audio> position, so the bottom transport bar can show live DJ progress. */
+  currentTime: number;
+  setCurrentTime: (seconds: number) => void;
+  pendingSeekSeconds: number | null;
+  seekTo: (seconds: number) => void;
+  consumePendingSeek: () => void;
+}
+
+export const useDjStore = create<DjState>((set, get) => ({
+  targetBpm: null,
+  targetKey: null,
+  keyLockEnabled: true,
+
+  setTargetBpm: (bpm) => set({ targetBpm: bpm }),
+  bumpTargetBpm: (delta) =>
+    set((s) => ({ targetBpm: Math.max(20, Math.min(400, (s.targetBpm ?? 120) + delta)) })),
+  setTargetKey: (key) => set((s) => ({ targetKey: s.targetKey === key ? null : key })),
+  toggleKeyLock: () => set((s) => ({ keyLockEnabled: !s.keyLockEnabled })),
+
+  currentTrack: null,
+  isPlaying: false,
+  playDjTrack: (track) => {
+    const { currentTrack, isPlaying } = get();
+    if (currentTrack?.id === track.id) {
+      set({ isPlaying: !isPlaying });
+      return;
+    }
+    set({ currentTrack: track, isPlaying: true, currentTime: 0 });
+  },
+  setDjPlaying: (playing) => set({ isPlaying: playing }),
+
+  currentTime: 0,
+  setCurrentTime: (seconds) => set({ currentTime: seconds }),
+  pendingSeekSeconds: null,
+  seekTo: (seconds) => set({ pendingSeekSeconds: seconds, currentTime: seconds }),
+  consumePendingSeek: () => set({ pendingSeekSeconds: null }),
+}));

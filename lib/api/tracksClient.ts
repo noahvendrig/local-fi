@@ -12,6 +12,9 @@ export interface TrackDetail extends TrackSummary {
   albumArtistName: string | null;
   waveformUrl: string | null;
   dateModified: string | null;
+  bpmSource: "tag" | "detected" | "manual" | null;
+  keySource: "tag" | "detected" | "manual" | null;
+  analysisError: string | null;
 }
 
 export interface TrackTagPatch {
@@ -23,6 +26,9 @@ export interface TrackTagPatch {
   discNumber?: number | null;
   year?: number | null;
   genre?: string | null;
+  bpm?: number | null;
+  /** Camelot notation, e.g. "8A". */
+  key?: string | null;
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {

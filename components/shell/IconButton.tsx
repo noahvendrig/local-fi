@@ -17,12 +17,14 @@ export function IconButton({
   label,
   active,
   size = "sm",
+  disabled,
   children,
 }: {
   onClick: () => void;
   label: string;
   active?: boolean;
   size?: "sm" | "lg" | "xl";
+  disabled?: boolean;
   children: React.ReactNode;
 }) {
   const dimension = size === "xl" ? "h-14 w-14" : size === "lg" ? "h-11 w-11" : "h-8 w-8";
@@ -30,9 +32,10 @@ export function IconButton({
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-label={label}
       aria-pressed={active}
-      className={`group relative flex ${dimension} shrink-0 items-center justify-center rounded-md ${active ? "text-acc-text" : "text-t2"} hover:bg-surf-2 hover:text-t1`}
+      className={`group relative flex ${dimension} shrink-0 items-center justify-center rounded-md ${active ? "text-acc-text" : "text-t2"} ${disabled ? "cursor-default opacity-40" : "hover:bg-surf-2 hover:text-t1"}`}
     >
       {children}
       <HoverTip text={label} />

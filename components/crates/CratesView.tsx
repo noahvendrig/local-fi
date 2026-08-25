@@ -40,7 +40,7 @@ export function CratesView() {
               <li key={crate.id}>
                 <Link
                   href={`/crates/${crate.id}`}
-                  className="lf-card lf-album-card group min-w-0 rounded-2xl p-4 transition-[background,border-color] duration-150 hover:border-t3 hover:bg-surf-2"
+                  className="lf-card lf-album-card group flex min-w-0 flex-col rounded-2xl p-4 transition-[background,border-color] duration-150 hover:border-t3 hover:bg-surf-2"
                 >
                   <div className="lf-hatch relative aspect-square overflow-hidden rounded-[20px] shadow-[var(--lf-art-shadow)]">
                     {crate.coverArtUrl ? (

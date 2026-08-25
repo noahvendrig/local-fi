@@ -12,6 +12,14 @@ import { purgeTrack } from "./trash";
 export type LibraryRootRow = typeof libraryRoots.$inferSelect;
 export interface LibraryRootSummary extends LibraryRootRow {
   trackCount: number;
+  /**
+   * Every file this root has ever indexed and not fully purged — includes soft-deleted tracks
+   * (duplicates removed via Health, manual delete), since their row — and the on-disk file,
+   * for a watched root — still exists. This is what "N of totalFileCount indexed" should
+   * compare totalFileCount against; trackCount alone undercounts once duplicates are removed,
+   * wrongly implying a rescan would find more files.
+   */
+  indexedFileCount: number;
   missingCount: number;
   /** The root-level synced crate's playlist id, if `syncToCrate` is on and it's been created yet. */
   rootCrateId: number | null;
@@ -40,6 +48,12 @@ export function listLibraryRoots(): LibraryRootSummary[] {
           .from(tracks)
           .where(and(eq(tracks.libraryRootId, root.id), isNull(tracks.deletedAt)))
           .get()?.c ?? 0;
+      const indexedFileCount =
+        db
+          .select({ c: count() })
+          .from(tracks)
+          .where(eq(tracks.libraryRootId, root.id))
+          .get()?.c ?? 0;
       const missingCount =
         db
           .select({ c: count() })
@@ -53,7 +67,7 @@ export function listLibraryRoots(): LibraryRootSummary[] {
             .where(and(eq(libraryRootCrates.libraryRootId, root.id), eq(libraryRootCrates.subfolderPath, "")))
             .get()?.playlistId ?? null)
         : null;
-      return { ...root, trackCount, missingCount, rootCrateId };
+      return { ...root, trackCount, indexedFileCount, missingCount, rootCrateId };
     });
 }
 
