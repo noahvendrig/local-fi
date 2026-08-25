@@ -85,19 +85,23 @@ export interface DjAdjustment {
 }
 
 /**
- * Computes the live playback adjustment for a track against the DJ session's target BPM/key.
- * Tempo always follows the target when both are known. Key only shifts when key lock is on —
- * with it off, pitch is left to follow tempo naturally (vinyl-style), matching the transport's
- * "Pitch follows tempo" copy.
+ * Computes the live playback adjustment for a track against the DJ session's target BPM/key/octave.
+ * Tempo always follows the target when both are known. Key and octave only shift when key lock is
+ * on — with it off, pitch is left to follow tempo naturally (vinyl-style), matching the
+ * transport's "Pitch follows tempo" copy. `targetOctave` is relative to the track's original
+ * pitch (0 = original, +1 = one octave up, etc.) and stacks on top of any key transpose.
  */
 export function computeDjAdjustment(
   track: { bpm: number | null; key: string | null },
   targetBpm: number | null,
   targetKey: string | null,
-  keyLockEnabled: boolean
+  keyLockEnabled: boolean,
+  targetOctave = 0
 ): DjAdjustment {
   const tempoRatio = targetBpm && track.bpm ? targetBpm / track.bpm : 1;
-  const pitchSemitones = keyLockEnabled && targetKey && track.key ? semitoneShiftBetweenKeys(track.key, targetKey) : 0;
+  if (!keyLockEnabled) return { tempoRatio, pitchSemitones: 0 };
+  const keyShift = targetKey && track.key ? semitoneShiftBetweenKeys(track.key, targetKey) : 0;
+  const pitchSemitones = keyShift + targetOctave * 12;
   return { tempoRatio, pitchSemitones };
 }
 

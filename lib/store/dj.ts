@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { TrackSummary } from "@/lib/api-client";
 
 /**
- * DJ-view session state: target BPM/key for matching tracks in a crate's DJ view, plus the
+ * DJ-view session state: target BPM/key/octave for matching tracks in a crate's DJ view, plus the
  * single DJ-deck's current track/playback state. Deliberately separate from usePlayerStore and
  * not persisted to /playback-state — this is ephemeral per session, not something to restore
  * into a page load that never opens the DJ view. Regular playback (usePlayerStore,
@@ -12,10 +12,14 @@ import type { TrackSummary } from "@/lib/api-client";
 interface DjState {
   targetBpm: number | null;
   targetKey: string | null;
+  /** Whole-octave shift relative to the track's original pitch (−2…+2). Applied with key lock. */
+  targetOctave: number;
   keyLockEnabled: boolean;
   setTargetBpm: (bpm: number | null) => void;
   bumpTargetBpm: (delta: number) => void;
   setTargetKey: (key: string | null) => void;
+  setTargetOctave: (octave: number) => void;
+  bumpTargetOctave: (delta: number) => void;
   toggleKeyLock: () => void;
 
   currentTrack: TrackSummary | null;
@@ -32,15 +36,25 @@ interface DjState {
   consumePendingSeek: () => void;
 }
 
+const OCTAVE_MIN = -2;
+const OCTAVE_MAX = 2;
+
+function clampOctave(octave: number): number {
+  return Math.max(OCTAVE_MIN, Math.min(OCTAVE_MAX, Math.round(octave)));
+}
+
 export const useDjStore = create<DjState>((set, get) => ({
   targetBpm: null,
   targetKey: null,
+  targetOctave: 0,
   keyLockEnabled: true,
 
-  setTargetBpm: (bpm) => set({ targetBpm: bpm }),
+  setTargetBpm: (bpm) => set({ targetBpm: bpm == null ? null : Math.max(20, Math.min(400, bpm)) }),
   bumpTargetBpm: (delta) =>
     set((s) => ({ targetBpm: Math.max(20, Math.min(400, (s.targetBpm ?? 120) + delta)) })),
   setTargetKey: (key) => set((s) => ({ targetKey: s.targetKey === key ? null : key })),
+  setTargetOctave: (octave) => set({ targetOctave: clampOctave(octave) }),
+  bumpTargetOctave: (delta) => set((s) => ({ targetOctave: clampOctave(s.targetOctave + delta) })),
   toggleKeyLock: () => set((s) => ({ keyLockEnabled: !s.keyLockEnabled })),
 
   currentTrack: null,

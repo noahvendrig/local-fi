@@ -20,6 +20,7 @@ export function useDjPlaybackEngine() {
   const isPlaying = useDjStore((s) => s.isPlaying);
   const targetBpm = useDjStore((s) => s.targetBpm);
   const targetKey = useDjStore((s) => s.targetKey);
+  const targetOctave = useDjStore((s) => s.targetOctave);
   const keyLockEnabled = useDjStore((s) => s.keyLockEnabled);
   const setDjPlaying = useDjStore((s) => s.setDjPlaying);
   const setCurrentTime = useDjStore((s) => s.setCurrentTime);
@@ -66,10 +67,16 @@ export function useDjPlaybackEngine() {
   useEffect(() => {
     const audio = audioElRef.current;
     if (!audio || !currentTrack) return;
-    const { tempoRatio, pitchSemitones } = computeDjAdjustment(currentTrack, targetBpm, targetKey, keyLockEnabled);
+    const { tempoRatio, pitchSemitones } = computeDjAdjustment(
+      currentTrack,
+      targetBpm,
+      targetKey,
+      keyLockEnabled,
+      targetOctave
+    );
     audio.playbackRate = tempoRatio;
     getPlaybackEqualizer().setDjTempoPitch(tempoRatio, pitchSemitones);
-  }, [currentTrack, targetBpm, targetKey, keyLockEnabled]);
+  }, [currentTrack, targetBpm, targetKey, keyLockEnabled, targetOctave]);
 
   useEffect(() => {
     const audio = audioElRef.current;

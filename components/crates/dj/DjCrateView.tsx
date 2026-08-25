@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchPlaylist } from "@/lib/api/playlistsClient";
 import { computeDjAdjustment } from "@/lib/audio/djMatch";
@@ -27,7 +28,16 @@ export function DjCrateView({ playlistId }: { playlistId: number }) {
   const isPlaying = useDjStore((s) => s.isPlaying);
   const targetBpm = useDjStore((s) => s.targetBpm);
   const targetKey = useDjStore((s) => s.targetKey);
+  const targetOctave = useDjStore((s) => s.targetOctave);
   const keyLockEnabled = useDjStore((s) => s.keyLockEnabled);
+
+  const autoAnalysisRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!playlist || autoAnalysisRef.current === playlistId) return;
+    autoAnalysisRef.current = playlistId;
+    const ids = playlist.tracks.filter((t) => t.analysisStatus !== "ready").map((t) => t.id);
+    if (ids.length > 0) startAnalysis(ids);
+  }, [playlist, playlistId, startAnalysis]);
 
   if (isLoading) return null;
 
@@ -45,9 +55,26 @@ export function DjCrateView({ playlistId }: { playlistId: number }) {
   const analyzedCount = playlist.tracks.filter((t) => t.analysisStatus === "ready").length;
   const isAnalyzing = progress != null && (progress.status === "pending" || progress.status === "running");
   const unanalyzedIds = playlist.tracks.filter((t) => t.analysisStatus !== "ready").map((t) => t.id);
+  const analysisPct = progress && progress.total > 0 ? Math.round((progress.processed / progress.total) * 100) : 0;
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
+      {isAnalyzing && (
+        <div className="border-b border-line bg-surf px-8 py-2.5">
+          <div className="mb-1.5 flex items-center justify-between font-mono text-[11px] text-t3">
+            <span>
+              Analysing {progress.processed} / {progress.total}…
+            </span>
+            <span>{analysisPct}%</span>
+          </div>
+          <div className="h-1 overflow-hidden rounded-sm bg-surf-2">
+            <div
+              className="h-full rounded-sm bg-acc transition-all duration-300"
+              style={{ width: `${analysisPct}%` }}
+            />
+          </div>
+        </div>
+      )}
       <div className="flex items-center gap-3.5 border-b border-line px-8 py-4">
         <Link href={`/crates/${playlistId}`} className="text-[13px] text-t3 hover:text-t1">
           ‹ Crate
@@ -59,28 +86,17 @@ export function DjCrateView({ playlistId }: { playlistId: number }) {
           <span className="rounded-md bg-acc px-3 py-[5px] text-[11px] font-medium uppercase tracking-wide text-on-acc">DJ view</span>
         </div>
         <div className="flex-1" />
-        {isAnalyzing ? (
-          <div className="flex items-center gap-2">
-            <div className="lf-index-spin h-3 w-3 flex-none rounded-full border-[1.5px] border-line border-t-acc" />
-            <span className="font-mono text-[11px] text-t3">
-              Analyzing {progress.processed} / {progress.total}…
-            </span>
-          </div>
-        ) : (
-          <>
-            <span className="font-mono text-[11px] text-t3">
-              {analyzedCount} of {playlist.tracks.length} analyzed
-            </span>
-            {unanalyzedIds.length > 0 && (
-              <button
-                type="button"
-                onClick={() => startAnalysis(unanalyzedIds)}
-                className="rounded-md border border-line px-3 py-1.5 text-[11px] font-medium text-t1 hover:border-acc hover:bg-surf-2"
-              >
-                Analyze crate
-              </button>
-            )}
-          </>
+        <span className="font-mono text-[11px] text-t3">
+          {analyzedCount} of {playlist.tracks.length} analyzed
+        </span>
+        {!isAnalyzing && unanalyzedIds.length > 0 && (
+          <button
+            type="button"
+            onClick={() => startAnalysis(unanalyzedIds)}
+            className="rounded-md border border-line px-3 py-1.5 text-[11px] font-medium text-t1 hover:border-acc hover:bg-surf-2"
+          >
+            Analyze crate
+          </button>
         )}
       </div>
 
@@ -102,7 +118,7 @@ export function DjCrateView({ playlistId }: { playlistId: number }) {
         <DjNowPlaying
           track={currentTrack}
           isPlaying={isPlaying}
-          adjustment={computeDjAdjustment(currentTrack, targetBpm, targetKey, keyLockEnabled)}
+          adjustment={computeDjAdjustment(currentTrack, targetBpm, targetKey, keyLockEnabled, targetOctave)}
         />
       )}
       <DjTracklist playlistId={playlistId} tracks={playlist.tracks} onAnalyze={startAnalysis} />
