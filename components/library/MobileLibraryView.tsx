@@ -11,9 +11,11 @@ import { NewCrateModal } from "@/components/crates/NewCrateModal";
 import { TrackRowActions } from "@/components/library/TrackRowActions";
 import { getAllOfflineCrates, getAllOfflineTracks, type OfflineTrack } from "@/lib/offline/db";
 import { removeCrateOffline } from "@/lib/offline/copyToPhone";
+import { offlineTrackToSummary } from "@/lib/offline/trackSummary";
 import { removeLocalTrack, uploadLocalTrackToPc } from "@/lib/offline/uploadToPc";
 import { useDeviceStore } from "@/lib/store/device";
 import { formatDuration } from "@/lib/format/track";
+import { PlayIcon } from "@/components/shell/PlayerIcons";
 
 // Swipe-right-to-queue tuning for MobileSongsList rows: how far (px) the row can be
 // dragged before it clamps, and how far it must travel to commit the "add to queue" action.
@@ -282,10 +284,23 @@ function MobileCratesList() {
 function MobileDownloadedList() {
   const queryClient = useQueryClient();
   const isPaired = useDeviceStore((s) => s.device !== null);
+  const currentTrackId = usePlayerStore((s) => s.currentTrack?.id);
+  const playTrack = usePlayerStore((s) => s.playTrack);
+  const playContext = usePlayerStore((s) => s.playContext);
 
   const cratesQuery = useQuery({ queryKey: ["offline", "crates"], queryFn: getAllOfflineCrates });
   const tracksQuery = useQuery({ queryKey: ["offline", "tracks"], queryFn: getAllOfflineTracks });
+  const offlineTracksById = new Map((tracksQuery.data ?? []).map((t) => [t.id, t]));
   const localTracks = (tracksQuery.data ?? []).filter((t): t is OfflineTrack => t.source === "local");
+
+  // Plays straight from the cached crate — the actual "offline playback" path (mobile plan
+  // Phase E), distinct from tapping through to the full /crates/:id detail page, which is
+  // desktop-oriented (rename/delete/export/sync) and depends on a live fetchPlaylist() call
+  // that has no offline fallback of its own.
+  function playOfflineCrate(crate: { trackIds: number[] }) {
+    const tracks = crate.trackIds.map((id) => offlineTracksById.get(id)).filter((t): t is OfflineTrack => t != null);
+    if (tracks.length > 0) playContext(tracks.map(offlineTrackToSummary));
+  }
 
   const removeCrateMutation = useMutation({
     mutationFn: (crateId: number) => removeCrateOffline(crateId),
@@ -322,6 +337,9 @@ function MobileDownloadedList() {
           <div className="flex flex-col gap-2.5">
             {crates.map((crate) => (
               <div key={crate.id} className="lf-card flex items-center gap-3 rounded-2xl px-3 py-2.5">
+                <button type="button" onClick={() => playOfflineCrate(crate)} aria-label={`Play ${crate.name}`} className="shrink-0 text-t1">
+                  <PlayIcon size={18} />
+                </button>
                 <Link href={`/crates/${crate.id}`} className="min-w-0 flex-1">
                   <p className="truncate text-sm text-t1">{crate.name}</p>
                   <p className="font-mono text-xs text-ok">{crate.trackIds.length} tracks · offline</p>
@@ -346,12 +364,18 @@ function MobileDownloadedList() {
           <div className="flex flex-col gap-2.5">
             {localTracks.map((track) => (
               <div key={track.id} className="lf-card flex items-center gap-3 rounded-2xl px-3 py-2.5">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-t1">{track.title ?? "Untitled"}</p>
+                <button
+                  type="button"
+                  onClick={() => playTrack(offlineTrackToSummary(track), localTracks.map(offlineTrackToSummary))}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <p className={`truncate text-sm ${currentTrackId === track.id ? "text-playing" : "text-t1"}`}>
+                    {track.title ?? "Untitled"}
+                  </p>
                   <p className="truncate font-mono text-xs text-t3">
                     {track.artistName ?? "Unknown artist"} · {formatDuration(track.durationSeconds)}
                   </p>
-                </div>
+                </button>
                 {isPaired ? (
                   <button
                     type="button"

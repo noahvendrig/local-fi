@@ -2,9 +2,8 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
-import { waveformUrl } from "@/lib/api-client";
 import { withAuthQuery } from "@/lib/api/http";
-import { fetchWaveform } from "@/lib/waveform/parse";
+import { resolveWaveform } from "@/lib/offline/playback";
 import { usePlayerStore } from "@/lib/store/player";
 import { useDjStore } from "@/lib/store/dj";
 import { useTransportSourceStore } from "@/lib/store/transportSource";
@@ -78,7 +77,7 @@ export function TransportBar() {
     setWaveform(null);
     if (!displayTrack) return;
     let cancelled = false;
-    fetchWaveform(waveformUrl(displayTrack.id))
+    resolveWaveform(displayTrack)
       .then((data) => {
         if (!cancelled) setWaveform(data);
       })

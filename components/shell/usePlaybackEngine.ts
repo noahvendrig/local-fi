@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import { streamUrl, type TrackSummary } from "@/lib/api-client";
+import type { TrackSummary } from "@/lib/api-client";
 import { recordPlay } from "@/lib/api/tracksClient";
 import { fadeDurationSeconds } from "@/lib/audio/crossfade";
 import { getPlaybackEqualizer, type DeckId } from "@/lib/audio/equalizer";
 import { loudnessGain } from "@/lib/audio/loudness";
+import { resolvePlaybackSrc } from "@/lib/offline/playback";
 import { getUpcomingTrack } from "@/lib/player/upNext";
 import { usePlayerStore } from "@/lib/store/player";
 import { useSettingsStore } from "@/lib/store/settings";
@@ -37,12 +38,26 @@ function waitForCanPlay(audio: HTMLAudioElement): Promise<void> {
   });
 }
 
-function assignTrack(audio: HTMLAudioElement, track: TrackSummary): Promise<void> {
-  const url = streamUrl(track.id);
+// A resolved offline blob becomes an object URL, which — unlike streamUrl()'s plain string —
+// owns a real browser resource until revoked. Stashing it on the element itself (rather than a
+// side map keyed by deck) keeps "does this deck currently hold a blob URL" co-located with the
+// element it belongs to, and survives the two decks trading the "lead" role.
+function revokeDeckBlobUrl(audio: HTMLAudioElement) {
+  const prev = audio.dataset.blobUrl;
+  if (prev) {
+    URL.revokeObjectURL(prev);
+    delete audio.dataset.blobUrl;
+  }
+}
+
+async function assignTrack(audio: HTMLAudioElement, track: TrackSummary): Promise<void> {
   if (audio.dataset.trackId === String(track.id) && audio.getAttribute("src")) {
     return waitForCanPlay(audio);
   }
+  const url = await resolvePlaybackSrc(track);
+  revokeDeckBlobUrl(audio);
   audio.dataset.trackId = String(track.id);
+  if (url.startsWith("blob:")) audio.dataset.blobUrl = url;
   audio.src = url;
   audio.load();
   return waitForCanPlay(audio);
@@ -51,6 +66,7 @@ function assignTrack(audio: HTMLAudioElement, track: TrackSummary): Promise<void
 function clearDeck(audio: HTMLAudioElement | null, deck: DeckId) {
   if (!audio) return;
   audio.pause();
+  revokeDeckBlobUrl(audio);
   audio.removeAttribute("src");
   audio.load();
   audio.dataset.trackId = "";

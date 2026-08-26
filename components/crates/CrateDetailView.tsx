@@ -6,6 +6,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { setLibraryRootSync } from "@/lib/api/libraryRootsClient";
 import { deletePlaylist, downloadPlaylistExport, fetchPlaylist, updatePlaylist } from "@/lib/api/playlistsClient";
+import { getOfflineCrate, getOfflineTrack } from "@/lib/offline/db";
+import { offlineTrackToSummary } from "@/lib/offline/trackSummary";
 import { usePlayerStore } from "@/lib/store/player";
 import { DownloadIcon, PlayIcon } from "@/components/shell/PlayerIcons";
 import { CrateCoverEditor } from "./CrateCoverEditor";
@@ -27,6 +29,20 @@ export function CrateDetailView({ playlistId }: { playlistId: number }) {
 
   const playContext = usePlayerStore((s) => s.playContext);
   const enqueue = usePlayerStore((s) => s.enqueue);
+
+  // Fallback for landing here (a bookmark, browser history) while offline: fetchPlaylist has no
+  // offline path of its own (rename/delete/export/sync below it all assume a live server), but
+  // if this crate was copied to the phone (mobile plan Phase C), it can at least still play.
+  const offlineFallbackQuery = useQuery({
+    queryKey: ["offline", "crate", "playable", playlistId],
+    queryFn: async () => {
+      const crate = await getOfflineCrate(playlistId);
+      if (!crate) return null;
+      const tracks = await Promise.all(crate.trackIds.map((id) => getOfflineTrack(id)));
+      return { name: crate.name, tracks: tracks.filter((t) => t != null) };
+    },
+    enabled: isLoading === false && (error != null || playlist == null),
+  });
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
@@ -73,9 +89,22 @@ export function CrateDetailView({ playlistId }: { playlistId: number }) {
   if (isLoading) return null;
 
   if (error || !playlist) {
+    const offlineCopy = offlineFallbackQuery.data;
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center">
-        <h1 className="font-serif text-2xl text-t1">Crate not found</h1>
+      <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
+        <h1 className="font-serif text-2xl text-t1">{offlineCopy ? offlineCopy.name : "Crate not found"}</h1>
+        {offlineCopy ? (
+          <>
+            <p className="max-w-xs text-sm text-t2">Can&rsquo;t reach the server right now, but this crate is available offline.</p>
+            <button
+              type="button"
+              onClick={() => playContext(offlineCopy.tracks.map(offlineTrackToSummary))}
+              className="lf-top mt-1 flex items-center gap-2 rounded-lg border border-acc bg-acc px-5 py-2.5 text-[13px] font-semibold text-on-acc hover:border-acc-2 hover:bg-acc-2"
+            >
+              <PlayIcon /> Play offline copy
+            </button>
+          </>
+        ) : null}
         <Link href="/crates" className="text-sm font-medium text-acc-text hover:underline">
           Back to crates
         </Link>
