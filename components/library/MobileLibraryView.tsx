@@ -2,13 +2,18 @@
 
 import Link from "next/link";
 import { useRef, useState } from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchArtists, fetchTracks } from "@/lib/api-client";
 import { fetchPlaylists } from "@/lib/api/playlistsClient";
 import { withAuthQuery } from "@/lib/api/http";
 import { usePlayerStore } from "@/lib/store/player";
 import { NewCrateModal } from "@/components/crates/NewCrateModal";
 import { TrackRowActions } from "@/components/library/TrackRowActions";
+import { getAllOfflineCrates, getAllOfflineTracks, type OfflineTrack } from "@/lib/offline/db";
+import { removeCrateOffline } from "@/lib/offline/copyToPhone";
+import { removeLocalTrack, uploadLocalTrackToPc } from "@/lib/offline/uploadToPc";
+import { useDeviceStore } from "@/lib/store/device";
+import { formatDuration } from "@/lib/format/track";
 
 // Swipe-right-to-queue tuning for MobileSongsList rows: how far (px) the row can be
 // dragged before it clamps, and how far it must travel to commit the "add to queue" action.
@@ -17,12 +22,13 @@ const SWIPE_QUEUE_THRESHOLD_PX = 64;
 // Below this, a touchmove is treated as an imprecise tap rather than the start of a swipe.
 const SWIPE_INTENT_PX = 8;
 
-type Segment = "crates" | "songs" | "artists" | "folders";
+type Segment = "crates" | "songs" | "artists" | "folders" | "downloaded";
 
 const SEGMENTS: { id: Segment; label: string }[] = [
   { id: "crates", label: "Crates" },
   { id: "songs", label: "All songs" },
   { id: "artists", label: "Artists" },
+  { id: "downloaded", label: "Downloaded" },
   { id: "folders", label: "Folders" },
 ];
 
@@ -58,6 +64,7 @@ export function MobileLibraryView() {
         {segment === "crates" ? <MobileCratesList /> : null}
         {segment === "songs" ? <MobileSongsList /> : null}
         {segment === "artists" ? <MobileArtistsList /> : null}
+        {segment === "downloaded" ? <MobileDownloadedList /> : null}
         {segment === "folders" ? (
           <p className="py-10 text-center text-sm text-t3">Manage watched folders from the desktop app.</p>
         ) : null}
@@ -268,6 +275,106 @@ function MobileCratesList() {
           </div>
         </Link>
       ))}
+    </div>
+  );
+}
+
+function MobileDownloadedList() {
+  const queryClient = useQueryClient();
+  const isPaired = useDeviceStore((s) => s.device !== null);
+
+  const cratesQuery = useQuery({ queryKey: ["offline", "crates"], queryFn: getAllOfflineCrates });
+  const tracksQuery = useQuery({ queryKey: ["offline", "tracks"], queryFn: getAllOfflineTracks });
+  const localTracks = (tracksQuery.data ?? []).filter((t): t is OfflineTrack => t.source === "local");
+
+  const removeCrateMutation = useMutation({
+    mutationFn: (crateId: number) => removeCrateOffline(crateId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["offline"] });
+    },
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: (trackId: number) => uploadLocalTrackToPc(trackId),
+  });
+
+  const removeTrackMutation = useMutation({
+    mutationFn: (trackId: number) => removeLocalTrack(trackId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["offline", "tracks"] }),
+  });
+
+  if (cratesQuery.isLoading || tracksQuery.isLoading) return null;
+
+  const crates = cratesQuery.data ?? [];
+  if (crates.length === 0 && localTracks.length === 0) {
+    return (
+      <p className="py-10 text-center text-sm text-t3">
+        Nothing downloaded yet — copy a crate to this phone, or import files from &ldquo;Import&rdquo; below.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      {crates.length > 0 ? (
+        <div>
+          <p className="mb-2.5 text-[11px] font-medium uppercase tracking-[0.04em] text-t3">Crates on this phone</p>
+          <div className="flex flex-col gap-2.5">
+            {crates.map((crate) => (
+              <div key={crate.id} className="lf-card flex items-center gap-3 rounded-2xl px-3 py-2.5">
+                <Link href={`/crates/${crate.id}`} className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-t1">{crate.name}</p>
+                  <p className="font-mono text-xs text-ok">{crate.trackIds.length} tracks · offline</p>
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => removeCrateMutation.mutate(crate.id)}
+                  disabled={removeCrateMutation.isPending}
+                  className="shrink-0 text-xs font-medium text-t3 hover:text-err disabled:opacity-50"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {localTracks.length > 0 ? (
+        <div>
+          <p className="mb-2.5 text-[11px] font-medium uppercase tracking-[0.04em] text-t3">Imported on this phone</p>
+          <div className="flex flex-col gap-2.5">
+            {localTracks.map((track) => (
+              <div key={track.id} className="lf-card flex items-center gap-3 rounded-2xl px-3 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-t1">{track.title ?? "Untitled"}</p>
+                  <p className="truncate font-mono text-xs text-t3">
+                    {track.artistName ?? "Unknown artist"} · {formatDuration(track.durationSeconds)}
+                  </p>
+                </div>
+                {isPaired ? (
+                  <button
+                    type="button"
+                    onClick={() => uploadMutation.mutate(track.id)}
+                    disabled={uploadMutation.isPending}
+                    className="shrink-0 text-xs font-medium text-acc-text disabled:opacity-50"
+                  >
+                    {uploadMutation.isPending && uploadMutation.variables === track.id ? "Uploading…" : "Upload to PC"}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => removeTrackMutation.mutate(track.id)}
+                  disabled={removeTrackMutation.isPending}
+                  className="shrink-0 text-xs font-medium text-t3 hover:text-err disabled:opacity-50"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

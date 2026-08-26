@@ -9,6 +9,7 @@ import { deletePlaylist, downloadPlaylistExport, fetchPlaylist, updatePlaylist }
 import { usePlayerStore } from "@/lib/store/player";
 import { DownloadIcon, PlayIcon } from "@/components/shell/PlayerIcons";
 import { CrateCoverEditor } from "./CrateCoverEditor";
+import { MobileOfflineButton } from "./MobileOfflineButton";
 import { ManualCrateTracklist } from "./ManualCrateTracklist";
 import { SmartCrateBuilder } from "./SmartCrateBuilder";
 
@@ -215,6 +216,10 @@ export function CrateDetailView({ playlistId }: { playlistId: number }) {
             </Link>
           </div>
           {exportError ? <p className="mt-2 text-xs text-err">{exportError}</p> : null}
+
+          <div className="mt-3">
+            <MobileOfflineButton crateId={playlistId} crateName={crateName} />
+          </div>
         </div>
       </div>
 

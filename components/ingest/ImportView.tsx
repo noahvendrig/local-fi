@@ -7,6 +7,7 @@ import { useCommandPaletteStore } from "@/lib/store/commandPalette";
 import { useIngestStore } from "@/lib/store/ingest";
 import { JobFileRow } from "./JobFileRow";
 import { LibraryFoldersSection } from "./LibraryFoldersSection";
+import { MobileLocalImportSection } from "./MobileLocalImportSection";
 
 const TERMINAL_JOB = new Set(["completed", "completed_with_errors", "failed", "cancelled"]);
 
@@ -153,6 +154,8 @@ export function ImportView() {
         <div className="hidden md:block">
           <LibraryFoldersSection />
         </div>
+
+        <MobileLocalImportSection />
       </div>
     </div>
   );
