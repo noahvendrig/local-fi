@@ -8,6 +8,7 @@ import {
   snapEqGain,
   type EqPresetId,
 } from "@/lib/audio/eqConfig";
+import { useTransportSourceStore } from "./transportSource";
 import type { WaveformData } from "@/lib/waveform/parse";
 
 const PERSIST_DEBOUNCE_MS = 400;
@@ -175,6 +176,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   playTrack: (track, queueContext) => {
     const { currentTrack, isPlaying, shuffle } = get();
+    useTransportSourceStore.getState().setActiveSource("regular");
     if (currentTrack?.id === track.id) {
       set({ isPlaying: !isPlaying });
       schedulePersist(get);
@@ -213,6 +215,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const nextSource = [...sourceQueue, ...tracksToAdd];
     if (!currentTrack) {
       // Nothing playing: queuing starts playback, matching common player UX.
+      useTransportSourceStore.getState().setActiveSource("regular");
       const nextQueue = shuffle ? shuffleInPlace([...tracksToAdd]) : [...tracksToAdd];
       set({
         currentTrack: nextQueue[0],
@@ -293,6 +296,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   playNext: () => {
     const { queue, currentIndex, repeatMode } = get();
     if (queue.length === 0) return;
+    useTransportSourceStore.getState().setActiveSource("regular");
     let nextIndex = currentIndex + 1;
     if (nextIndex >= queue.length) {
       if (repeatMode !== "all") {
@@ -309,6 +313,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   playPrevious: () => {
     const { queue, currentIndex, repeatMode } = get();
     if (queue.length === 0) return;
+    useTransportSourceStore.getState().setActiveSource("regular");
     let prevIndex = currentIndex - 1;
     if (prevIndex < 0) {
       if (repeatMode !== "all") {
@@ -324,6 +329,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   playFromQueue: (index) => {
     const { queue } = get();
     if (index < 0 || index >= queue.length) return;
+    useTransportSourceStore.getState().setActiveSource("regular");
     set({ currentIndex: index, currentTrack: queue[index], isPlaying: true, currentTime: 0, pendingSeekSeconds: null });
     schedulePersist(get);
   },

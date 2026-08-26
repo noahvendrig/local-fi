@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { TrackSummary } from "@/lib/api-client";
+import { useTransportSourceStore } from "./transportSource";
 
 /**
  * DJ-view session state: target BPM/key/octave for matching tracks in a crate's DJ view, plus the
@@ -7,7 +8,8 @@ import type { TrackSummary } from "@/lib/api-client";
  * not persisted to /playback-state — this is ephemeral per session, not something to restore
  * into a page load that never opens the DJ view. Regular playback (usePlayerStore,
  * usePlaybackEngine) is untouched by any of this. The bottom transport bar reads both stores
- * to show whichever deck is actually active — see TransportBar's `djActive` logic.
+ * plus useTransportSourceStore to show whichever deck the user last selected — see
+ * TransportBar's `djActive` logic.
  */
 interface DjState {
   targetBpm: number | null;
@@ -61,6 +63,7 @@ export const useDjStore = create<DjState>((set, get) => ({
   isPlaying: false,
   playDjTrack: (track) => {
     const { currentTrack, isPlaying } = get();
+    useTransportSourceStore.getState().setActiveSource("dj");
     if (currentTrack?.id === track.id) {
       set({ isPlaying: !isPlaying });
       return;

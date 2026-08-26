@@ -7,6 +7,7 @@ import { withAuthQuery } from "@/lib/api/http";
 import { fetchWaveform } from "@/lib/waveform/parse";
 import { usePlayerStore } from "@/lib/store/player";
 import { useDjStore } from "@/lib/store/dj";
+import { useTransportSourceStore } from "@/lib/store/transportSource";
 import { useSettingsStore } from "@/lib/store/settings";
 import { WaveformScrubber } from "./WaveformScrubber";
 import { EqualizerPopover } from "./EqualizerPopover";
@@ -56,13 +57,14 @@ export function TransportBar() {
   const djCurrentTime = useDjStore((s) => s.currentTime);
   const setDjPlaying = useDjStore((s) => s.setDjPlaying);
   const djSeekTo = useDjStore((s) => s.seekTo);
+  const activeSource = useTransportSourceStore((s) => s.activeSource);
 
   const { audioARef, audioBRef, handleTimeUpdate, handleEnded, handlePlay, handlePause } = usePlaybackEngine();
 
-  // The DJ deck has no queue of its own, so it "wins" the bar whenever it's actually making
-  // sound, or when it's the only thing loaded at all — otherwise the regular player keeps
-  // showing, same as before DJ mode existed.
-  const djActive = djTrack != null && (djIsPlaying || (!isPlaying && !currentTrack));
+  // Which deck the bar shows/controls is tracked explicitly (useTransportSourceStore), set by
+  // whichever store's track-selection actions last ran — NOT derived from isPlaying, so pausing
+  // the DJ deck from this bar can't make it silently fall back to a leftover regular track.
+  const djActive = activeSource === "dj" && djTrack != null;
   const displayTrack = djActive ? djTrack : currentTrack;
   const displayIsPlaying = djActive ? djIsPlaying : isPlaying;
   const displayCurrentTime = djActive ? djCurrentTime : currentTime;
