@@ -6,11 +6,19 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchAlbums, fetchArtists, fetchTracks, type TrackSummary } from "@/lib/api-client";
 import { fetchPlaylists } from "@/lib/api/playlistsClient";
 import { revealTrackInFolder } from "@/lib/api/tracksClient";
+import { useHasCredentials } from "@/lib/api/http";
 import { formatDuration } from "@/lib/format/track";
 import { useCommandPaletteStore } from "@/lib/store/commandPalette";
+import { useDeviceStore } from "@/lib/store/device";
 import { usePlayerStore } from "@/lib/store/player";
 import { useTagEditorStore } from "@/lib/store/tagEditor";
 import { PlayIcon } from "./PlayerIcons";
+
+// The standalone PWA has no /albums/:id, /artists/:id, /crates/:id, or /trash page of its own
+// (see MobileLibraryView.tsx's ArtistOrCrateLink for why) — search results for those groups
+// link out to the paired PC's own page instead of an internal route. Unaffected in the existing
+// LAN mobile/desktop view, which still has all of these routes.
+const STANDALONE = process.env.NEXT_PUBLIC_STANDALONE === "true";
 
 type ResultGroupName = "Tracks" | "Albums" | "Artists" | "Crates" | "Actions";
 
@@ -39,9 +47,11 @@ export function CommandPalette() {
   const playTrack = usePlayerStore((s) => s.playTrack);
   const enqueue = usePlayerStore((s) => s.enqueue);
   const openTagEditor = useTagEditorStore((s) => s.open);
+  const device = useDeviceStore((s) => s.device);
+  const hasCredentials = useHasCredentials();
 
   const trimmed = query.trim();
-  const enabled = isOpen && trimmed.length > 0;
+  const enabled = isOpen && trimmed.length > 0 && hasCredentials;
 
   const tracksQuery = useQuery({
     queryKey: ["search", "tracks", trimmed],
@@ -101,26 +111,27 @@ export function CommandPalette() {
       sublabel: t.artistName ?? "Unknown artist",
       track: t,
     }));
+    const externalHref = (path: string) => (STANDALONE && device ? `${device.serverUrl}${path}` : path);
     const albums: FlatResult[] = (albumsQuery.data?.items ?? []).map((a) => ({
       group: "Albums" as const,
       key: `album-${a.id}`,
       label: a.title,
       sublabel: a.albumArtistName,
-      href: `/albums/${a.id}`,
+      href: externalHref(`/albums/${a.id}`),
     }));
     const artists: FlatResult[] = (artistsQuery.data?.items ?? []).map((ar) => ({
       group: "Artists" as const,
       key: `artist-${ar.id}`,
       label: ar.name,
       sublabel: `${ar.albumCount} album${ar.albumCount === 1 ? "" : "s"}`,
-      href: `/artists/${ar.id}`,
+      href: externalHref(`/artists/${ar.id}`),
     }));
     const crates: FlatResult[] = (cratesQuery.data?.items ?? []).map((c) => ({
       group: "Crates" as const,
       key: `crate-${c.id}`,
       label: c.name,
       sublabel: c.type === "smart" ? "Smart crate" : `${c.trackCount} track${c.trackCount === 1 ? "" : "s"}`,
-      href: `/crates/${c.id}`,
+      href: externalHref(`/crates/${c.id}`),
     }));
     const q = trimmed.toLowerCase();
     const actions: FlatResult[] = [];
@@ -133,17 +144,19 @@ export function CommandPalette() {
         href: "/settings",
       });
     }
-    if (q.length === 0 || "trash".startsWith(q) || q.includes("bin")) {
+    // Trash has no page of its own in the standalone build; only offer it there once paired,
+    // linking out to the PC's own page like the Albums/Artists/Crates results above.
+    if ((q.length === 0 || "trash".startsWith(q) || q.includes("bin")) && (!STANDALONE || device)) {
       actions.push({
         group: "Actions",
         key: "action-trash",
         label: "Trash",
         sublabel: "Restore or permanently delete tracks",
-        href: "/trash",
+        href: externalHref("/trash"),
       });
     }
     return { tracks, albums, artists, crates, actions };
-  }, [tracksQuery.data, albumsQuery.data, artistsQuery.data, cratesQuery.data, trimmed]);
+  }, [tracksQuery.data, albumsQuery.data, artistsQuery.data, cratesQuery.data, trimmed, device]);
 
   const flat = [...groups.actions, ...groups.tracks, ...groups.albums, ...groups.artists, ...groups.crates];
 
@@ -168,7 +181,11 @@ export function CommandPalette() {
         groups.tracks.map((r) => r.track as TrackSummary)
       );
     } else if (result.href) {
-      router.push(result.href);
+      if (STANDALONE && (result.group === "Albums" || result.group === "Artists" || result.group === "Crates" || result.key === "action-trash")) {
+        window.open(result.href, "_blank", "noopener,noreferrer");
+      } else {
+        router.push(result.href);
+      }
     }
     handleClose();
   }

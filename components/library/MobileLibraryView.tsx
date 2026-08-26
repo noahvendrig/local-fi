@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchArtists, fetchTracks } from "@/lib/api-client";
 import { fetchPlaylists } from "@/lib/api/playlistsClient";
-import { withAuthQuery } from "@/lib/api/http";
+import { useHasCredentials, withAuthQuery } from "@/lib/api/http";
 import { usePlayerStore } from "@/lib/store/player";
 import { NewCrateModal } from "@/components/crates/NewCrateModal";
 import { TrackRowActions } from "@/components/library/TrackRowActions";
@@ -26,19 +26,33 @@ const SWIPE_INTENT_PX = 8;
 
 type Segment = "crates" | "songs" | "artists" | "folders" | "downloaded";
 
-const SEGMENTS: { id: Segment; label: string }[] = [
-  { id: "crates", label: "Crates" },
-  { id: "songs", label: "All songs" },
-  { id: "artists", label: "Artists" },
-  { id: "downloaded", label: "Downloaded" },
-  { id: "folders", label: "Folders" },
-];
+// The standalone PWA has no watched-folder concept (desktop-only) and, unlike the existing LAN
+// mobile view, starts with zero PC connection ever — "Downloaded" (local imports + copied
+// crates) is the only segment guaranteed to have content with zero pairing, so it leads and
+// "Folders" is dropped entirely. The existing LAN mobile view is unaffected: it always has a
+// same-origin connection, so "Crates" leading and "Folders" being present stays unchanged there.
+const STANDALONE = process.env.NEXT_PUBLIC_STANDALONE === "true";
+
+const SEGMENTS: { id: Segment; label: string }[] = STANDALONE
+  ? [
+      { id: "downloaded", label: "Downloaded" },
+      { id: "crates", label: "Crates" },
+      { id: "songs", label: "All songs" },
+      { id: "artists", label: "Artists" },
+    ]
+  : [
+      { id: "crates", label: "Crates" },
+      { id: "songs", label: "All songs" },
+      { id: "artists", label: "Artists" },
+      { id: "downloaded", label: "Downloaded" },
+      { id: "folders", label: "Folders" },
+    ];
 
 // Mobile "Your Library" screen (design board 1c, "m2 library" frame): a segmented control
 // over Crates/All songs/Artists/Folders, distinct from the desktop grid/list toggle
 // (useLibraryStore) so switching this segment never affects the desktop view's own state.
 export function MobileLibraryView() {
-  const [segment, setSegment] = useState<Segment>("crates");
+  const [segment, setSegment] = useState<Segment>(STANDALONE ? "downloaded" : "crates");
   const [isCreatingCrate, setIsCreatingCrate] = useState(false);
   const hasMiniPlayer = usePlayerStore((s) => Boolean(s.currentTrack));
 
@@ -99,11 +113,13 @@ function PlusIcon() {
 }
 
 function MobileSongsList() {
+  const hasCredentials = useHasCredentials();
   const tracksQuery = useInfiniteQuery({
     queryKey: ["tracks", { sort: "date_added_desc" as const }],
     queryFn: ({ pageParam }) => fetchTracks({ sort: "date_added_desc", cursor: pageParam }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: hasCredentials,
   });
   const tracks = tracksQuery.data?.pages.flatMap((p) => p.items) ?? [];
   const currentTrackId = usePlayerStore((s) => s.currentTrack?.id);
@@ -118,6 +134,7 @@ function MobileSongsList() {
   const touchOriginRef = useRef<{ x: number; y: number } | null>(null);
   const suppressClickRef = useRef(false);
 
+  if (!hasCredentials) return <NotPairedMessage />;
   if (tracksQuery.isLoading) return null;
   if (tracks.length === 0) return <p className="py-10 text-center text-sm text-t3">No songs yet.</p>;
 
@@ -230,41 +247,92 @@ function QueueIcon() {
   );
 }
 
+function NotPairedMessage() {
+  return (
+    <p className="py-10 text-center text-sm text-t3">
+      Not paired to a PC yet — go to Settings to pair, or use &ldquo;Downloaded&rdquo; for what&apos;s on this phone.
+    </p>
+  );
+}
+
+// The standalone PWA has no /artists/:id or /crates/:id page of its own (static export can't
+// enumerate every possible id at build time — they only exist once paired to a specific PC), so
+// a tap there opens the paired PC's own already-working page in a new tab instead of an internal
+// Link. The existing LAN mobile view is unaffected — it still has those routes, so it keeps the
+// original internal Link.
+function ArtistOrCrateLink({
+  href,
+  className,
+  children,
+}: {
+  href: string;
+  className: string;
+  children: React.ReactNode;
+}) {
+  const device = useDeviceStore((s) => s.device);
+  if (STANDALONE) {
+    if (!device) return null; // unreachable in practice: this list is gated behind hasCredentials
+    return (
+      <a href={`${device.serverUrl}${href}`} target="_blank" rel="noopener noreferrer" className={className}>
+        {children}
+      </a>
+    );
+  }
+  return (
+    <Link href={href} className={className}>
+      {children}
+    </Link>
+  );
+}
+
 function MobileArtistsList() {
+  const hasCredentials = useHasCredentials();
   const artistsQuery = useInfiniteQuery({
     queryKey: ["artists", { sort: "name_asc" as const }],
     queryFn: ({ pageParam }) => fetchArtists({ sort: "name_asc", cursor: pageParam }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: hasCredentials,
   });
   const artists = artistsQuery.data?.pages.flatMap((p) => p.items) ?? [];
 
+  if (!hasCredentials) return <NotPairedMessage />;
   if (artistsQuery.isLoading) return null;
   if (artists.length === 0) return <p className="py-10 text-center text-sm text-t3">No artists yet.</p>;
 
   return (
     <div className="flex flex-col">
       {artists.map((artist) => (
-        <Link key={artist.id} href={`/artists/${artist.id}`} className="flex items-center justify-between border-b border-line py-3">
+        <ArtistOrCrateLink
+          key={artist.id}
+          href={`/artists/${artist.id}`}
+          className="flex items-center justify-between border-b border-line py-3"
+        >
           <span className="min-w-0 truncate text-sm text-t1">{artist.name}</span>
           <span className="shrink-0 pl-2 font-mono text-xs text-t3">{artist.albumCount} albums</span>
-        </Link>
+        </ArtistOrCrateLink>
       ))}
     </div>
   );
 }
 
 function MobileCratesList() {
-  const cratesQuery = useQuery({ queryKey: ["playlists"], queryFn: () => fetchPlaylists() });
+  const hasCredentials = useHasCredentials();
+  const cratesQuery = useQuery({ queryKey: ["playlists"], queryFn: () => fetchPlaylists(), enabled: hasCredentials });
   const crates = cratesQuery.data?.items ?? [];
 
+  if (!hasCredentials) return <NotPairedMessage />;
   if (cratesQuery.isLoading) return null;
   if (crates.length === 0) return <p className="py-10 text-center text-sm text-t3">No crates yet.</p>;
 
   return (
     <div className="flex flex-col gap-2.5">
       {crates.map((crate) => (
-        <Link key={crate.id} href={`/crates/${crate.id}`} className="lf-card flex items-center gap-3 rounded-2xl px-3 py-2.5">
+        <ArtistOrCrateLink
+          key={crate.id}
+          href={`/crates/${crate.id}`}
+          className="lf-card flex items-center gap-3 rounded-2xl px-3 py-2.5"
+        >
           <div className="lf-hatch h-11 w-11 shrink-0 overflow-hidden rounded-[10px]">
             {crate.coverArtUrl ? (
               // eslint-disable-next-line @next/next/no-img-element -- local-only images
@@ -275,7 +343,7 @@ function MobileCratesList() {
             <p className="truncate text-sm text-t1">{crate.name}</p>
             <p className="font-mono text-xs text-t3">{crate.trackCount} tracks</p>
           </div>
-        </Link>
+        </ArtistOrCrateLink>
       ))}
     </div>
   );

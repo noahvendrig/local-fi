@@ -1,5 +1,5 @@
 import type { TrackSummary } from "@/lib/api-client";
-import { authHeaders } from "./http";
+import { apiUrl, authHeaders } from "./http";
 
 export interface TrackDetail extends TrackSummary {
   trackTotal: number | null;
@@ -32,7 +32,7 @@ export interface TrackTagPatch {
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
+  const res = await fetch(apiUrl(url), {
     ...init,
     headers: { ...authHeaders(), ...(init?.body ? { "Content-Type": "application/json" } : {}), ...init?.headers },
   });
@@ -64,7 +64,7 @@ export interface CoverUploadResult {
 async function uploadCover(url: string, file: File): Promise<CoverUploadResult> {
   const formData = new FormData();
   formData.append("file", file);
-  const res = await fetch(url, { method: "PUT", headers: authHeaders(), body: formData });
+  const res = await fetch(apiUrl(url), { method: "PUT", headers: authHeaders(), body: formData });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     throw new Error(body?.error?.message ?? `Request failed (${res.status})`);

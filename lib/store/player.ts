@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { TrackSummary } from "@/lib/api-client";
+import { hasCredentials } from "@/lib/api/http";
 import { fetchPlaybackState, putPlaybackState, type RepeatMode } from "@/lib/api/playbackClient";
 import {
   DEFAULT_EQ_STATE,
@@ -108,6 +109,7 @@ function schedulePersist(get: () => PlayerState) {
   persistTimer = setTimeout(() => {
     const s = get();
     if (!s.hydrated) return; // don't clobber saved state with pre-hydrate defaults
+    if (!hasCredentials()) return; // nothing to persist to before the standalone app is paired
     void putPlaybackState({
       queue: s.queue.map((t) => t.id),
       currentIndex: s.currentIndex,
@@ -149,6 +151,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   eqPreset: DEFAULT_EQ_STATE.preset,
 
   hydrate: async () => {
+    if (!hasCredentials()) {
+      set({ hydrated: true }); // standalone, not paired yet — nothing to fetch
+      return;
+    }
     try {
       const data = await fetchPlaybackState();
       const currentIndex = data.queue.length > 0 ? Math.min(data.currentIndex, data.queue.length - 1) : 0;
@@ -465,7 +471,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   // through schedulePersist — it changes far more often than the other fields and the API
   // merges partial PUTs server-side, so this never clobbers queue/index/etc.
   persistPosition: (seconds) => {
-    if (!get().hydrated) return;
+    if (!get().hydrated || !hasCredentials()) return;
     void putPlaybackState({ positionSeconds: seconds });
   },
 

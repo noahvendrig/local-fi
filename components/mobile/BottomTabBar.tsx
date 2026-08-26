@@ -4,16 +4,32 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCommandPaletteStore } from "@/lib/store/commandPalette";
 
-const TAB_ITEMS = [
-  { label: "Home", icon: HomeIcon, href: "/", match: (path: string) => path === "/" },
-  {
-    label: "Library",
-    icon: LibraryIcon,
-    href: "/library",
-    match: (path: string) => path.startsWith("/library") || path.startsWith("/albums") || path.startsWith("/artists") || path.startsWith("/crates"),
-  },
-  { label: "Import", icon: ImportIcon, href: "/import", match: (path: string) => path.startsWith("/import") },
-] as const;
+// The standalone build has no Home dashboard (Phase 5: zero synced play history has nothing to
+// show) and its root route "/" already *is* the library view (Phase 6), so "Library" takes the
+// Home slot pointing at "/" instead of the two separate Home+Library tabs the existing LAN
+// mobile/desktop view has.
+const STANDALONE = process.env.NEXT_PUBLIC_STANDALONE === "true";
+
+const TAB_ITEMS = STANDALONE
+  ? ([
+      {
+        label: "Library",
+        icon: LibraryIcon,
+        href: "/",
+        match: (path: string) => path === "/" || path.startsWith("/albums") || path.startsWith("/artists") || path.startsWith("/crates"),
+      },
+      { label: "Import", icon: ImportIcon, href: "/import", match: (path: string) => path.startsWith("/import") },
+    ] as const)
+  : ([
+      { label: "Home", icon: HomeIcon, href: "/", match: (path: string) => path === "/" },
+      {
+        label: "Library",
+        icon: LibraryIcon,
+        href: "/library",
+        match: (path: string) => path.startsWith("/library") || path.startsWith("/albums") || path.startsWith("/artists") || path.startsWith("/crates"),
+      },
+      { label: "Import", icon: ImportIcon, href: "/import", match: (path: string) => path.startsWith("/import") },
+    ] as const);
 
 // Fixed 5-tab bottom bar for the mobile shell (design board 1c, m2 "Library grid" frame).
 // Search opens the existing ⌘K command palette rather than navigating — same store both

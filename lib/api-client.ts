@@ -1,4 +1,4 @@
-import { authHeaders, withAuthQuery } from "@/lib/api/http";
+import { apiUrl, authHeaders, withAuthQuery } from "@/lib/api/http";
 
 export interface Page<T> {
   items: T[];
@@ -129,7 +129,7 @@ function buildQuery(params: object): string {
 }
 
 async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { headers: authHeaders() });
+  const res = await fetch(apiUrl(url), { headers: authHeaders() });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     throw new Error(body?.error?.message ?? `Request failed (${res.status})`);

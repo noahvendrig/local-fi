@@ -15,6 +15,18 @@ export function extractCodeFromScan(payload: string): string {
   return payload;
 }
 
+/** Pulls the PC's origin out of a scanned pairing URL — null for a bare code with no address
+ *  attached (e.g. the standalone PWA's manual "Server address" fallback is the only way to
+ *  pair in that case). Same-origin callers (the existing LAN mobile view) don't need this at
+ *  all, since window.location.origin already is the PC. */
+export function extractOriginFromScan(payload: string): string | null {
+  try {
+    return new URL(payload).origin;
+  } catch {
+    return null;
+  }
+}
+
 // Live camera QR viewfinder (design board 1c "m-pair scan" frame) — for re-pairing from inside
 // an already-installed PWA. getUserMedia requires a secure context (HTTPS, or localhost), which
 // a plain LAN address is not, so this degrades to a status message rather than blocking the

@@ -1,6 +1,6 @@
 import type { TrackSummary } from "@/lib/api-client";
 import type { EqState } from "@/lib/audio/eqConfig";
-import { authHeaders } from "./http";
+import { apiUrl, authHeaders } from "./http";
 
 export type RepeatMode = "off" | "all" | "one";
 
@@ -29,13 +29,13 @@ export interface PlaybackStatePatch {
 }
 
 export async function fetchPlaybackState(): Promise<PlaybackStateDTO> {
-  const res = await fetch("/api/v1/playback-state", { headers: authHeaders() });
+  const res = await fetch(apiUrl("/api/v1/playback-state"), { headers: authHeaders() });
   if (!res.ok) throw new Error(`Failed to fetch playback state (${res.status})`);
   return res.json();
 }
 
 export async function putPlaybackState(patch: PlaybackStatePatch): Promise<PlaybackStateDTO> {
-  const res = await fetch("/api/v1/playback-state", {
+  const res = await fetch(apiUrl("/api/v1/playback-state"), {
     method: "PUT",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify(patch),

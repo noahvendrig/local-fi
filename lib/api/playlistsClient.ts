@@ -1,6 +1,6 @@
 import type { TrackSummary } from "@/lib/api-client";
 import type { RuleGroup } from "@/lib/crates/rules";
-import { authHeaders, withAuthQuery } from "./http";
+import { apiUrl, authHeaders, withAuthQuery } from "./http";
 
 export type PlaylistType = "manual" | "smart";
 
@@ -48,7 +48,7 @@ export interface PlaylistTrackEntry {
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
+  const res = await fetch(apiUrl(url), {
     ...init,
     headers: { ...authHeaders(), ...(init?.body ? { "Content-Type": "application/json" } : {}), ...init?.headers },
   });
@@ -104,7 +104,7 @@ export async function uploadPlaylistCover(id: number, file: File): Promise<Playl
   }
   const formData = new FormData();
   formData.append("file", file);
-  const res = await fetch(`/api/v1/playlists/${id}/cover`, {
+  const res = await fetch(apiUrl(`/api/v1/playlists/${id}/cover`), {
     method: "PUT",
     headers: authHeaders(),
     body: formData,
@@ -155,7 +155,7 @@ export async function downloadPlaylistExport(playlistId: number, suggestedName: 
       suggestedName,
       types: [{ description: "Zip archive", accept: { "application/zip": [".zip"] } }],
     });
-    const res = await fetch(`/api/v1/playlists/${playlistId}/export`, { headers: authHeaders() });
+    const res = await fetch(apiUrl(`/api/v1/playlists/${playlistId}/export`), { headers: authHeaders() });
     if (!res.ok) {
       const body = await res.json().catch(() => null);
       throw new Error(body?.error?.message ?? `Export failed (${res.status})`);

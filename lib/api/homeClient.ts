@@ -1,5 +1,5 @@
 import type { TrackSummary } from "@/lib/api-client";
-import { authHeaders } from "./http";
+import { apiUrl, authHeaders } from "./http";
 
 export interface HomeStat {
   label: string;
@@ -50,7 +50,7 @@ export interface HomeStatsDTO {
 }
 
 export async function fetchHomeStats(): Promise<HomeStatsDTO> {
-  const res = await fetch("/api/v1/home", { headers: authHeaders() });
+  const res = await fetch(apiUrl("/api/v1/home"), { headers: authHeaders() });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     throw new Error(body?.error?.message ?? `Failed to fetch home stats (${res.status})`);
