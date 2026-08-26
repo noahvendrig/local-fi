@@ -10,6 +10,7 @@ import {
 } from "@/lib/store/settings";
 import { usePlayerStore } from "@/lib/store/player";
 import { formatDuration } from "@/lib/format/track";
+import { MobileDevicesSection } from "./MobileDevicesSection";
 
 const PREVIEW_BARS = [0.28, 0.46, 0.72, 0.4, 0.88, 0.62, 0.34, 0.78, 0.52, 0.94, 0.58, 0.36, 0.7, 0.48, 0.82, 0.3, 0.64, 0.44, 0.9, 0.38, 0.56, 0.74, 0.42, 0.66];
 
@@ -86,6 +87,10 @@ export function SettingsView() {
         >
           Reset to defaults
         </button>
+      </div>
+
+      <div className="mt-8">
+        <MobileDevicesSection />
       </div>
 
       <section className="mt-10">

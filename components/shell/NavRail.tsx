@@ -3,9 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { PairingModal } from "@/components/shell/PairingModal";
 import { fetchPlaylists } from "@/lib/api/playlistsClient";
 import { fetchTrash } from "@/lib/api/trashClient";
+import { listPairedDevices } from "@/lib/api/pairingClient";
 import { PALETTES } from "@/lib/theme/palettes";
 import { useIngestStore } from "@/lib/store/ingest";
 import { useSettingsStore } from "@/lib/store/settings";
@@ -21,8 +24,11 @@ const CRATE_DOTS = ["var(--lf-acc)", "var(--lf-playing)", "var(--lf-ok)", "var(-
 
 export function NavRail() {
   const pathname = usePathname();
+  const [isPairingOpen, setIsPairingOpen] = useState(false);
   const cratesQuery = useQuery({ queryKey: ["playlists"], queryFn: () => fetchPlaylists() });
   const trashQuery = useQuery({ queryKey: ["trash", "count"], queryFn: () => fetchTrash({ limit: 1 }) });
+  const devicesQuery = useQuery({ queryKey: ["pairing", "devices"], queryFn: listPairedDevices });
+  const pairedDevices = devicesQuery.data?.items ?? [];
   const crates = cratesQuery.data?.items ?? [];
   const trashCount = trashQuery.data?.total ?? 0;
   const isIndexing = useIngestStore((s) =>
@@ -123,6 +129,21 @@ export function NavRail() {
         {trashCount > 0 ? <span className="ml-auto font-mono text-[11px] text-t3">{trashCount}</span> : null}
       </Link>
 
+      <button
+        type="button"
+        onClick={() => setIsPairingOpen(true)}
+        className="mt-1 flex w-full items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 text-left text-[13px] text-t2 hover:bg-surf-2 hover:text-t1"
+      >
+        <DeviceIcon />
+        {pairedDevices.length > 0 ? pairedDevices[0].name : "Pair a phone"}
+        <span
+          className="ml-auto h-[7px] w-[7px] rounded-full"
+          style={{ background: pairedDevices.length > 0 ? "var(--lf-ok)" : "var(--lf-t3)" }}
+          aria-hidden
+        />
+      </button>
+      {isPairingOpen ? <PairingModal onClose={() => setIsPairingOpen(false)} /> : null}
+
       <Link
         href="/settings"
         className={`mt-1 flex items-center gap-2.5 rounded-lg border px-3 py-2 text-[13px] hover:bg-surf-2 hover:text-t1 ${
@@ -185,6 +206,15 @@ function CratesIcon() {
       <rect x="3" y="4" width="18" height="4" rx="1" />
       <rect x="3" y="10" width="18" height="4" rx="1" />
       <rect x="3" y="16" width="18" height="4" rx="1" />
+    </svg>
+  );
+}
+
+function DeviceIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="6" y="2" width="12" height="20" rx="2" />
+      <path d="M11 18h2" />
     </svg>
   );
 }

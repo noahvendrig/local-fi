@@ -372,3 +372,35 @@ export const settings = sqliteTable("settings", {
   value: text("value").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
+
+/**
+ * A phone (or other second client) paired over LAN via a QR/code scan (mobile plan Phase B).
+ * `token` is a long-lived bearer credential checked as a fallback in lib/auth/verifyToken.ts
+ * after the single static token — additive, not a replacement, so desktop's existing auth path
+ * is untouched. Revoking is soft (revokedAt set, row kept) so the paired-devices list can still
+ * show a device's history after it's removed.
+ */
+export const devices = sqliteTable("devices", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  uuid: text("uuid").notNull().unique(),
+  token: text("token").notNull().unique(),
+  name: text("name").notNull(),
+  pairedAt: text("paired_at").notNull(),
+  lastSeenAt: text("last_seen_at"),
+  revokedAt: text("revoked_at"),
+});
+
+/**
+ * A short-lived pairing code shown as a QR (and its plain-text form) on the PC. Deliberately a
+ * separate table from `devices`, not a status column on it — a session is single-use/short-TTL
+ * (mints at most one device row) while a device is long-lived, mirroring the existing
+ * import_jobs-produces-a-result shape rather than overloading one row's lifecycle for both.
+ */
+export const pairingSessions = sqliteTable("pairing_sessions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  code: text("code").notNull().unique(),
+  expiresAt: text("expires_at").notNull(),
+  consumedAt: text("consumed_at"),
+  deviceId: integer("device_id").references(() => devices.id, { onDelete: "set null" }),
+  createdAt: text("created_at").notNull(),
+});
