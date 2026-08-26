@@ -14,7 +14,7 @@ export function CratesView() {
   const crates = data?.items ?? [];
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="hidden h-full flex-col md:flex">
       <div className="flex items-center justify-between px-10 py-[22px]">
         <h1 className="text-[28px] font-bold leading-[1.2] text-t1">Crates</h1>
         <button

@@ -136,7 +136,7 @@ function DjTrackRow({
 
   return (
     <div
-      className={`grid items-center gap-3.5 border-b border-line px-3 py-[11px] last:border-b-0 ${track.missing ? "opacity-40" : ""}`}
+      className={`grid items-center gap-3.5 border-b border-line px-3 py-[11px] last:border-b-0 ${isCurrent ? "bg-[var(--lf-tint)]" : ""} ${track.missing ? "opacity-40" : ""}`}
       style={{ gridTemplateColumns: GRID_COLS }}
     >
       <span aria-hidden className="text-xs text-t3">

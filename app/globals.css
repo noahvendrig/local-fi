@@ -540,9 +540,31 @@ html[data-motion="reduce"] *::after {
   animation: lfprogress-indeterminate 1.2s ease-in-out infinite;
 }
 
+@keyframes lfqueuedflash {
+  0% {
+    opacity: 0;
+    transform: translateY(-50%) scale(0.9);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.lf-queued-badge {
+  animation: lfqueuedflash 900ms ease forwards;
+}
+
 html[data-motion="reduce"] .lf-vinyl-spin,
 html[data-motion="reduce"] .lf-index-spin,
 html[data-motion="reduce"] .lf-index-pulse,
-html[data-motion="reduce"] .lf-progress-indeterminate > span {
+html[data-motion="reduce"] .lf-progress-indeterminate > span,
+html[data-motion="reduce"] .lf-queued-badge {
   animation: none !important;
 }

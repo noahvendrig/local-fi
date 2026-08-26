@@ -81,7 +81,49 @@ export function ManualCrateTracklist({ playlist }: { playlist: PlaylistDetail })
       {playlist.tracks.length === 0 ? (
         <p className="text-sm text-t3">No tracks yet — add some to get started.</p>
       ) : (
-        <table className="w-full border-collapse text-sm">
+        <>
+          <div className="flex flex-col md:hidden">
+          {playlist.tracks.map((track) => {
+            const isCurrent = track.id === currentTrackId;
+            return (
+              <div key={track.entryId ?? track.id} className="relative -mx-10 overflow-hidden">
+                <div
+                  onClick={() => !track.missing && playTrack(track, playlist.tracks)}
+                  onKeyDown={(e) => {
+                    if ((e.key === "Enter" || e.key === " ") && !track.missing) {
+                      e.preventDefault();
+                      playTrack(track, playlist.tracks);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={track.missing ? -1 : 0}
+                  aria-label={`Play ${track.title ?? "Untitled"}`}
+                  className={`flex items-center justify-between gap-3 border-b border-line bg-bg px-10 py-3 ${
+                    track.missing ? "cursor-not-allowed opacity-40" : "cursor-pointer"
+                  } ${isCurrent ? "bg-[var(--lf-tint)]" : ""}`}
+                  title={track.missing ? "File missing on disk" : undefined}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className={`truncate text-sm ${isCurrent ? "text-playing" : "text-t1"}`}>{track.title ?? "Untitled"}</p>
+                    <p className="truncate font-mono text-xs text-t3">{track.artistName}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemove(track);
+                    }}
+                    aria-label="Remove from crate"
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-t3 hover:bg-surf hover:text-err"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <table className="hidden w-full border-collapse text-sm md:table">
           <thead>
             <tr className="border-b border-line text-left text-xs text-t3">
               <th className="hidden w-6 py-2 font-normal sm:table-cell" />
@@ -161,6 +203,7 @@ export function ManualCrateTracklist({ playlist }: { playlist: PlaylistDetail })
             })}
           </tbody>
         </table>
+        </>
       )}
 
       {isAdding && (

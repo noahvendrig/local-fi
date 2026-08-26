@@ -1,13 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { fetchArtists, fetchTracks } from "@/lib/api-client";
 import { fetchPlaylists } from "@/lib/api/playlistsClient";
 import { withAuthQuery } from "@/lib/api/http";
-import { formatDuration } from "@/lib/format/track";
 import { usePlayerStore } from "@/lib/store/player";
+import { NewCrateModal } from "@/components/crates/NewCrateModal";
+import { TrackRowActions } from "@/components/library/TrackRowActions";
+
+// Swipe-right-to-queue tuning for MobileSongsList rows: how far (px) the row can be
+// dragged before it clamps, and how far it must travel to commit the "add to queue" action.
+const SWIPE_MAX_PX = 96;
+const SWIPE_QUEUE_THRESHOLD_PX = 64;
+// Below this, a touchmove is treated as an imprecise tap rather than the start of a swipe.
+const SWIPE_INTENT_PX = 8;
 
 type Segment = "crates" | "songs" | "artists" | "folders";
 
@@ -23,6 +31,8 @@ const SEGMENTS: { id: Segment; label: string }[] = [
 // (useLibraryStore) so switching this segment never affects the desktop view's own state.
 export function MobileLibraryView() {
   const [segment, setSegment] = useState<Segment>("crates");
+  const [isCreatingCrate, setIsCreatingCrate] = useState(false);
+  const hasMiniPlayer = usePlayerStore((s) => Boolean(s.currentTrack));
 
   return (
     <div className="flex h-full flex-col pb-36 md:hidden">
@@ -52,7 +62,30 @@ export function MobileLibraryView() {
           <p className="py-10 text-center text-sm text-t3">Manage watched folders from the desktop app.</p>
         ) : null}
       </div>
+
+      {segment === "crates" ? (
+        <button
+          type="button"
+          onClick={() => setIsCreatingCrate(true)}
+          aria-label="New crate"
+          className={`fixed right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-acc text-on-acc shadow-[var(--lf-shadow)] hover:bg-acc-2 md:hidden ${
+            hasMiniPlayer ? "bottom-[172px]" : "bottom-[100px]"
+          }`}
+        >
+          <PlusIcon />
+        </button>
+      ) : null}
+
+      {isCreatingCrate && <NewCrateModal onClose={() => setIsCreatingCrate(false)} />}
     </div>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+      <path d="M12 5v14M5 12h14" />
+    </svg>
   );
 }
 
@@ -66,41 +99,125 @@ function MobileSongsList() {
   const tracks = tracksQuery.data?.pages.flatMap((p) => p.items) ?? [];
   const currentTrackId = usePlayerStore((s) => s.currentTrack?.id);
   const playTrack = usePlayerStore((s) => s.playTrack);
+  const enqueue = usePlayerStore((s) => s.enqueue);
+
+  // Only one row can be dragged at a time; touchOriginRef/suppressClickRef don't need to
+  // trigger re-renders themselves, so they stay in refs alongside the drag state.
+  const [dragId, setDragId] = useState<number | null>(null);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [justQueuedId, setJustQueuedId] = useState<number | null>(null);
+  const touchOriginRef = useRef<{ x: number; y: number } | null>(null);
+  const suppressClickRef = useRef(false);
 
   if (tracksQuery.isLoading) return null;
   if (tracks.length === 0) return <p className="py-10 text-center text-sm text-t3">No songs yet.</p>;
+
+  function handleTouchStart(track: (typeof tracks)[number], e: React.TouchEvent) {
+    if (track.missing) return;
+    const touch = e.touches[0];
+    touchOriginRef.current = { x: touch.clientX, y: touch.clientY };
+    suppressClickRef.current = false;
+    setDragId(track.id);
+    setDragOffset(0);
+  }
+
+  function handleTouchMove(track: (typeof tracks)[number], e: React.TouchEvent) {
+    const origin = touchOriginRef.current;
+    if (!origin || dragId !== track.id) return;
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - origin.x;
+    const deltaY = touch.clientY - origin.y;
+    if (Math.abs(deltaX) > SWIPE_INTENT_PX) suppressClickRef.current = true;
+    // Once it's clearly a vertical scroll gesture, stop following it horizontally.
+    if (Math.abs(deltaY) > Math.abs(deltaX)) return;
+    setDragOffset(Math.max(0, Math.min(deltaX, SWIPE_MAX_PX)));
+  }
+
+  function handleTouchEnd(track: (typeof tracks)[number]) {
+    touchOriginRef.current = null;
+    if (dragId !== track.id) return;
+    if (dragOffset >= SWIPE_QUEUE_THRESHOLD_PX) {
+      enqueue([track]);
+      setJustQueuedId(track.id);
+      setTimeout(() => setJustQueuedId((id) => (id === track.id ? null : id)), 900);
+    }
+    setDragId(null);
+    setDragOffset(0);
+  }
+
+  function handlePlay(track: (typeof tracks)[number]) {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    if (!track.missing) playTrack(track, tracks);
+  }
 
   return (
     <div className="flex flex-col">
       {tracks.map((track) => {
         const isCurrent = track.id === currentTrackId;
+        const isDragging = dragId === track.id;
+        const offsetX = isDragging ? dragOffset : 0;
         return (
-          <div
-            key={track.id}
-            onClick={() => !track.missing && playTrack(track, tracks)}
-            onKeyDown={(e) => {
-              if ((e.key === "Enter" || e.key === " ") && !track.missing) {
-                e.preventDefault();
-                playTrack(track, tracks);
-              }
-            }}
-            role="button"
-            tabIndex={track.missing ? -1 : 0}
-            aria-label={`Play ${track.title ?? "Untitled"}`}
-            className={`flex items-center justify-between gap-3 border-b border-line px-4 py-3 -mx-4 ${
-              track.missing ? "cursor-not-allowed opacity-40" : "cursor-pointer"
-            } ${isCurrent ? "bg-[var(--lf-tint)]" : ""}`}
-            title={track.missing ? "File missing on disk" : undefined}
-          >
-            <div className="min-w-0">
-              <p className={`truncate text-sm ${isCurrent ? "text-playing" : "text-t1"}`}>{track.title ?? "Untitled"}</p>
-              <p className="truncate font-mono text-xs text-t3">{track.artistName}</p>
+          <div key={track.id} className="relative -mx-4 overflow-hidden">
+            <div
+              aria-hidden
+              className="absolute inset-y-0 left-0 flex items-center gap-1.5 bg-acc pl-4 text-on-acc"
+              style={{ width: offsetX }}
+            >
+              <QueueIcon />
+              <span className="whitespace-nowrap text-xs font-medium">Queue</span>
             </div>
-            <span className="shrink-0 pl-2 font-mono text-xs text-t3">{formatDuration(track.durationSeconds)}</span>
+            <div
+              onTouchStart={(e) => handleTouchStart(track, e)}
+              onTouchMove={(e) => handleTouchMove(track, e)}
+              onTouchEnd={() => handleTouchEnd(track)}
+              onTouchCancel={() => handleTouchEnd(track)}
+              onClick={() => handlePlay(track)}
+              onKeyDown={(e) => {
+                if ((e.key === "Enter" || e.key === " ") && !track.missing) {
+                  e.preventDefault();
+                  playTrack(track, tracks);
+                }
+              }}
+              role="button"
+              tabIndex={track.missing ? -1 : 0}
+              aria-label={`Play ${track.title ?? "Untitled"}`}
+              style={{
+                transform: `translateX(${offsetX}px)`,
+                transition: isDragging ? "none" : "transform 200ms ease",
+                touchAction: "pan-y",
+              }}
+              className={`flex items-center justify-between gap-3 border-b border-line bg-bg px-4 py-3 ${
+                track.missing ? "cursor-not-allowed opacity-40" : "cursor-pointer"
+              } ${isCurrent ? "bg-[var(--lf-tint)]" : ""}`}
+              title={track.missing ? "File missing on disk" : undefined}
+            >
+              <div className="min-w-0 flex-1">
+                <p className={`truncate text-sm ${isCurrent ? "text-playing" : "text-t1"}`}>{track.title ?? "Untitled"}</p>
+                <p className="truncate font-mono text-xs text-t3">{track.artistName}</p>
+              </div>
+              <TrackRowActions track={track} alwaysVisible />
+            </div>
+            {justQueuedId === track.id ? (
+              <span className="lf-queued-badge pointer-events-none absolute right-4 top-1/2 rounded-full bg-acc px-2 py-0.5 text-[10px] font-medium text-on-acc">
+                Queued
+              </span>
+            ) : null}
           </div>
         );
       })}
     </div>
+  );
+}
+
+function QueueIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+      <path d="M4 6h10M4 12h10M4 18h6" />
+      <path d="M18 10v8M14 14h8" />
+    </svg>
   );
 }
 

@@ -19,6 +19,39 @@ export function TrackList({ tracks }: { tracks: TrackSummary[] }) {
 
   return (
     <div>
+      <div className="flex flex-col md:hidden">
+        {tracks.map((track) => {
+          const isCurrent = track.id === currentTrackId;
+          return (
+            <div key={track.id} className="group relative -mx-10 overflow-hidden">
+              <div
+                onClick={() => !track.missing && playTrack(track, tracks)}
+                onKeyDown={(e) => {
+                  if ((e.key === "Enter" || e.key === " ") && !track.missing) {
+                    e.preventDefault();
+                    playTrack(track, tracks);
+                  }
+                }}
+                role="button"
+                tabIndex={track.missing ? -1 : 0}
+                aria-label={`Play ${track.title ?? "Untitled"}`}
+                className={`flex items-center justify-between gap-3 border-b border-line bg-bg px-10 py-3 ${
+                  track.missing ? "cursor-not-allowed opacity-40" : "cursor-pointer"
+                } ${isCurrent ? "bg-[var(--lf-tint)]" : ""}`}
+                title={track.missing ? "File missing on disk" : undefined}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className={`truncate text-sm ${isCurrent ? "text-playing" : "text-t1"}`}>{track.title ?? "Untitled"}</p>
+                  <p className="truncate font-mono text-xs text-t3">{track.artistName}</p>
+                </div>
+                <TrackRowActions track={track} alwaysVisible />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="hidden md:block">
       <div className={`mb-2 grid ${columns} gap-3 border-b border-line px-3 pb-2 text-[11px] font-medium uppercase tracking-[0.04em] text-t3`}>
         <span>#</span>
         <span>Title</span>
@@ -87,6 +120,7 @@ export function TrackList({ tracks }: { tracks: TrackSummary[] }) {
           </div>
         );
       })}
+      </div>
     </div>
   );
 }

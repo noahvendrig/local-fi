@@ -45,9 +45,21 @@ export function CrateDetailView({ playlistId }: { playlistId: number }) {
     mutationFn: () => deletePlaylist(playlistId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["playlists"] });
-      router.push("/crates");
+      goBackToCrates();
     },
   });
+
+  // Prefer returning to wherever the user came from (the mobile Library "Crates" segment
+  // or the desktop /crates grid) over hardcoding /crates, which would bounce mobile users
+  // into the desktop grid view. Falls back to /crates only when there's no in-app history
+  // (e.g. a direct link).
+  function goBackToCrates() {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push("/crates");
+    }
+  }
 
   const syncMutation = useMutation({
     mutationFn: (sync: boolean) => setLibraryRootSync(playlist!.librarySync!.rootId, sync),
@@ -88,9 +100,9 @@ export function CrateDetailView({ playlistId }: { playlistId: number }) {
 
   return (
     <div className="flex h-full flex-col overflow-y-auto px-10 py-8">
-      <Link href="/crates" className="w-fit text-xs font-medium text-t3 hover:text-t1">
+      <button type="button" onClick={goBackToCrates} className="w-fit text-xs font-medium text-t3 hover:text-t1">
         ← Crates
-      </Link>
+      </button>
 
       <div className="mt-4 flex flex-col gap-8 sm:flex-row">
         <CrateCoverEditor playlistId={playlistId} coverArtUrl={playlist.coverArtUrl} />
@@ -143,7 +155,7 @@ export function CrateDetailView({ playlistId }: { playlistId: number }) {
                       ? `Synced from "${playlist.librarySync.rootName}" — click to pause`
                       : `Sync paused for "${playlist.librarySync.rootName}" — click to resume`
                   }
-                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${
+                  className={`hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium disabled:opacity-50 md:flex ${
                     playlist.librarySync.syncToCrate
                       ? "border-acc text-acc hover:bg-[var(--lf-tint)]"
                       : "border-line text-t3 hover:border-acc hover:text-t1"

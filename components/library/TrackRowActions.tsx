@@ -10,7 +10,7 @@ import { useTagEditorStore } from "@/lib/store/tagEditor";
 import { ConfirmDialog } from "@/components/shell/ConfirmDialog";
 import { DEFAULT_TRASH_GRACE_DAYS } from "@/lib/library/trashConfig";
 
-export function TrackRowActions({ track }: { track: TrackSummary }) {
+export function TrackRowActions({ track, alwaysVisible }: { track: TrackSummary; alwaysVisible?: boolean }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const openTagEditor = useTagEditorStore((s) => s.open);
@@ -51,7 +51,9 @@ export function TrackRowActions({ track }: { track: TrackSummary }) {
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         title="Track actions"
-        className="rounded-md p-1 text-t3 opacity-0 hover:bg-surf hover:text-t1 group-hover:opacity-100 focus:opacity-100"
+        className={`rounded-md p-1 text-t3 hover:bg-surf hover:text-t1 focus:opacity-100 ${
+          alwaysVisible ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        }`}
       >
         <MoreIcon />
       </button>
