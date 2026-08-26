@@ -57,6 +57,8 @@ export function SettingsView() {
   const setLoudnessMatch = useSettingsStore((s) => s.setLoudnessMatch);
   const crossfadeSeconds = useSettingsStore((s) => s.crossfadeSeconds);
   const setCrossfadeSeconds = useSettingsStore((s) => s.setCrossfadeSeconds);
+  const compressImports = useSettingsStore((s) => s.compressImports);
+  const setCompressImports = useSettingsStore((s) => s.setCompressImports);
   const resetSettings = useSettingsStore((s) => s.resetSettings);
 
   async function handleNotifications(enabled: boolean) {
@@ -255,6 +257,14 @@ export function SettingsView() {
 
       <section className="mt-12 pb-10">
         <h2 className="text-sm font-medium uppercase tracking-wide text-t3">Library</h2>
+
+        <SettingRow
+          title="Compress imports"
+          description="Re-encodes uploaded tracks to Opus (~160 kbps) to save disk space. Cover art and tags are preserved. Only applies to new uploads — synced library folders are never modified."
+        >
+          <Toggle checked={compressImports} onChange={setCompressImports} label={compressImports ? "On" : "Off"} />
+        </SettingRow>
+
         <div className="lf-card mt-4 flex items-center justify-between gap-4 rounded-2xl px-5 py-4">
           <div>
             <p className="text-sm font-semibold text-t1">Library health</p>

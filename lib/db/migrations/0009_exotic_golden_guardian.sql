@@ -1,0 +1,1 @@
+ALTER TABLE `import_jobs` ADD `compress_audio` integer DEFAULT 0 NOT NULL;

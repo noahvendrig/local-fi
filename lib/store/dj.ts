@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { TrackSummary } from "@/lib/api-client";
+import { usePlayerStore } from "./player";
 import { useTransportSourceStore } from "./transportSource";
 
 /**
@@ -65,12 +66,18 @@ export const useDjStore = create<DjState>((set, get) => ({
     const { currentTrack, isPlaying } = get();
     useTransportSourceStore.getState().setActiveSource("dj");
     if (currentTrack?.id === track.id) {
-      set({ isPlaying: !isPlaying });
+      const next = !isPlaying;
+      if (next) usePlayerStore.getState().setPlaying(false);
+      set({ isPlaying: next });
       return;
     }
+    usePlayerStore.getState().setPlaying(false);
     set({ currentTrack: track, isPlaying: true, currentTime: 0 });
   },
-  setDjPlaying: (playing) => set({ isPlaying: playing }),
+  setDjPlaying: (playing) => {
+    if (playing) usePlayerStore.getState().setPlaying(false);
+    set({ isPlaying: playing });
+  },
 
   currentTime: 0,
   setCurrentTime: (seconds) => set({ currentTime: seconds }),

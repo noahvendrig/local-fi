@@ -102,6 +102,8 @@ export const importJobs = sqliteTable(
     processedFiles: integer("processed_files").notNull().default(0),
     failedFiles: integer("failed_files").notNull().default(0),
     createFolderPlaylists: integer("create_folder_playlists").notNull().default(0),
+    /** Opt-in re-encode to Opus during upload (never applied to `folder_scan` jobs — those files are never touched). */
+    compressAudio: integer("compress_audio").notNull().default(0),
     startedAt: text("started_at"),
     finishedAt: text("finished_at"),
     createdAt: text("created_at").notNull(),

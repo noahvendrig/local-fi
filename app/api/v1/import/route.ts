@@ -19,7 +19,8 @@ import { enqueueImportJob } from "@/lib/import/queue";
  * `finalize=false` delays processing until the last batch. `relativePaths`
  * (one per file, same order) and `createFolderPlaylists=true` opt into grouping
  * files from the same immediate subfolder into their own playlist once the job
- * finishes (see lib/import/folderPlaylists.ts).
+ * finishes (see lib/import/folderPlaylists.ts). `compressAudio=true` opts into
+ * re-encoding to Opus while processing (see lib/import/transcode.ts).
  */
 export async function POST(request: Request) {
   let formData: FormData;
@@ -43,6 +44,7 @@ export async function POST(request: Request) {
   const existingUuid = readFormString(formData, "jobUuid");
   const finalize = formData.get("finalize") !== "false";
   const createFolderPlaylists = formData.get("createFolderPlaylists") === "true";
+  const compressAudio = formData.get("compressAudio") === "true";
 
   if (files.length === 0 && !(existingUuid && finalize)) {
     return NextResponse.json(
@@ -88,6 +90,7 @@ export async function POST(request: Request) {
         status: "pending",
         totalFiles: files.length,
         createFolderPlaylists: createFolderPlaylists ? 1 : 0,
+        compressAudio: compressAudio ? 1 : 0,
         createdAt: now,
       })
       .returning()

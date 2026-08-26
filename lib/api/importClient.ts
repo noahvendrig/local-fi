@@ -6,7 +6,13 @@ export { withAuthQuery };
 
 export async function submitImport(
   files: CollectedFile[],
-  options: { jobUuid?: string; finalize?: boolean; createFolderPlaylists?: boolean; signal?: AbortSignal } = {},
+  options: {
+    jobUuid?: string;
+    finalize?: boolean;
+    createFolderPlaylists?: boolean;
+    compressAudio?: boolean;
+    signal?: AbortSignal;
+  } = {},
 ): Promise<ImportJobWithFiles> {
   const formData = new FormData();
   for (const { file, relativePath } of files) {
@@ -16,6 +22,7 @@ export async function submitImport(
   if (options.jobUuid) formData.append("jobUuid", options.jobUuid);
   formData.append("finalize", options.finalize === false ? "false" : "true");
   if (options.createFolderPlaylists) formData.append("createFolderPlaylists", "true");
+  if (options.compressAudio) formData.append("compressAudio", "true");
 
   const res = await fetch("/api/v1/import", {
     method: "POST",

@@ -3,6 +3,7 @@ import { cancelImportJob, fetchImportJob, fetchImportJobs, importJobEventsUrl, s
 import type { ImportJob, ImportJobWithFiles } from "@/lib/api/types";
 import { chunkFilesForUpload } from "@/lib/ingest/chunkFiles";
 import { hasSubfolders, type CollectedFile } from "@/lib/ingest/collectFiles";
+import { useSettingsStore } from "@/lib/store/settings";
 
 const TERMINAL_STATUSES = new Set(["completed", "completed_with_errors", "failed", "cancelled"]);
 
@@ -77,6 +78,7 @@ async function performSubmit(
   uploadAbort = abort;
   set(() => ({ error: null, uploadProgress: { copied: 0, total: files.length } }));
 
+  const compressAudio = useSettingsStore.getState().compressImports;
   let jobUuid: string | undefined;
   try {
     const batches = chunkFilesForUpload(files);
@@ -87,6 +89,7 @@ async function performSubmit(
         jobUuid,
         finalize: i === batches.length - 1,
         createFolderPlaylists,
+        compressAudio,
         signal: abort.signal,
       });
       jobUuid = job.uuid;

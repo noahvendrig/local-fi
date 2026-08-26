@@ -97,7 +97,7 @@ export function enqueueImportJob(jobId: number): void {
       } else if (job.type === "folder_scan" && file.stagedPath && file.libraryRootId != null) {
         await processFolderScanFile(jobId, file.id, file.stagedPath, file.originalFilename, file.libraryRootId);
       } else if (file.stagedPath) {
-        await processImportFile(jobId, file.id, file.stagedPath, file.originalFilename);
+        await processImportFile(jobId, file.id, file.stagedPath, file.originalFilename, job.compressAudio === 1);
       }
 
       pendingCounts.set(jobId, (pendingCounts.get(jobId) ?? 1) - 1);

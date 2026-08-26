@@ -29,6 +29,7 @@ export interface PlayerSettings {
   showFormatBadges: boolean;
   loudnessMatch: boolean;
   crossfadeSeconds: CrossfadeSeconds;
+  compressImports: boolean;
 }
 
 export const DEFAULT_SETTINGS: PlayerSettings = {
@@ -47,6 +48,7 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   showFormatBadges: true,
   loudnessMatch: true,
   crossfadeSeconds: 0,
+  compressImports: false,
 };
 
 interface SettingsState extends PlayerSettings {
@@ -66,6 +68,7 @@ interface SettingsState extends PlayerSettings {
   setShowFormatBadges: (showFormatBadges: boolean) => void;
   setLoudnessMatch: (loudnessMatch: boolean) => void;
   setCrossfadeSeconds: (crossfadeSeconds: CrossfadeSeconds) => void;
+  setCompressImports: (compressImports: boolean) => void;
   resetSettings: () => void;
   hydrateFromDom: () => void;
 }
@@ -122,6 +125,7 @@ function parseStoredSettings(): PlayerSettings {
     } else if (parsed.trackFade === 6) {
       next.crossfadeSeconds = 4;
     }
+    if (typeof parsed.compressImports === "boolean") next.compressImports = parsed.compressImports;
   } catch {
     return next;
   }
@@ -158,6 +162,7 @@ function snapshot(state: SettingsState): PlayerSettings {
     showFormatBadges: state.showFormatBadges,
     loudnessMatch: state.loudnessMatch,
     crossfadeSeconds: state.crossfadeSeconds,
+    compressImports: state.compressImports,
   };
 }
 
@@ -187,6 +192,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setShowFormatBadges: (showFormatBadges) => commit(set, get, { showFormatBadges }),
   setLoudnessMatch: (loudnessMatch) => commit(set, get, { loudnessMatch }),
   setCrossfadeSeconds: (crossfadeSeconds) => commit(set, get, { crossfadeSeconds }),
+  setCompressImports: (compressImports) => commit(set, get, { compressImports }),
   resetSettings: () => commit(set, get, { ...DEFAULT_SETTINGS }),
   hydrateFromDom: () => {
     const next = parseStoredSettings();

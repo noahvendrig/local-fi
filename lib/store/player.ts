@@ -8,6 +8,7 @@ import {
   snapEqGain,
   type EqPresetId,
 } from "@/lib/audio/eqConfig";
+import { useDjStore } from "./dj";
 import { useTransportSourceStore } from "./transportSource";
 import type { WaveformData } from "@/lib/waveform/parse";
 
@@ -178,10 +179,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const { currentTrack, isPlaying, shuffle } = get();
     useTransportSourceStore.getState().setActiveSource("regular");
     if (currentTrack?.id === track.id) {
-      set({ isPlaying: !isPlaying });
+      const next = !isPlaying;
+      if (next) useDjStore.getState().setDjPlaying(false);
+      set({ isPlaying: next });
       schedulePersist(get);
       return;
     }
+    useDjStore.getState().setDjPlaying(false);
     const sourceQueue = queueContext && queueContext.length > 0 ? [...queueContext] : [track];
     let queue = [...sourceQueue];
     let currentIndex = queue.findIndex((t) => t.id === track.id);
@@ -216,6 +220,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     if (!currentTrack) {
       // Nothing playing: queuing starts playback, matching common player UX.
       useTransportSourceStore.getState().setActiveSource("regular");
+      useDjStore.getState().setDjPlaying(false);
       const nextQueue = shuffle ? shuffleInPlace([...tracksToAdd]) : [...tracksToAdd];
       set({
         currentTrack: nextQueue[0],
@@ -242,11 +247,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   togglePlay: () => {
     if (!get().currentTrack) return;
-    set((s) => ({ isPlaying: !s.isPlaying }));
+    const next = !get().isPlaying;
+    if (next) useDjStore.getState().setDjPlaying(false);
+    set({ isPlaying: next });
     schedulePersist(get);
   },
 
   setPlaying: (playing) => {
+    if (playing) useDjStore.getState().setDjPlaying(false);
     set({ isPlaying: playing });
     schedulePersist(get);
   },
@@ -306,6 +314,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       }
       nextIndex = 0;
     }
+    useDjStore.getState().setDjPlaying(false);
     set({ currentIndex: nextIndex, currentTrack: queue[nextIndex], isPlaying: true, currentTime: 0, pendingSeekSeconds: null });
     schedulePersist(get);
   },
@@ -322,6 +331,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         prevIndex = queue.length - 1;
       }
     }
+    useDjStore.getState().setDjPlaying(false);
     set({ currentIndex: prevIndex, currentTrack: queue[prevIndex], isPlaying: true, currentTime: 0, pendingSeekSeconds: null });
     schedulePersist(get);
   },
@@ -330,6 +340,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const { queue } = get();
     if (index < 0 || index >= queue.length) return;
     useTransportSourceStore.getState().setActiveSource("regular");
+    useDjStore.getState().setDjPlaying(false);
     set({ currentIndex: index, currentTrack: queue[index], isPlaying: true, currentTime: 0, pendingSeekSeconds: null });
     schedulePersist(get);
   },
