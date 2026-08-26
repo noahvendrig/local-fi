@@ -34,7 +34,17 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: apps/standalone/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            apps/standalone/package-lock.json
+
+      # The shared code this app imports (lib/**, components/**) physically lives at the repo
+      # root, so Node/Turbopack resolve ITS packages by walking up from those files' own
+      # directory — landing on the root's node_modules, never apps/standalone's. Without this,
+      # every package a reused file needs (zustand, idb, tailwindcss, ...) fails to resolve on a
+      # clean checkout, even though it's declared correctly in apps/standalone/package.json too.
+      - run: npm ci
+        working-directory: .
 
       - run: npm ci
 

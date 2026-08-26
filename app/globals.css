@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Explicit @source needed for apps/standalone: its Next.js build root is pinned to this
+   repo's root (next.config.ts's turbopack.root) so cross-directory `@/*` imports resolve, but
+   that also makes Tailwind's own automatic content detection scope to apps/standalone's own
+   tree only, missing the actual component files (which live here, in the repo root, not under
+   apps/standalone). Harmless/redundant for the root app's own build, whose default detection
+   already covers these paths. */
+@source "../components";
+@source "../app";
+
 /* Ultraviolet Dub — the in-use scheme from Local-fi.dc.html (ink violet · electric iris · pale lilac). */
 :root[data-theme="dark"] {
   --lf-bg: #121016;
