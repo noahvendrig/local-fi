@@ -50,7 +50,7 @@ export function NowPlayingOverlay() {
       role="dialog"
       aria-modal="true"
       aria-label="Now Playing"
-      className="fixed inset-0 z-50 flex flex-col overflow-hidden"
+      className="fixed inset-0 z-50 hidden flex-col overflow-hidden md:flex"
       style={
         isGlass
           ? {

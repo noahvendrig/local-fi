@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { fetchHomeStats, type HomeBackInRotationTrack, type HomeTopTrack } from "@/lib/api/homeClient";
+import { fetchHomeStats, type HomeBackInRotationTrack, type HomeStatsDTO, type HomeTopTrack } from "@/lib/api/homeClient";
 import { withAuthQuery } from "@/lib/api/http";
 import { useCommandPaletteStore } from "@/lib/store/commandPalette";
 import { usePlayerStore } from "@/lib/store/player";
@@ -21,7 +21,9 @@ export function HomeView() {
   const hasActivity = !!data && data.stats.some((s) => Number.parseFloat(s.value) > 0) && data.top5.length > 0;
 
   return (
-    <div className="flex h-full flex-col">
+    <>
+      <MobileHomeView data={data} />
+      <div className="hidden h-full flex-col md:flex">
       <div className="flex flex-none items-center gap-4 px-10 pb-4 pt-[22px]">
         <h1 className="whitespace-nowrap text-[28px] font-bold leading-[1.2] text-t1">Home</h1>
         {data ? <span className="truncate pt-2 font-mono text-xs text-t3">{data.rangeLabel}</span> : null}
@@ -159,7 +161,87 @@ export function HomeView() {
           </div>
         )}
       </div>
+      </div>
+    </>
+  );
+}
+
+// Mobile "This week" screen (design board 1c, "m1b home" frame): same fetchHomeStats data
+// as the desktop dashboard, laid out as stat cards + a compact Top 5 list + day chart.
+function MobileHomeView({ data }: { data: HomeStatsDTO | undefined }) {
+  if (!data) return null;
+  const hasActivity = data.stats.some((s) => Number.parseFloat(s.value) > 0) && data.top5.length > 0;
+
+  return (
+    <div className="flex h-full flex-col overflow-y-auto px-4 pb-28 pt-4 md:hidden">
+      <h1 className="text-2xl font-bold leading-[1.2] text-t1">This week</h1>
+      <p className="mt-1 font-mono text-xs text-t3">{data.rangeLabel}</p>
+
+      <div className="mt-4 flex gap-2.5">
+        {data.stats.slice(0, 2).map((stat) => (
+          <div key={stat.label} className="lf-card flex-1 rounded-2xl px-3.5 py-3.5">
+            <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.04em] text-t3">{stat.label}</p>
+            <p className="font-mono text-[22px] leading-none text-t1">{stat.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {!hasActivity ? (
+        <div className="lf-card mt-5 flex flex-col items-center gap-1.5 rounded-2xl px-6 py-12 text-center">
+          <p className="text-base font-semibold text-t1">No listening data yet</p>
+          <p className="max-w-sm text-sm text-t2">Play some tracks and this page will fill in.</p>
+        </div>
+      ) : (
+        <>
+          <div className="mb-2.5 mt-6 flex items-baseline gap-2">
+            <h2 className="text-base font-semibold text-t1">Top 5 songs</h2>
+            <span className="font-mono text-[11px] text-t3">by plays</span>
+          </div>
+          {data.top5.map((t) => (
+            <MobileTopTrackRow key={t.track.id} item={t} />
+          ))}
+
+          <p className="mb-3 mt-6 text-[10px] font-medium uppercase tracking-[0.04em] text-t3">Plays by day</p>
+          <div className="flex h-16 items-end gap-2">
+            {data.days.map((d) => (
+              <div key={d.date} className="min-h-1 flex-1 rounded-sm bg-playing" style={{ height: `${d.h}%` }} />
+            ))}
+          </div>
+          <div className="mt-1.5 flex gap-2">
+            {data.days.map((d) => (
+              <span key={d.date} className="flex-1 text-center font-mono text-[10px] text-t3">
+                {d.label.slice(0, 3)}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
     </div>
+  );
+}
+
+function MobileTopTrackRow({ item }: { item: HomeTopTrack }) {
+  const currentTrackId = usePlayerStore((s) => s.currentTrack?.id);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const playTrack = usePlayerStore((s) => s.playTrack);
+  const isCurrent = item.track.id === currentTrackId;
+
+  return (
+    <button
+      type="button"
+      onClick={() => playTrack(item.track)}
+      className="grid w-full grid-cols-[24px_44px_minmax(0,1fr)_62px] items-center gap-3 border-b border-line py-2.5 text-left"
+    >
+      <span className={`font-mono text-[15px] ${isCurrent ? "text-playing" : "text-t3"}`}>
+        {isCurrent && isPlaying ? <PlayingIcon /> : item.rank}
+      </span>
+      <TrackArt url={item.track.coverArtUrl} size={44} rounded="rounded-[10px]" />
+      <div className="min-w-0">
+        <p className={`truncate text-sm ${isCurrent ? "text-playing" : "text-t1"}`}>{item.track.title ?? "Untitled"}</p>
+        <p className="truncate font-mono text-[11px] text-t3">{item.track.artistName ?? "Unknown artist"}</p>
+      </div>
+      <span className="text-right font-mono text-xs text-t2">{item.plays}</span>
+    </button>
   );
 }
 

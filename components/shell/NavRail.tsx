@@ -32,7 +32,7 @@ export function NavRail() {
   const paletteName = PALETTES.find((p) => p.id === palette)?.name ?? "Palette";
 
   return (
-    <nav className="flex w-[240px] shrink-0 flex-col border-r border-line bg-bg px-3 py-5">
+    <nav className="hidden w-[240px] shrink-0 flex-col border-r border-line bg-bg px-3 py-5 md:flex">
       <div className="mb-5 flex items-center gap-2.5 px-2">
         <span className="grid h-[22px] w-[22px] place-items-center rounded-full border border-acc" aria-hidden>
           <span className="h-[5px] w-[5px] rounded-full bg-acc" />

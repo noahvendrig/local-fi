@@ -92,7 +92,7 @@ export function TransportBar() {
   }, [displayTrack?.id]);
 
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-30 flex h-[88px] items-center gap-6 overflow-visible border-t border-line bg-surf px-6 shadow-[var(--lf-transport-shadow)]">
+    <footer className="fixed inset-x-0 bottom-0 z-30 hidden h-[88px] items-center gap-6 overflow-visible border-t border-line bg-surf px-6 shadow-[var(--lf-transport-shadow)] md:flex">
       <audio
         ref={audioARef}
         crossOrigin="anonymous"

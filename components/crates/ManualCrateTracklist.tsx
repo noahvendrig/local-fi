@@ -84,12 +84,12 @@ export function ManualCrateTracklist({ playlist }: { playlist: PlaylistDetail })
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-line text-left text-xs text-t3">
-              <th className="w-6 py-2 font-normal" />
-              <th className="w-10 py-2 pr-2 font-normal">#</th>
+              <th className="hidden w-6 py-2 font-normal sm:table-cell" />
+              <th className="hidden w-10 py-2 pr-2 font-normal sm:table-cell">#</th>
               <th className="py-2 pr-4 font-normal">Title</th>
-              <th className="w-20 py-2 pr-4 font-normal">Format</th>
-              <th className="w-24 py-2 pr-4 font-normal">Rate</th>
-              <th className="w-16 py-2 pr-2 text-right font-normal">Time</th>
+              <th className="hidden w-20 py-2 pr-4 font-normal sm:table-cell">Format</th>
+              <th className="hidden w-24 py-2 pr-4 font-normal sm:table-cell">Rate</th>
+              <th className="hidden w-16 py-2 pr-2 text-right font-normal sm:table-cell">Time</th>
               <th className="w-6 py-2" />
             </tr>
           </thead>
@@ -120,29 +120,29 @@ export function ManualCrateTracklist({ playlist }: { playlist: PlaylistDetail })
                   className={`cursor-pointer border-b border-line last:border-b-0 hover:bg-surf-2 ${dragOverIndex === i ? "bg-[var(--lf-tint)]" : ""} ${isCurrent ? "bg-[var(--lf-tint)]" : ""} ${track.missing ? "opacity-40" : ""}`}
                   title={track.missing ? "File missing on disk" : undefined}
                 >
-                  <td className="cursor-grab py-2 text-t3" aria-hidden onClick={(e) => e.stopPropagation()}>
+                  <td className="hidden cursor-grab py-2 text-t3 sm:table-cell" aria-hidden onClick={(e) => e.stopPropagation()}>
                     ⠿
                   </td>
-                  <td className="py-2 pr-2 font-mono text-xs text-t3">{isCurrent && isPlaying ? <PlayingIcon /> : i + 1}</td>
+                  <td className="hidden py-2 pr-2 font-mono text-xs text-t3 sm:table-cell">{isCurrent && isPlaying ? <PlayingIcon /> : i + 1}</td>
                   <td className={`min-w-0 max-w-0 truncate py-2 pr-4 ${isCurrent ? "text-playing" : "text-t1"}`}>
-                    {track.title ?? "Untitled"}
+                    <span className="block truncate">{track.title ?? "Untitled"}</span>
                     {track.artistId ? (
                       <Link
                         href={`/artists/${track.artistId}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="ml-2 truncate text-t3 hover:text-acc-text"
+                        className="inline-block max-w-full truncate text-xs text-t3 hover:text-acc-text max-md:pointer-events-none"
                       >
                         {track.artistName}
                       </Link>
                     ) : (
-                      <span className="ml-2 truncate text-t3">{track.artistName}</span>
+                      <span className="block truncate text-xs text-t3">{track.artistName}</span>
                     )}
                   </td>
-                  <td className="py-2 pr-4">
+                  <td className="hidden py-2 pr-4 sm:table-cell">
                     <FormatBadge format={track.format} lossless={track.lossless} />
                   </td>
-                  <td className="py-2 pr-4 font-mono text-xs text-t2">{formatRate(track)}</td>
-                  <td className="py-2 pr-2 text-right font-mono text-xs text-t2">{formatDuration(track.durationSeconds)}</td>
+                  <td className="hidden py-2 pr-4 font-mono text-xs text-t2 sm:table-cell">{formatRate(track)}</td>
+                  <td className="hidden py-2 pr-2 text-right font-mono text-xs text-t2 sm:table-cell">{formatDuration(track.durationSeconds)}</td>
                   <td className="py-2 pr-2 text-right">
                     <button
                       type="button"

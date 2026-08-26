@@ -20,7 +20,7 @@ export function RightRail() {
   return (
     <aside
       aria-hidden={!isOpen}
-      className={`fixed inset-y-0 right-0 z-20 flex w-[360px] flex-col border-l border-line bg-surf pb-[88px] transition-transform duration-200 ${
+      className={`fixed inset-y-0 right-0 z-20 hidden w-[360px] flex-col border-l border-line bg-surf pb-[88px] transition-transform duration-200 md:flex ${
         isOpen ? "translate-x-0" : "pointer-events-none translate-x-full"
       }`}
     >

@@ -149,7 +149,10 @@ export function ImportView() {
           </section>
         ) : null}
 
-        <LibraryFoldersSection />
+        {/* Watched-folder syncing is a desktop-only feature (server filesystem paths); not part of the mobile design. */}
+        <div className="hidden md:block">
+          <LibraryFoldersSection />
+        </div>
       </div>
     </div>
   );

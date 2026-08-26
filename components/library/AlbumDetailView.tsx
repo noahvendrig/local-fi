@@ -52,8 +52,8 @@ export function AlbumDetailView({ albumId }: { albumId: number }) {
         ← Library
       </Link>
 
-      <div className="mt-4 flex flex-col gap-8 sm:flex-row">
-        <div className="lf-hatch h-[260px] w-[260px] shrink-0 overflow-hidden rounded-[20px] shadow-[var(--lf-art-shadow)]">
+      <div className="mt-4 flex flex-col items-center gap-8 text-center sm:flex-row sm:items-start sm:text-left">
+        <div className="lf-hatch mx-auto h-[200px] w-[200px] shrink-0 overflow-hidden rounded-[20px] shadow-[var(--lf-art-shadow)] sm:mx-0 sm:h-[260px] sm:w-[260px]">
           {album.coverArtUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- local-only images
             <img src={withAuthQuery(album.coverArtUrl)} alt="" className="h-full w-full object-cover" />
@@ -69,7 +69,7 @@ export function AlbumDetailView({ albumId }: { albumId: number }) {
             {album.isCompilation ? "Compilation" : "Album"}
             {album.year ? ` · ${album.year}` : ""}
           </p>
-          <h1 className="mb-2.5 font-serif text-[40px] font-medium leading-[1.1] text-t1" title={album.title}>
+          <h1 className="mb-2.5 font-serif text-2xl font-medium leading-[1.1] text-t1 sm:text-[40px]" title={album.title}>
             {album.title}
           </h1>
           <p className="mb-4 text-sm leading-[1.5] text-t2">
@@ -86,7 +86,7 @@ export function AlbumDetailView({ albumId }: { albumId: number }) {
               <span>Unknown artist</span>
             )}
           </p>
-          <p className="mb-6 flex flex-wrap gap-3.5 font-mono text-xs text-t3">
+          <p className="mb-6 flex flex-wrap justify-center gap-3.5 font-mono text-xs text-t3 sm:justify-start">
             <span>
               {album.tracks.length} track{album.tracks.length === 1 ? "" : "s"}
             </span>
@@ -98,7 +98,7 @@ export function AlbumDetailView({ albumId }: { albumId: number }) {
             ) : null}
           </p>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center justify-center gap-2.5 sm:justify-start">
             <button
               type="button"
               onClick={() => playContext(album.tracks)}

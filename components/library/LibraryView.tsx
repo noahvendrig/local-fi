@@ -8,6 +8,7 @@ import type { AlbumSort, TrackSort } from "@/lib/api-client";
 import { useLibraryStore } from "@/lib/store/library";
 import { AlbumGrid } from "./AlbumGrid";
 import { LibraryToolbar } from "./LibraryToolbar";
+import { MobileLibraryView } from "./MobileLibraryView";
 import { TrackList } from "./TrackList";
 
 export function LibraryView() {
@@ -62,7 +63,9 @@ export function LibraryView() {
   const meta = shownCount > 0 ? `${shownCount} shown` : undefined;
 
   return (
-    <div className="flex h-full flex-col">
+    <>
+      <MobileLibraryView />
+      <div className="hidden h-full flex-col md:flex">
       <LibraryToolbar
         trackSort={trackSort}
         onTrackSortChange={setTrackSort}
@@ -91,7 +94,8 @@ export function LibraryView() {
           <LoadMoreButton onClick={() => tracksQuery.fetchNextPage()} loading={tracksQuery.isFetchingNextPage} />
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

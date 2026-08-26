@@ -6,6 +6,11 @@ import { RightRail } from "@/components/shell/RightRail";
 import { TransportBar } from "@/components/shell/TransportBar";
 import { NowPlayingOverlay } from "@/components/shell/NowPlayingOverlay";
 import { CommandPalette } from "@/components/shell/CommandPalette";
+import { ServiceWorkerRegister } from "@/components/shell/ServiceWorkerRegister";
+import { BottomTabBar } from "@/components/mobile/BottomTabBar";
+import { MiniPlayer } from "@/components/mobile/MiniPlayer";
+import { NowPlayingSheet } from "@/components/mobile/NowPlayingSheet";
+import { QueueSheet } from "@/components/mobile/QueueSheet";
 import { AuthTokenProvider } from "@/components/auth/AuthTokenProvider";
 import { FolderImportModal } from "@/components/ingest/FolderImportModal";
 import { IngestTray } from "@/components/ingest/IngestTray";
@@ -49,17 +54,22 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className="flex h-full flex-col font-sans antialiased" suppressHydrationWarning>
         <QueryProvider>
+          <ServiceWorkerRegister />
           <AuthTokenProvider token={token} />
           <SettingsProvider />
           <HotkeysProvider />
           <PlaybackStateProvider />
-          <div className="flex flex-1 overflow-hidden pb-[88px]">
+          <div className="flex flex-1 overflow-hidden pb-[84px] md:pb-[88px]">
             <NavRail />
             <main className="flex-1 overflow-y-auto">{children}</main>
           </div>
           <RightRail />
           <TransportBar />
           <NowPlayingOverlay />
+          <BottomTabBar />
+          <MiniPlayer />
+          <NowPlayingSheet />
+          <QueueSheet />
           <IngestTray />
           <FolderImportModal />
           <CommandPalette />

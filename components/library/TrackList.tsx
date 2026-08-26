@@ -59,7 +59,7 @@ export function TrackList({ tracks }: { tracks: TrackSummary[] }) {
                 <Link
                   href={`/artists/${track.artistId}`}
                   onClick={(e) => e.stopPropagation()}
-                  className="inline-block max-w-full truncate font-mono text-xs text-t3 hover:text-acc-text"
+                  className="inline-block max-w-full truncate font-mono text-xs text-t3 hover:text-acc-text max-md:pointer-events-none"
                 >
                   {track.artistName}
                 </Link>
