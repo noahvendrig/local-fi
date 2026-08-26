@@ -43,10 +43,17 @@ jobs:
       # directory — landing on the root's node_modules, never apps/standalone's. Without this,
       # every package a reused file needs (zustand, idb, tailwindcss, ...) fails to resolve on a
       # clean checkout, even though it's declared correctly in apps/standalone/package.json too.
-      - run: npm ci
+      #
+      # `npm install`, not `npm ci`, in both spots: both lockfiles are maintained on Windows dev
+      # machines, and platform-specific optional deps (e.g. tailwindcss's Linux/wasm32 fallback
+      # engine, never touched on Windows) don't reliably round-trip into a Windows-generated
+      # lockfile. `npm ci`'s strict lockfile-match would fail here for reasons unrelated to any
+      # real dependency change. This project has no other CI and one maintainer — the small loss
+      # of install determinism is worth not fighting cross-platform lockfile drift.
+      - run: npm install
         working-directory: .
 
-      - run: npm ci
+      - run: npm install
 
       - run: npm run build
 
