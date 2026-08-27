@@ -21,7 +21,11 @@ export function WaveformScrubber({ waveform, currentTime, duration, onSeek, disa
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hoverRatio, setHoverRatio] = useState<number | null>(null);
   const draggingRef = useRef(false);
-  const progressStyle = useSettingsStore((s) => s.progressStyle);
+  // The standalone PWA can't render waveform peaks or a live analyser on the phone, so it's
+  // always the thin bar there regardless of what's stored in settings.
+  const storedProgressStyle = useSettingsStore((s) => s.progressStyle);
+  const progressStyle =
+    process.env.NEXT_PUBLIC_STANDALONE === "true" ? "bar" : storedProgressStyle;
   const timeDisplay = useSettingsStore((s) => s.timeDisplay);
   const palette = useSettingsStore((s) => s.palette);
   const theme = useSettingsStore((s) => s.theme);

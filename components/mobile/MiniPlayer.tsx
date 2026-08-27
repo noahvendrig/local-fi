@@ -13,11 +13,15 @@ export function MiniPlayer() {
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const openNowPlaying = usePlayerStore((s) => s.openNowPlaying);
+  const currentTime = usePlayerStore((s) => s.currentTime);
 
   if (!currentTrack) return null;
 
+  const duration = currentTrack.durationSeconds ?? 0;
+  const playedRatio = duration > 0 ? Math.min(1, Math.max(0, currentTime / duration)) : 0;
+
   return (
-    <div className="fixed inset-x-3 bottom-[92px] z-20 flex h-16 items-center gap-2.5 rounded-2xl border border-line bg-surf px-3 shadow-[var(--lf-shadow)] md:hidden">
+    <div className="fixed inset-x-3 bottom-[92px] z-20 flex h-16 items-center gap-2.5 overflow-hidden rounded-2xl border border-line bg-surf px-3 shadow-[var(--lf-shadow)] md:hidden">
       <button
         type="button"
         onClick={openNowPlaying}
@@ -47,6 +51,9 @@ export function MiniPlayer() {
       >
         {isPlaying ? <PauseIcon size={18} /> : <PlayIcon size={18} />}
       </button>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] bg-line" aria-hidden>
+        <div className="h-full bg-playing" style={{ width: `${playedRatio * 100}%` }} />
+      </div>
     </div>
   );
 }

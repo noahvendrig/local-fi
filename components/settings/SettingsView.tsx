@@ -12,6 +12,11 @@ import { usePlayerStore } from "@/lib/store/player";
 import { formatDuration } from "@/lib/format/track";
 import { MobileDevicesSection } from "./MobileDevicesSection";
 
+// The standalone PWA has no waveform peaks or analyser wired up on the phone, so "Thin bar" is
+// the only progress style it can render — the picker is hidden there and the scrubber is forced
+// to "bar" in WaveformScrubber.
+const STANDALONE = process.env.NEXT_PUBLIC_STANDALONE === "true";
+
 const PREVIEW_BARS = [0.28, 0.46, 0.72, 0.4, 0.88, 0.62, 0.34, 0.78, 0.52, 0.94, 0.58, 0.36, 0.7, 0.48, 0.82, 0.3, 0.64, 0.44, 0.9, 0.38, 0.56, 0.74, 0.42, 0.66];
 
 const SHORTCUTS = [
@@ -119,24 +124,26 @@ export function SettingsView() {
       <section className="mt-12">
         <h2 className="text-sm font-medium uppercase tracking-wide text-t3">Player</h2>
 
-        <SettingRow
-          title="Progress bar"
-          description="Waveform uses imported peaks. Thin bar is a simple played track. Spectrum is a live analyser."
-        >
-          <div className="flex flex-col items-end gap-2">
-            <SegmentedControl
-              ariaLabel="Progress bar style"
-              value={progressStyle}
-              onChange={setProgressStyle}
-              options={[
-                { value: "waveform", label: "Waveform" },
-                { value: "bar", label: "Thin bar" },
-                { value: "spectrum", label: "Spectrum" },
-              ]}
-            />
-            <ProgressPreview style={progressStyle} />
-          </div>
-        </SettingRow>
+        {!STANDALONE && (
+          <SettingRow
+            title="Progress bar"
+            description="Waveform uses imported peaks. Thin bar is a simple played track. Spectrum is a live analyser."
+          >
+            <div className="flex flex-col items-end gap-2">
+              <SegmentedControl
+                ariaLabel="Progress bar style"
+                value={progressStyle}
+                onChange={setProgressStyle}
+                options={[
+                  { value: "waveform", label: "Waveform" },
+                  { value: "bar", label: "Thin bar" },
+                  { value: "spectrum", label: "Spectrum" },
+                ]}
+              />
+              <ProgressPreview style={progressStyle} />
+            </div>
+          </SettingRow>
+        )}
 
         <SettingRow title="Time display" description="What the right-hand time in the scrubber shows while a track plays.">
           <SegmentedControl
