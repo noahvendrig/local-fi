@@ -8,8 +8,8 @@ import { importLocalFiles, type LocalImportResult } from "@/lib/offline/localImp
 // frame's "Choose a folder" intent, adapted to individual files since directory pickers are
 // unreliable on iOS Safari) — for a user who never gets the PC server running at all. Picked
 // files are parsed and stored entirely client-side (lib/offline/localImport.ts); browsing what
-// landed here happens on the Library tab's "Downloaded" segment rather than duplicating that
-// list in two places.
+// landed here happens on the Library tab's "All songs" segment (which merges on-device tracks
+// with the paired PC's library) rather than duplicating that list in two places.
 export function MobileLocalImportSection() {
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -42,7 +42,7 @@ export function MobileLocalImportSection() {
       </div>
       <p className="mt-1.5 text-sm text-t2">
         No PC server needed — files are read and stored on this phone only. See them under Library →
-        Downloaded.
+        All songs.
       </p>
 
       <input ref={inputRef} type="file" multiple accept="audio/*" className="hidden" onChange={handleFiles} />

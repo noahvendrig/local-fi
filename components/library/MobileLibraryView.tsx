@@ -3,18 +3,17 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchArtists, fetchTracks } from "@/lib/api-client";
+import { fetchArtists, fetchTracks, type TrackSummary } from "@/lib/api-client";
 import { fetchPlaylists } from "@/lib/api/playlistsClient";
 import { useHasCredentials, withAuthQuery } from "@/lib/api/http";
 import { usePlayerStore } from "@/lib/store/player";
 import { NewCrateModal } from "@/components/crates/NewCrateModal";
 import { TrackRowActions } from "@/components/library/TrackRowActions";
-import { getAllOfflineCrates, getAllOfflineTracks, type OfflineTrack } from "@/lib/offline/db";
+import { getAllOfflineCrates, getAllOfflineTracks, type OfflineCrate, type OfflineTrack } from "@/lib/offline/db";
 import { removeCrateOffline } from "@/lib/offline/copyToPhone";
 import { offlineTrackToSummary } from "@/lib/offline/trackSummary";
 import { removeLocalTrack, uploadLocalTrackToPc } from "@/lib/offline/uploadToPc";
 import { useDeviceStore } from "@/lib/store/device";
-import { formatDuration } from "@/lib/format/track";
 import { PlayIcon } from "@/components/shell/PlayerIcons";
 
 // Swipe-right-to-queue tuning for MobileSongsList rows: how far (px) the row can be
@@ -24,27 +23,28 @@ const SWIPE_QUEUE_THRESHOLD_PX = 64;
 // Below this, a touchmove is treated as an imprecise tap rather than the start of a swipe.
 const SWIPE_INTENT_PX = 8;
 
-type Segment = "crates" | "songs" | "artists" | "folders" | "downloaded";
+type Segment = "crates" | "songs" | "artists" | "folders";
 
-// The standalone PWA has no watched-folder concept (desktop-only) and, unlike the existing LAN
-// mobile view, starts with zero PC connection ever — "Downloaded" (local imports + copied
-// crates) is the only segment guaranteed to have content with zero pairing, so it leads and
-// "Folders" is dropped entirely. The existing LAN mobile view is unaffected: it always has a
-// same-origin connection, so "Crates" leading and "Folders" being present stays unchanged there.
+// There is no separate "Downloaded" segment: on-device content (files imported on this phone,
+// plus crates copied from a PC for offline playback) is merged straight into "All songs",
+// "Artists", and "Crates" so a song shows in one place regardless of where it came from or
+// whether this device is paired. The standalone PWA has no watched-folder concept (desktop-only)
+// and starts with zero PC connection ever, so it leads with "All songs" (the only segment
+// guaranteed to have content with zero pairing, once anything's been imported) and drops
+// "Folders". The existing LAN mobile view always has a same-origin connection, so "Crates"
+// leading and "Folders" being present stays unchanged there.
 const STANDALONE = process.env.NEXT_PUBLIC_STANDALONE === "true";
 
 const SEGMENTS: { id: Segment; label: string }[] = STANDALONE
   ? [
-      { id: "downloaded", label: "Downloaded" },
-      { id: "crates", label: "Crates" },
       { id: "songs", label: "All songs" },
+      { id: "crates", label: "Crates" },
       { id: "artists", label: "Artists" },
     ]
   : [
       { id: "crates", label: "Crates" },
       { id: "songs", label: "All songs" },
       { id: "artists", label: "Artists" },
-      { id: "downloaded", label: "Downloaded" },
       { id: "folders", label: "Folders" },
     ];
 
@@ -52,7 +52,7 @@ const SEGMENTS: { id: Segment; label: string }[] = STANDALONE
 // over Crates/All songs/Artists/Folders, distinct from the desktop grid/list toggle
 // (useLibraryStore) so switching this segment never affects the desktop view's own state.
 export function MobileLibraryView() {
-  const [segment, setSegment] = useState<Segment>(STANDALONE ? "downloaded" : "crates");
+  const [segment, setSegment] = useState<Segment>(STANDALONE ? "songs" : "crates");
   const [isCreatingCrate, setIsCreatingCrate] = useState(false);
   const hasMiniPlayer = usePlayerStore((s) => Boolean(s.currentTrack));
 
@@ -80,7 +80,6 @@ export function MobileLibraryView() {
         {segment === "crates" ? <MobileCratesList /> : null}
         {segment === "songs" ? <MobileSongsList /> : null}
         {segment === "artists" ? <MobileArtistsList /> : null}
-        {segment === "downloaded" ? <MobileDownloadedList /> : null}
         {segment === "folders" ? (
           <p className="py-10 text-center text-sm text-t3">Manage watched folders from the desktop app.</p>
         ) : null}
@@ -112,6 +111,19 @@ function PlusIcon() {
   );
 }
 
+// On-device tracks — files imported on this phone (source: "local", negative id, no server row
+// at all) and tracks pulled down inside a copied crate (source: "synced", real positive id) —
+// live only in IndexedDB. They're merged into every library list so a song shows in one place
+// regardless of where it came from or whether this device is paired. A negative id is what tells
+// the rows below to show on-device actions instead of the server-backed TrackRowActions, and
+// what routes playback through the offline cache seam (lib/offline/playback.ts).
+function useOfflineTrackSummaries(): TrackSummary[] {
+  const offlineTracksQuery = useQuery({ queryKey: ["offline", "tracks"], queryFn: getAllOfflineTracks });
+  return (offlineTracksQuery.data ?? []).map(offlineTrackToSummary);
+}
+
+const byDateAddedDesc = (a: TrackSummary, b: TrackSummary) => b.dateAdded.localeCompare(a.dateAdded);
+
 function MobileSongsList() {
   const hasCredentials = useHasCredentials();
   const tracksQuery = useInfiniteQuery({
@@ -121,7 +133,12 @@ function MobileSongsList() {
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: hasCredentials,
   });
-  const tracks = tracksQuery.data?.pages.flatMap((p) => p.items) ?? [];
+  const offlineTracks = useOfflineTrackSummaries();
+  const serverTracks = tracksQuery.data?.pages.flatMap((p) => p.items) ?? [];
+  // A copied-crate track is also a real server row — when paired it comes back from both places,
+  // so the server copy (richer metadata) wins and the offline duplicate is dropped.
+  const serverIds = new Set(serverTracks.map((t) => t.id));
+  const tracks = [...offlineTracks.filter((t) => !serverIds.has(t.id)), ...serverTracks].sort(byDateAddedDesc);
   const currentTrackId = usePlayerStore((s) => s.currentTrack?.id);
   const playTrack = usePlayerStore((s) => s.playTrack);
   const enqueue = usePlayerStore((s) => s.enqueue);
@@ -134,8 +151,7 @@ function MobileSongsList() {
   const touchOriginRef = useRef<{ x: number; y: number } | null>(null);
   const suppressClickRef = useRef(false);
 
-  if (!hasCredentials) return <NotPairedMessage />;
-  if (tracksQuery.isLoading) return null;
+  if (tracksQuery.isLoading && tracks.length === 0) return null;
   if (tracks.length === 0) return <p className="py-10 text-center text-sm text-t3">No songs yet.</p>;
 
   function handleTouchStart(track: (typeof tracks)[number], e: React.TouchEvent) {
@@ -224,7 +240,11 @@ function MobileSongsList() {
                 <p className={`truncate text-sm ${isCurrent ? "text-playing" : "text-t1"}`}>{track.title ?? "Untitled"}</p>
                 <p className="truncate font-mono text-xs text-t3">{track.artistName}</p>
               </div>
-              <TrackRowActions track={track} alwaysVisible />
+              {track.id < 0 ? (
+                <LocalTrackRowActions track={track} />
+              ) : hasCredentials ? (
+                <TrackRowActions track={track} alwaysVisible />
+              ) : null}
             </div>
             {justQueuedId === track.id ? (
               <span className="lf-queued-badge pointer-events-none absolute right-4 top-1/2 rounded-full bg-acc px-2 py-0.5 text-[10px] font-medium text-on-acc">
@@ -250,8 +270,104 @@ function QueueIcon() {
 function NotPairedMessage() {
   return (
     <p className="py-10 text-center text-sm text-t3">
-      Not paired to a PC yet — go to Settings to pair, or use &ldquo;Downloaded&rdquo; for what&apos;s on this phone.
+      Not paired to a PC yet — go to Settings to pair. Songs you import on this phone show up in
+      &ldquo;All songs&rdquo; either way.
     </p>
+  );
+}
+
+// On-device track actions, standing in for the server-backed TrackRowActions on rows whose track
+// has no server row (negative id). "Upload to PC" hands the audio blob to the same import
+// pipeline the desktop folder-import uses (lib/offline/uploadToPc.ts); it doesn't auto-remove the
+// local copy, so "Remove from this phone" stays available for after the PC has re-scanned it.
+function LocalTrackRowActions({ track }: { track: TrackSummary }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const isPaired = useDeviceStore((s) => s.device !== null);
+  const removeTrackById = usePlayerStore((s) => s.removeTrackById);
+
+  const uploadMutation = useMutation({ mutationFn: () => uploadLocalTrackToPc(track.id) });
+  const removeMutation = useMutation({
+    mutationFn: async () => {
+      removeTrackById(track.id);
+      await removeLocalTrack(track.id);
+    },
+    onSuccess: () => {
+      setMenuOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["offline"] });
+    },
+  });
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setMenuOpen((open) => !open);
+        }}
+        aria-label={`Actions for ${track.title ?? "Untitled"}`}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        title="Track actions"
+        className="rounded-md p-1 text-t3 hover:bg-surf hover:text-t1"
+      >
+        <MoreDotsIcon />
+      </button>
+
+      {menuOpen ? (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={(e) => {
+              e.stopPropagation();
+              setMenuOpen(false);
+            }}
+          />
+          <div
+            role="menu"
+            className="absolute right-0 top-full z-50 mt-1 min-w-[200px] rounded-xl border border-line bg-surf py-1 shadow-[var(--lf-shadow)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {isPaired ? (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => uploadMutation.mutate()}
+                disabled={uploadMutation.isPending || uploadMutation.isSuccess}
+                className="flex w-full items-center px-3 py-2 text-left text-sm text-t1 hover:bg-surf-2 disabled:opacity-50"
+              >
+                {uploadMutation.isPending ? "Uploading…" : uploadMutation.isSuccess ? "Uploaded to PC" : "Upload to PC"}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => removeMutation.mutate()}
+              disabled={removeMutation.isPending}
+              className="flex w-full items-center px-3 py-2 text-left text-sm text-err hover:bg-surf-2 disabled:opacity-50"
+            >
+              Remove from this phone
+            </button>
+          </div>
+          {uploadMutation.isError ? (
+            <p className="absolute right-0 top-full z-50 mt-1 w-56 rounded-lg border border-err bg-surf px-2 py-1.5 text-xs text-err">
+              {(uploadMutation.error as Error).message}
+            </p>
+          ) : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function MoreDotsIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <circle cx="12" cy="5" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="12" cy="19" r="1.6" />
+    </svg>
   );
 }
 
@@ -294,17 +410,38 @@ function MobileArtistsList() {
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: hasCredentials,
   });
-  const artists = artistsQuery.data?.pages.flatMap((p) => p.items) ?? [];
+  const serverArtists = artistsQuery.data?.pages.flatMap((p) => p.items) ?? [];
+  const offlineTracks = useOfflineTrackSummaries();
+  const playContext = usePlayerStore((s) => s.playContext);
 
-  if (!hasCredentials) return <NotPairedMessage />;
-  if (artistsQuery.isLoading) return null;
-  if (artists.length === 0) return <p className="py-10 text-center text-sm text-t3">No artists yet.</p>;
+  // Artists that exist only because of on-device songs have no server row, so no /artists/:id
+  // detail page — tapping one just plays that artist's on-device tracks. An artist the server
+  // already knows about is left to its server row (whose detail view is the fuller one).
+  const serverNames = new Set(serverArtists.map((a) => a.name.toLowerCase()));
+  const localByArtist = new Map<string, TrackSummary[]>();
+  for (const track of offlineTracks) {
+    const name = track.artistName ?? "Unknown artist";
+    if (serverNames.has(name.toLowerCase())) continue;
+    const list = localByArtist.get(name) ?? [];
+    list.push(track);
+    localByArtist.set(name, list);
+  }
+  const localArtists = [...localByArtist.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+  if (artistsQuery.isLoading && serverArtists.length === 0 && localArtists.length === 0) return null;
+  if (serverArtists.length === 0 && localArtists.length === 0) {
+    return hasCredentials ? (
+      <p className="py-10 text-center text-sm text-t3">No artists yet.</p>
+    ) : (
+      <NotPairedMessage />
+    );
+  }
 
   return (
     <div className="flex flex-col">
-      {artists.map((artist) => (
+      {serverArtists.map((artist) => (
         <ArtistOrCrateLink
-          key={artist.id}
+          key={`s-${artist.id}`}
           href={`/artists/${artist.id}`}
           className="flex items-center justify-between border-b border-line py-3"
         >
@@ -312,160 +449,161 @@ function MobileArtistsList() {
           <span className="shrink-0 pl-2 font-mono text-xs text-t3">{artist.albumCount} albums</span>
         </ArtistOrCrateLink>
       ))}
+      {localArtists.map(([name, tracks]) => (
+        <button
+          key={`l-${name}`}
+          type="button"
+          onClick={() => playContext(tracks)}
+          className="flex items-center justify-between border-b border-line py-3 text-left"
+        >
+          <span className="min-w-0 truncate text-sm text-t1">{name}</span>
+          <span className="shrink-0 pl-2 font-mono text-xs text-ok">{tracks.length} on this phone</span>
+        </button>
+      ))}
     </div>
   );
 }
 
 function MobileCratesList() {
   const hasCredentials = useHasCredentials();
-  const cratesQuery = useQuery({ queryKey: ["playlists"], queryFn: () => fetchPlaylists(), enabled: hasCredentials });
-  const crates = cratesQuery.data?.items ?? [];
+  const queryClient = useQueryClient();
+  const serverCratesQuery = useQuery({
+    queryKey: ["playlists"],
+    queryFn: () => fetchPlaylists(),
+    enabled: hasCredentials,
+  });
+  const offlineCratesQuery = useQuery({ queryKey: ["offline", "crates"], queryFn: getAllOfflineCrates });
+  const offlineTracksQuery = useQuery({ queryKey: ["offline", "tracks"], queryFn: getAllOfflineTracks });
+  const playContext = usePlayerStore((s) => s.playContext);
 
-  if (!hasCredentials) return <NotPairedMessage />;
-  if (cratesQuery.isLoading) return null;
-  if (crates.length === 0) return <p className="py-10 text-center text-sm text-t3">No crates yet.</p>;
+  const serverCrates = serverCratesQuery.data?.items ?? [];
+  const offlineCrates = offlineCratesQuery.data ?? [];
+  const offlineCrateById = new Map(offlineCrates.map((c) => [c.id, c]));
+  const offlineTracksById = new Map((offlineTracksQuery.data ?? []).map((t) => [t.id, t]));
+  // A copied crate carries the real server playlist id, so when paired it shows up in both
+  // lists — its server row is the one rendered (with an offline marker); the extras below are
+  // crates whose PC is currently unreachable, so there's no detail page to link them to.
+  const offlineOnlyCrates = offlineCrates.filter((c) => !serverCrates.some((s) => s.id === c.id));
+
+  const removeDownloadMutation = useMutation({
+    mutationFn: (crateId: number) => removeCrateOffline(crateId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["offline"] }),
+  });
+
+  function playOfflineCrate(crate: OfflineCrate) {
+    const tracks = crate.trackIds
+      .map((id) => offlineTracksById.get(id))
+      .filter((t): t is OfflineTrack => t != null);
+    if (tracks.length > 0) playContext(tracks.map(offlineTrackToSummary));
+  }
+
+  const loading = (hasCredentials && serverCratesQuery.isLoading) || offlineCratesQuery.isLoading;
+  if (loading && serverCrates.length === 0 && offlineCrates.length === 0) return null;
+  if (serverCrates.length === 0 && offlineOnlyCrates.length === 0) {
+    return hasCredentials ? (
+      <p className="py-10 text-center text-sm text-t3">No crates yet.</p>
+    ) : (
+      <NotPairedMessage />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-2.5">
-      {crates.map((crate) => (
-        <ArtistOrCrateLink
-          key={crate.id}
-          href={`/crates/${crate.id}`}
-          className="lf-card flex items-center gap-3 rounded-2xl px-3 py-2.5"
-        >
-          <div className="lf-hatch h-11 w-11 shrink-0 overflow-hidden rounded-[10px]">
-            {crate.coverArtUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element -- local-only images
-              <img src={withAuthQuery(crate.coverArtUrl)} alt="" className="h-full w-full object-cover" />
-            ) : null}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm text-t1">{crate.name}</p>
-            <p className="font-mono text-xs text-t3">{crate.trackCount} tracks</p>
-          </div>
-        </ArtistOrCrateLink>
+      {serverCrates.map((crate) => {
+        const offline = offlineCrateById.get(crate.id);
+        return (
+          <CrateCard
+            key={`s-${crate.id}`}
+            name={crate.name}
+            trackCount={crate.trackCount}
+            coverArtUrl={crate.coverArtUrl}
+            href={`/crates/${crate.id}`}
+            offline={offline != null}
+            onPlayOffline={offline ? () => playOfflineCrate(offline) : undefined}
+            onRemoveDownload={offline ? () => removeDownloadMutation.mutate(crate.id) : undefined}
+            removing={removeDownloadMutation.isPending && removeDownloadMutation.variables === crate.id}
+          />
+        );
+      })}
+      {offlineOnlyCrates.map((crate) => (
+        <CrateCard
+          key={`o-${crate.id}`}
+          name={crate.name}
+          trackCount={crate.trackIds.length}
+          coverArtUrl={null}
+          href={null}
+          offline
+          onPlayOffline={() => playOfflineCrate(crate)}
+          onRemoveDownload={() => removeDownloadMutation.mutate(crate.id)}
+          removing={removeDownloadMutation.isPending && removeDownloadMutation.variables === crate.id}
+        />
       ))}
     </div>
   );
 }
 
-function MobileDownloadedList() {
-  const queryClient = useQueryClient();
-  const isPaired = useDeviceStore((s) => s.device !== null);
-  const currentTrackId = usePlayerStore((s) => s.currentTrack?.id);
-  const playTrack = usePlayerStore((s) => s.playTrack);
-  const playContext = usePlayerStore((s) => s.playContext);
-
-  const cratesQuery = useQuery({ queryKey: ["offline", "crates"], queryFn: getAllOfflineCrates });
-  const tracksQuery = useQuery({ queryKey: ["offline", "tracks"], queryFn: getAllOfflineTracks });
-  const offlineTracksById = new Map((tracksQuery.data ?? []).map((t) => [t.id, t]));
-  const localTracks = (tracksQuery.data ?? []).filter((t): t is OfflineTrack => t.source === "local");
-
-  // Plays straight from the cached crate — the actual "offline playback" path (mobile plan
-  // Phase E), distinct from tapping through to the full /crates/:id detail page, which is
-  // desktop-oriented (rename/delete/export/sync) and depends on a live fetchPlaylist() call
-  // that has no offline fallback of its own.
-  function playOfflineCrate(crate: { trackIds: number[] }) {
-    const tracks = crate.trackIds.map((id) => offlineTracksById.get(id)).filter((t): t is OfflineTrack => t != null);
-    if (tracks.length > 0) playContext(tracks.map(offlineTrackToSummary));
-  }
-
-  const removeCrateMutation = useMutation({
-    mutationFn: (crateId: number) => removeCrateOffline(crateId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["offline"] });
-    },
-  });
-
-  const uploadMutation = useMutation({
-    mutationFn: (trackId: number) => uploadLocalTrackToPc(trackId),
-  });
-
-  const removeTrackMutation = useMutation({
-    mutationFn: (trackId: number) => removeLocalTrack(trackId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["offline", "tracks"] }),
-  });
-
-  if (cratesQuery.isLoading || tracksQuery.isLoading) return null;
-
-  const crates = cratesQuery.data ?? [];
-  if (crates.length === 0 && localTracks.length === 0) {
-    return (
-      <p className="py-10 text-center text-sm text-t3">
-        Nothing downloaded yet — copy a crate to this phone, or import files from &ldquo;Import&rdquo; below.
-      </p>
-    );
-  }
+// One crate row. A crate that's been copied to this phone gets a play-from-cache button and a
+// "Remove download" action; `href` is null for a crate whose PC we can't currently reach (no
+// detail page to link to), leaving offline playback as the only affordance.
+function CrateCard({
+  name,
+  trackCount,
+  coverArtUrl,
+  href,
+  offline,
+  onPlayOffline,
+  onRemoveDownload,
+  removing,
+}: {
+  name: string;
+  trackCount: number;
+  coverArtUrl: string | null;
+  href: string | null;
+  offline: boolean;
+  onPlayOffline?: () => void;
+  onRemoveDownload?: () => void;
+  removing?: boolean;
+}) {
+  const body = (
+    <>
+      <div className="lf-hatch h-11 w-11 shrink-0 overflow-hidden rounded-[10px]">
+        {coverArtUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- local-only images
+          <img src={withAuthQuery(coverArtUrl)} alt="" className="h-full w-full object-cover" />
+        ) : null}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm text-t1">{name}</p>
+        <p className={`font-mono text-xs ${offline ? "text-ok" : "text-t3"}`}>
+          {trackCount} tracks{offline ? " · offline" : ""}
+        </p>
+      </div>
+    </>
+  );
 
   return (
-    <div className="flex flex-col gap-6">
-      {crates.length > 0 ? (
-        <div>
-          <p className="mb-2.5 text-[11px] font-medium uppercase tracking-[0.04em] text-t3">Crates on this phone</p>
-          <div className="flex flex-col gap-2.5">
-            {crates.map((crate) => (
-              <div key={crate.id} className="lf-card flex items-center gap-3 rounded-2xl px-3 py-2.5">
-                <button type="button" onClick={() => playOfflineCrate(crate)} aria-label={`Play ${crate.name}`} className="shrink-0 text-t1">
-                  <PlayIcon size={18} />
-                </button>
-                <Link href={`/crates/${crate.id}`} className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-t1">{crate.name}</p>
-                  <p className="font-mono text-xs text-ok">{crate.trackIds.length} tracks · offline</p>
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => removeCrateMutation.mutate(crate.id)}
-                  disabled={removeCrateMutation.isPending}
-                  className="shrink-0 text-xs font-medium text-t3 hover:text-err disabled:opacity-50"
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
+    <div className="lf-card flex items-center gap-3 rounded-2xl px-3 py-2.5">
+      {offline && onPlayOffline ? (
+        <button type="button" onClick={onPlayOffline} aria-label={`Play ${name}`} className="shrink-0 text-t1">
+          <PlayIcon size={18} />
+        </button>
       ) : null}
-
-      {localTracks.length > 0 ? (
-        <div>
-          <p className="mb-2.5 text-[11px] font-medium uppercase tracking-[0.04em] text-t3">Imported on this phone</p>
-          <div className="flex flex-col gap-2.5">
-            {localTracks.map((track) => (
-              <div key={track.id} className="lf-card flex items-center gap-3 rounded-2xl px-3 py-2.5">
-                <button
-                  type="button"
-                  onClick={() => playTrack(offlineTrackToSummary(track), localTracks.map(offlineTrackToSummary))}
-                  className="min-w-0 flex-1 text-left"
-                >
-                  <p className={`truncate text-sm ${currentTrackId === track.id ? "text-playing" : "text-t1"}`}>
-                    {track.title ?? "Untitled"}
-                  </p>
-                  <p className="truncate font-mono text-xs text-t3">
-                    {track.artistName ?? "Unknown artist"} · {formatDuration(track.durationSeconds)}
-                  </p>
-                </button>
-                {isPaired ? (
-                  <button
-                    type="button"
-                    onClick={() => uploadMutation.mutate(track.id)}
-                    disabled={uploadMutation.isPending}
-                    className="shrink-0 text-xs font-medium text-acc-text disabled:opacity-50"
-                  >
-                    {uploadMutation.isPending && uploadMutation.variables === track.id ? "Uploading…" : "Upload to PC"}
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => removeTrackMutation.mutate(track.id)}
-                  disabled={removeTrackMutation.isPending}
-                  className="shrink-0 text-xs font-medium text-t3 hover:text-err disabled:opacity-50"
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
+      {href ? (
+        <ArtistOrCrateLink href={href} className="flex min-w-0 flex-1 items-center gap-3">
+          {body}
+        </ArtistOrCrateLink>
+      ) : (
+        <div className="flex min-w-0 flex-1 items-center gap-3">{body}</div>
+      )}
+      {offline && onRemoveDownload ? (
+        <button
+          type="button"
+          onClick={onRemoveDownload}
+          disabled={removing}
+          className="shrink-0 text-xs font-medium text-t3 hover:text-err disabled:opacity-50"
+        >
+          Remove download
+        </button>
       ) : null}
     </div>
   );
