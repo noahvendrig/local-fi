@@ -54,66 +54,8 @@ export function SettingsProvider() {
     }
   }, [currentTrack, trackNotifications]);
 
-  useEffect(() => {
-    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
-    const session = navigator.mediaSession;
-    if (!currentTrack) {
-      session.metadata = null;
-      return;
-    }
-    const artworkUrl = currentTrack.coverArtUrl
-      ? `${window.location.origin}${withAuthQuery(currentTrack.coverArtUrl)}`
-      : undefined;
-    session.metadata = new MediaMetadata({
-      title: currentTrack.title ?? "Untitled",
-      artist: currentTrack.artistName ?? "Unknown artist",
-      album: currentTrack.albumTitle ?? "",
-      artwork: artworkUrl ? [{ src: artworkUrl, sizes: "512x512" }] : [],
-    });
-    session.playbackState = isPlaying ? "playing" : "paused";
-    session.setActionHandler("play", () => usePlayerStore.getState().setPlaying(true));
-    session.setActionHandler("pause", () => usePlayerStore.getState().setPlaying(false));
-    session.setActionHandler("previoustrack", () => usePlayerStore.getState().playPrevious());
-    session.setActionHandler("nexttrack", () => usePlayerStore.getState().playNext());
-    session.setActionHandler("seekbackward", () => {
-      const s = usePlayerStore.getState();
-      s.seekTo(s.currentTime - useSettingsStore.getState().seekStep);
-    });
-    session.setActionHandler("seekforward", () => {
-      const s = usePlayerStore.getState();
-      s.seekTo(s.currentTime + useSettingsStore.getState().seekStep);
-    });
-    session.setActionHandler("seekto", (details) => {
-      if (typeof details.seekTime === "number") usePlayerStore.getState().seekTo(details.seekTime);
-    });
-    return () => {
-      session.setActionHandler("play", null);
-      session.setActionHandler("pause", null);
-      session.setActionHandler("previoustrack", null);
-      session.setActionHandler("nexttrack", null);
-      session.setActionHandler("seekbackward", null);
-      session.setActionHandler("seekforward", null);
-      session.setActionHandler("seekto", null);
-    };
-  }, [currentTrack, isPlaying]);
-
-  useEffect(() => {
-    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
-    const id = window.setInterval(() => {
-      const track = usePlayerStore.getState().currentTrack;
-      if (!track) return;
-      try {
-        navigator.mediaSession.setPositionState({
-          duration: Math.max(track.durationSeconds, 0),
-          playbackRate: 1,
-          position: Math.min(usePlayerStore.getState().currentTime, track.durationSeconds),
-        });
-      } catch {
-        // setPositionState throws if duration/position are out of range in some browsers.
-      }
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, [currentTrack?.id, isPlaying]);
+  // navigator.mediaSession (lock screen / notification / media keys) lives in its own
+  // source-aware controller — see lib/player/mediaSession.ts, mounted via MediaSessionMount.
 
   return null;
 }

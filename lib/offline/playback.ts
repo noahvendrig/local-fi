@@ -1,4 +1,5 @@
 import { streamUrl, waveformUrl, type TrackSummary } from "@/lib/api-client";
+import { withAuthQuery } from "@/lib/api/http";
 import { fetchWaveform, parseWaveform, type WaveformData } from "@/lib/waveform/parse";
 import { readBlob } from "./blobs";
 
@@ -41,4 +42,47 @@ export async function resolveWaveform(track: TrackSummary): Promise<WaveformData
   } catch {
     return null;
   }
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error ?? new Error("failed to read cover blob"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function guessImageType(url: string): string {
+  const ext = url.split("?")[0].split(".").pop()?.toLowerCase();
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  if (ext === "gif") return "image/gif";
+  if (ext === "avif") return "image/avif";
+  return "image/jpeg";
+}
+
+/**
+ * Resolves cover art for `navigator.mediaSession` metadata — the artwork seam that mirrors
+ * resolvePlaybackSrc's offline-first order. A cached `cover` blob (Phase C copies / Phase D
+ * imports, the only art an offline-only track has since its coverArtUrl is null) becomes a
+ * `data:` URL — small enough not to matter, and unlike `blob:` URLs it's reliably accepted as
+ * artwork by iOS Safari and Firefox. A synced track with no cached cover falls back to the
+ * authenticated stream URL, made absolute so the standalone PWA resolves it against the paired
+ * PC rather than its own static-host origin (CORS for /api/v1/* is already reflected by proxy.ts).
+ */
+export async function resolveArtworkSrc(track: TrackSummary): Promise<{ src: string; type: string } | null> {
+  const blob = await readBlob(track.id, "cover").catch(() => undefined);
+  if (blob) {
+    try {
+      return { src: await blobToDataUrl(blob), type: blob.type || "image/jpeg" };
+    } catch {
+      // fall through to the network URL
+    }
+  }
+  if (track.coverArtUrl) {
+    const src = new URL(withAuthQuery(track.coverArtUrl), window.location.origin).toString();
+    return { src, type: guessImageType(track.coverArtUrl) };
+  }
+  return null;
 }

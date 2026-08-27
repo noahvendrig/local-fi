@@ -7,6 +7,7 @@ import { TransportBar } from "@/components/shell/TransportBar";
 import { NowPlayingOverlay } from "@/components/shell/NowPlayingOverlay";
 import { CommandPalette } from "@/components/shell/CommandPalette";
 import { ServiceWorkerRegister } from "@/components/shell/ServiceWorkerRegister";
+import { MediaSessionMount } from "@/components/shell/MediaSessionMount";
 import { BottomTabBar } from "@/components/mobile/BottomTabBar";
 import { MiniPlayer } from "@/components/mobile/MiniPlayer";
 import { NowPlayingSheet } from "@/components/mobile/NowPlayingSheet";
@@ -57,6 +58,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <ServiceWorkerRegister />
           <AuthTokenProvider token={token} />
           <SettingsProvider />
+          <MediaSessionMount />
           <HotkeysProvider />
           <PlaybackStateProvider />
           <div className="flex flex-1 overflow-hidden pb-[84px] md:pb-[88px]">

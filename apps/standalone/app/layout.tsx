@@ -4,6 +4,7 @@ import { inter, jetbrainsMono, fraunces } from "@/app/fonts";
 import { ServiceWorkerRegister } from "@/components/shell/ServiceWorkerRegister";
 import { CommandPalette } from "@/components/shell/CommandPalette";
 import { PlaybackEngineMount } from "@/components/shell/PlaybackEngineMount";
+import { MediaSessionMount } from "@/components/shell/MediaSessionMount";
 import { BottomTabBar } from "@/components/mobile/BottomTabBar";
 import { MiniPlayer } from "@/components/mobile/MiniPlayer";
 import { NowPlayingSheet } from "@/components/mobile/NowPlayingSheet";
@@ -52,6 +53,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <QueryProvider>
           <ServiceWorkerRegister />
           <SettingsProvider />
+          <MediaSessionMount />
           <HotkeysProvider />
           <PlaybackStateProvider />
           <PlaybackEngineMount />
