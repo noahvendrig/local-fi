@@ -20,7 +20,7 @@ import {
 import { offlineTrackToSummary } from "@/lib/offline/trackSummary";
 import { removeLocalTrack, uploadLocalTrackToPc } from "@/lib/offline/uploadToPc";
 import { useDeviceStore } from "@/lib/store/device";
-import { PlayIcon } from "@/components/shell/PlayerIcons";
+import { AlbumPlaceholderIcon, PlayIcon } from "@/components/shell/PlayerIcons";
 
 // Swipe-right-to-queue tuning for MobileSongsList rows: how far (px) the row can be
 // dragged before it clamps, and how far it must travel to commit the "add to queue" action.
@@ -160,6 +160,9 @@ function MobileSongsList() {
   const [dragId, setDragId] = useState<number | null>(null);
   const [dragOffset, setDragOffset] = useState(0);
   const [justQueuedId, setJustQueuedId] = useState<number | null>(null);
+  // A row that's been released and is easing back to rest. Kept clipped for that ~200ms so the
+  // snapping row doesn't poke past the screen edge; see the wrapper's conditional overflow.
+  const [settlingId, setSettlingId] = useState<number | null>(null);
   const touchOriginRef = useRef<{ x: number; y: number } | null>(null);
   const suppressClickRef = useRef(false);
 
@@ -195,6 +198,10 @@ function MobileSongsList() {
       setJustQueuedId(track.id);
       setTimeout(() => setJustQueuedId((id) => (id === track.id ? null : id)), 900);
     }
+    if (dragOffset > 0) {
+      setSettlingId(track.id);
+      setTimeout(() => setSettlingId((id) => (id === track.id ? null : id)), 220);
+    }
     setDragId(null);
     setDragOffset(0);
   }
@@ -214,7 +221,14 @@ function MobileSongsList() {
         const isDragging = dragId === track.id;
         const offsetX = isDragging ? dragOffset : 0;
         return (
-          <div key={track.id} className="relative -mx-4 overflow-hidden">
+          // `overflow-hidden` clips the swipe reveal and keeps a dragged/settling row from poking
+          // past the screen edge — but it also clips the row-actions dropdown, which opens below
+          // the row (outside this box). Only clip while a swipe is in progress; at rest the menu
+          // needs to overflow so it isn't cut off.
+          <div
+            key={track.id}
+            className={`relative -mx-4 ${offsetX > 0 || settlingId === track.id ? "overflow-hidden" : ""}`}
+          >
             {offsetX > 0 ? (
               <div
                 aria-hidden
@@ -245,14 +259,17 @@ function MobileSongsList() {
                 transition: isDragging ? "none" : "transform 200ms ease",
                 touchAction: "pan-y",
               }}
-              className={`flex items-center justify-between gap-3 bg-bg px-4 py-3 ${
+              className={`flex items-center justify-between gap-3 bg-bg px-4 py-3.5 ${
                 track.missing ? "cursor-not-allowed opacity-40" : "cursor-pointer"
               } ${isCurrent ? "bg-[var(--lf-tint)]" : ""}`}
               title={track.missing ? "File missing on disk" : undefined}
             >
-              <div className="min-w-0 flex-1">
-                <p className={`truncate text-sm ${isCurrent ? "text-playing" : "text-t1"}`}>{track.title ?? "Untitled"}</p>
-                <p className="truncate font-mono text-xs text-t3">{track.artistName}</p>
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                <TrackCoverThumb coverArtUrl={track.coverArtUrl} />
+                <div className="min-w-0 flex-1">
+                  <p className={`truncate text-sm ${isCurrent ? "text-playing" : "text-t1"}`}>{track.title ?? "Untitled"}</p>
+                  <p className="truncate font-mono text-xs text-t3">{track.artistName}</p>
+                </div>
               </div>
               {track.id < 0 ? (
                 <LocalTrackRowActions track={track} />
@@ -278,6 +295,24 @@ function QueueIcon() {
       <path d="M4 6h10M4 12h10M4 18h6" />
       <path d="M18 10v8M14 14h8" />
     </svg>
+  );
+}
+
+// Cover-art thumbnail sitting at the left of a song row. On-device songs (and any track the
+// server has no art for) fall back to the same hatch fill + placeholder glyph the mini-player
+// and Now Playing sheet use. `coverArtUrl` is a fetchable server URL, so it needs withAuthQuery.
+function TrackCoverThumb({ coverArtUrl }: { coverArtUrl: string | null }) {
+  return (
+    <div className="lf-hatch h-12 w-12 shrink-0 overflow-hidden rounded-[10px]">
+      {coverArtUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- local-only images
+        <img src={withAuthQuery(coverArtUrl)} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-t3" aria-hidden>
+          <AlbumPlaceholderIcon />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -657,8 +692,11 @@ function LocalCrateDetailSheet({
 }) {
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
+  const [addQuery, setAddQuery] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [draftName, setDraftName] = useState(crate.name);
+  const currentTrackId = usePlayerStore((s) => s.currentTrack?.id);
+  const playTrack = usePlayerStore((s) => s.playTrack);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["offline", "crates"] });
   const renameMutation = useMutation({
@@ -672,18 +710,29 @@ function LocalCrateDetailSheet({
     mutationFn: (trackId: number) => removeTrackFromLocalCrate(crate.id, trackId),
     onSuccess: invalidate,
   });
+  // Adding a track keeps the picker open so several can be added in one visit — the added
+  // track drops out of the candidate list on refetch; "Done adding" closes the picker. The
+  // per-row `disabled` while pending also serializes the read-modify-write in addTracksToLocalCrate.
   const addTracksMutation = useMutation({
     mutationFn: (trackIds: number[]) => addTracksToLocalCrate(crate.id, trackIds),
-    onSuccess: () => {
-      setAdding(false);
-      invalidate();
-    },
+    onSuccess: invalidate,
   });
 
   const crateTracks = crate.trackIds
     .map((id) => tracksById.get(id))
     .filter((t): t is OfflineTrack => t != null);
-  const candidateTracks = allTracks.filter((t) => !crate.trackIds.includes(t.id));
+  // Same TrackSummary list the top "Play" button feeds playContext with, so tapping a row
+  // starts the queue at that track instead of always from the top.
+  const crateTrackSummaries = crateTracks.map(offlineTrackToSummary);
+  const notInCrate = allTracks.filter((t) => !crate.trackIds.includes(t.id));
+  const addSearch = addQuery.trim().toLowerCase();
+  const candidateTracks = addSearch
+    ? notInCrate.filter(
+        (t) =>
+          (t.title ?? "").toLowerCase().includes(addSearch) ||
+          (t.artistName ?? "").toLowerCase().includes(addSearch),
+      )
+    : notInCrate;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-bg md:hidden">
@@ -727,7 +776,10 @@ function LocalCrateDetailSheet({
         </button>
         <button
           type="button"
-          onClick={() => setAdding((v) => !v)}
+          onClick={() => {
+            setAdding((v) => !v);
+            setAddQuery("");
+          }}
           className="rounded-lg border border-line px-3 py-1.5 text-sm text-t1 hover:bg-surf-2"
         >
           {adding ? "Done adding" : "Add tracks"}
@@ -743,49 +795,87 @@ function LocalCrateDetailSheet({
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8">
-        {adding ? (
-          candidateTracks.length === 0 ? (
-            <p className="py-10 text-center text-sm text-t3">Every on-device song is already in this crate.</p>
+      {adding ? (
+        <div className="flex min-h-0 flex-1 flex-col px-4 pb-8">
+          <input
+            type="text"
+            value={addQuery}
+            onChange={(e) => setAddQuery(e.target.value)}
+            placeholder="Search your songs…"
+            className="mb-2 shrink-0 rounded-md border border-line bg-surf-2 px-3 py-2 text-sm text-t1"
+          />
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {candidateTracks.length === 0 ? (
+              <p className="py-10 text-center text-sm text-t3">
+                {notInCrate.length === 0
+                  ? "Every on-device song is already in this crate."
+                  : "No songs match your search."}
+              </p>
+            ) : (
+              candidateTracks.map((track) => (
+                <button
+                  key={track.id}
+                  type="button"
+                  onClick={() => addTracksMutation.mutate([track.id])}
+                  disabled={addTracksMutation.isPending}
+                  className="flex w-full items-center justify-between gap-3 border-b border-line py-3.5 text-left disabled:opacity-50"
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <TrackCoverThumb coverArtUrl={null} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm text-t1">{track.title ?? "Untitled"}</p>
+                      <p className="truncate font-mono text-xs text-t3">{track.artistName ?? "Unknown artist"}</p>
+                    </div>
+                  </div>
+                  <PlusIcon />
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8">
+          {crateTracks.length === 0 ? (
+            <p className="py-10 text-center text-sm text-t3">No tracks yet — tap &ldquo;Add tracks&rdquo;.</p>
           ) : (
-            candidateTracks.map((track) => (
-              <button
-                key={track.id}
-                type="button"
-                onClick={() => addTracksMutation.mutate([track.id])}
-                disabled={addTracksMutation.isPending}
-                className="flex w-full items-center justify-between gap-3 border-b border-line py-3 text-left disabled:opacity-50"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-t1">{track.title ?? "Untitled"}</p>
-                  <p className="truncate font-mono text-xs text-t3">{track.artistName ?? "Unknown artist"}</p>
+            crateTracks.map((track, i) => {
+              const isCurrent = track.id === currentTrackId;
+              return (
+                <div key={track.id} className="flex items-center justify-between gap-3 border-b border-line py-3.5">
+                  <div
+                    onClick={() => playTrack(crateTrackSummaries[i], crateTrackSummaries)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        playTrack(crateTrackSummaries[i], crateTrackSummaries);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Play ${track.title ?? "Untitled"}`}
+                    className="flex min-w-0 flex-1 cursor-pointer items-center gap-3"
+                  >
+                    <TrackCoverThumb coverArtUrl={null} />
+                    <div className="min-w-0 flex-1">
+                      <p className={`truncate text-sm ${isCurrent ? "text-playing" : "text-t1"}`}>{track.title ?? "Untitled"}</p>
+                      <p className="truncate font-mono text-xs text-t3">{track.artistName ?? "Unknown artist"}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeTrackMutation.mutate(track.id)}
+                    disabled={removeTrackMutation.isPending}
+                    aria-label={`Remove ${track.title ?? "track"} from crate`}
+                    className="shrink-0 p-1 text-t3 hover:text-err disabled:opacity-40"
+                  >
+                    <RemoveIcon />
+                  </button>
                 </div>
-                <PlusIcon />
-              </button>
-            ))
-          )
-        ) : crateTracks.length === 0 ? (
-          <p className="py-10 text-center text-sm text-t3">No tracks yet — tap &ldquo;Add tracks&rdquo;.</p>
-        ) : (
-          crateTracks.map((track) => (
-            <div key={track.id} className="flex items-center justify-between gap-3 border-b border-line py-3">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm text-t1">{track.title ?? "Untitled"}</p>
-                <p className="truncate font-mono text-xs text-t3">{track.artistName ?? "Unknown artist"}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => removeTrackMutation.mutate(track.id)}
-                disabled={removeTrackMutation.isPending}
-                aria-label={`Remove ${track.title ?? "track"} from crate`}
-                className="shrink-0 p-1 text-t3 hover:text-err disabled:opacity-40"
-              >
-                <RemoveIcon />
-              </button>
-            </div>
-          ))
-        )}
-      </div>
+              );
+            })
+          )}
+        </div>
+      )}
     </div>
   );
 }
