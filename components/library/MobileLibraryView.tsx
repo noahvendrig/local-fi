@@ -88,17 +88,33 @@ export function MobileLibraryView() {
         ) : null}
       </div>
 
-      {segment === "crates" && hasCredentials ? (
-        <button
-          type="button"
-          onClick={() => setIsCreatingCrate(true)}
-          aria-label="New crate"
-          className={`fixed right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-acc text-on-acc shadow-[var(--lf-shadow)] hover:bg-acc-2 md:hidden ${
-            hasMiniPlayer ? "bottom-[172px]" : "bottom-[100px]"
-          }`}
-        >
-          <PlusIcon />
-        </button>
+      {segment === "crates" ? (
+        // Crates are the paired PC's playlists — there's no on-device crate store — so without
+        // credentials the "+" can't open the create modal (it would POST to a server that isn't
+        // there). Rather than hide the affordance and leave the tab a dead end, point it at
+        // pairing so the path to making a crate is still discoverable.
+        hasCredentials ? (
+          <button
+            type="button"
+            onClick={() => setIsCreatingCrate(true)}
+            aria-label="New crate"
+            className={`fixed right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-acc text-on-acc shadow-[var(--lf-shadow)] hover:bg-acc-2 md:hidden ${
+              hasMiniPlayer ? "bottom-[172px]" : "bottom-[100px]"
+            }`}
+          >
+            <PlusIcon />
+          </button>
+        ) : (
+          <Link
+            href="/pair"
+            aria-label="Pair with a computer to create crates"
+            className={`fixed right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-acc text-on-acc shadow-[var(--lf-shadow)] hover:bg-acc-2 md:hidden ${
+              hasMiniPlayer ? "bottom-[172px]" : "bottom-[100px]"
+            }`}
+          >
+            <PlusIcon />
+          </Link>
+        )
       ) : null}
 
       {isCreatingCrate && <NewCrateModal onClose={() => setIsCreatingCrate(false)} />}
@@ -206,14 +222,16 @@ function MobileSongsList() {
         const offsetX = isDragging ? dragOffset : 0;
         return (
           <div key={track.id} className="relative -mx-4 overflow-hidden">
-            <div
-              aria-hidden
-              className="absolute inset-y-0 left-0 flex items-center gap-1.5 bg-acc pl-4 text-on-acc"
-              style={{ width: offsetX }}
-            >
-              <QueueIcon />
-              <span className="whitespace-nowrap text-xs font-medium">Queue</span>
-            </div>
+            {offsetX > 0 ? (
+              <div
+                aria-hidden
+                className="absolute inset-y-0 left-0 flex items-center gap-1.5 bg-acc pl-4 text-on-acc"
+                style={{ width: offsetX }}
+              >
+                <QueueIcon />
+                <span className="whitespace-nowrap text-xs font-medium">Queue</span>
+              </div>
+            ) : null}
             <div
               onTouchStart={(e) => handleTouchStart(track, e)}
               onTouchMove={(e) => handleTouchMove(track, e)}
@@ -234,7 +252,7 @@ function MobileSongsList() {
                 transition: isDragging ? "none" : "transform 200ms ease",
                 touchAction: "pan-y",
               }}
-              className={`flex items-center justify-between gap-3 rounded-lg bg-bg px-4 py-3 ${
+              className={`flex items-center justify-between gap-3 bg-bg px-4 py-3 ${
                 track.missing ? "cursor-not-allowed opacity-40" : "cursor-pointer"
               } ${isCurrent ? "bg-[var(--lf-tint)]" : ""}`}
               title={track.missing ? "File missing on disk" : undefined}
@@ -504,9 +522,20 @@ function MobileCratesList() {
   if (loading && serverCrates.length === 0 && offlineCrates.length === 0) return null;
   if (serverCrates.length === 0 && offlineOnlyCrates.length === 0) {
     return hasCredentials ? (
-      <p className="py-10 text-center text-sm text-t3">No crates yet.</p>
+      <p className="py-10 text-center text-sm text-t3">No crates yet — tap + to make one.</p>
     ) : (
-      <NotPairedMessage />
+      <div className="flex flex-col items-center gap-3 py-10 text-center">
+        <p className="max-w-xs text-sm text-t3">
+          Crates live on your computer. Pair with one to create crates and copy them here for
+          offline listening.
+        </p>
+        <Link
+          href="/pair"
+          className="rounded-lg border border-acc bg-acc px-4 py-2 text-[13px] font-semibold text-on-acc hover:border-acc-2 hover:bg-acc-2"
+        >
+          Pair with a computer
+        </Link>
+      </div>
     );
   }
 
