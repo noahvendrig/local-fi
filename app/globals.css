@@ -271,69 +271,69 @@
   --lf-canvas: #e3eaf1;
 }
 
-/* Tape Forest */
+/* Night Green — near-black + streaming green (Spotify-leaning) */
 :root[data-theme="dark"][data-palette="forest"] {
-  --lf-bg: #10140f;
-  --lf-surf: #171c16;
-  --lf-surf-2: #1e261c;
-  --lf-line: #2a3328;
-  --lf-t1: #edf3e8;
-  --lf-t2: #9aab94;
-  --lf-t3: #64705f;
-  --lf-t4: #64705f;
-  --lf-acc: #6f9e4a;
-  --lf-acc-2: #88b85e;
-  --lf-acc-text: #6f9e4a;
-  --lf-on-acc: #10140f;
-  --lf-gold: #d4c06a;
-  --lf-playing: #d4c06a;
-  --lf-ok: #8fb37a;
-  --lf-warn: #d4c06a;
-  --lf-err: #d46a5a;
-  --lf-glass: rgba(16, 20, 15, 0.87);
-  --lf-tint: rgba(111, 158, 74, 0.14);
-  --lf-ring: rgba(136, 184, 94, 0.12);
-  --lf-glow-a: rgba(111, 158, 74, 0.3);
-  --lf-glow-b: rgba(212, 192, 106, 0.16);
-  --lf-art-shadow: 0 8px 20px rgba(10, 16, 8, 0.36);
-  --lf-art-shadow-lg: 0 24px 56px rgba(10, 16, 8, 0.54);
-  --lf-shadow: 0 18px 48px rgba(10, 16, 8, 0.42);
-  --lf-transport-shadow: 0 -10px 30px rgba(10, 16, 8, 0.28);
-  --lf-hatch-a: #1e261c;
-  --lf-hatch-b: #141a13;
-  --lf-canvas: #0a0d09;
+  --lf-bg: #0e1511;
+  --lf-surf: #0e1511;
+  --lf-surf-2: #1c2b23;
+  --lf-line: #26362d;
+  --lf-t1: #eaf4ee;
+  --lf-t2: #9db3a6;
+  --lf-t3: #63786c;
+  --lf-t4: #63786c;
+  --lf-acc: #1ed760;
+  --lf-acc-2: #3be477;
+  --lf-acc-text: #1ed760;
+  --lf-on-acc: #06130c;
+  --lf-gold: #7ee8a2;
+  --lf-playing: #1ed760;
+  --lf-ok: #5bbf87;
+  --lf-warn: #e0b54d;
+  --lf-err: #e5544b;
+  --lf-glass: rgba(14, 21, 17, 0.87);
+  --lf-tint: rgba(30, 215, 96, 0.13);
+  --lf-ring: rgba(30, 215, 96, 0.12);
+  --lf-glow-a: rgba(30, 215, 96, 0.3);
+  --lf-glow-b: rgba(126, 232, 162, 0.16);
+  --lf-art-shadow: 0 8px 20px rgba(4, 12, 8, 0.4);
+  --lf-art-shadow-lg: 0 24px 56px rgba(4, 12, 8, 0.58);
+  --lf-shadow: 0 18px 48px rgba(4, 12, 8, 0.46);
+  --lf-transport-shadow: 0 -10px 30px rgba(4, 12, 8, 0.3);
+  --lf-hatch-a: #1c2b23;
+  --lf-hatch-b: #121c16;
+  --lf-canvas: #080d0a;
 }
 
 :root[data-theme="light"][data-palette="forest"] {
-  --lf-bg: #f4f6ef;
-  --lf-surf: #ffffff;
-  --lf-surf-2: #e8eedf;
-  --lf-line: #dde4d4;
-  --lf-t1: #1a2118;
-  --lf-t2: #5c6a56;
-  --lf-t3: #5c6a56;
-  --lf-t4: #9aab94;
-  --lf-acc: #4f7a32;
-  --lf-acc-2: #3f6426;
-  --lf-acc-text: #3d6a24;
-  --lf-on-acc: #f4f6ef;
-  --lf-gold: #d4c06a;
-  --lf-playing: #7a6414;
-  --lf-ok: #3f6b32;
-  --lf-warn: #7a6414;
-  --lf-err: #a33c32;
-  --lf-glass: rgba(244, 246, 239, 0.9);
-  --lf-tint: rgba(111, 158, 74, 0.14);
-  --lf-ring: rgba(136, 184, 94, 0.12);
-  --lf-glow-a: rgba(111, 158, 74, 0.3);
-  --lf-glow-b: rgba(212, 192, 106, 0.16);
-  --lf-art-shadow: 0 8px 20px rgba(10, 16, 8, 0.14);
-  --lf-art-shadow-lg: 0 24px 56px rgba(10, 16, 8, 0.2);
-  --lf-shadow: 0 18px 48px rgba(10, 16, 8, 0.18);
-  --lf-transport-shadow: 0 -8px 24px rgba(10, 16, 8, 0.1);
-  --lf-hatch-a: #e8eedf;
-  --lf-hatch-b: #dce4d0;
-  --lf-canvas: #e4ead8;
+  --lf-bg: #f3f7f3;
+  --lf-surf: #f3f7f3;
+  --lf-surf-2: #e7f1e9;
+  --lf-line: #d8e6db;
+  --lf-t1: #14231a;
+  --lf-t2: #4e6356;
+  --lf-t3: #4e6356;
+  --lf-t4: #9db3a6;
+  --lf-acc: #148a3f;
+  --lf-acc-2: #0f7333;
+  --lf-acc-text: #10802f;
+  --lf-on-acc: #ffffff;
+  --lf-gold: #1ed760;
+  --lf-playing: #0f7a38;
+  --lf-ok: #2f6b44;
+  --lf-warn: #7a5e1e;
+  --lf-err: #b23a3a;
+  --lf-glass: rgba(243, 247, 243, 0.9);
+  --lf-tint: rgba(30, 215, 96, 0.13);
+  --lf-ring: rgba(30, 215, 96, 0.12);
+  --lf-glow-a: rgba(30, 215, 96, 0.3);
+  --lf-glow-b: rgba(126, 232, 162, 0.16);
+  --lf-art-shadow: 0 8px 20px rgba(10, 20, 12, 0.14);
+  --lf-art-shadow-lg: 0 24px 56px rgba(10, 20, 12, 0.2);
+  --lf-shadow: 0 18px 48px rgba(10, 20, 12, 0.18);
+  --lf-transport-shadow: 0 -8px 24px rgba(10, 20, 12, 0.1);
+  --lf-hatch-a: #e7f1e9;
+  --lf-hatch-b: #dbe9de;
+  --lf-canvas: #e2eee4;
 }
 
 /* Afterglow */

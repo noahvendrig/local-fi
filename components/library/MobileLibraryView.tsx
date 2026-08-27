@@ -255,7 +255,11 @@ function MobileSongsList() {
               tabIndex={track.missing ? -1 : 0}
               aria-label={`Play ${track.title ?? "Untitled"}`}
               style={{
-                transform: `translateX(${offsetX}px)`,
+                // A non-`none` transform makes this row a stacking context, which traps the
+                // row-actions dropdown below the next row's opaque background. Only set a transform
+                // while the row is actually being swiped or settling back; at rest leave it unset
+                // so the menu's z-index can lift it above the following rows.
+                transform: offsetX > 0 || settlingId === track.id ? `translateX(${offsetX}px)` : undefined,
                 transition: isDragging ? "none" : "transform 200ms ease",
                 touchAction: "pan-y",
               }}
@@ -267,7 +271,7 @@ function MobileSongsList() {
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <TrackCoverThumb coverArtUrl={track.coverArtUrl} />
                 <div className="min-w-0 flex-1">
-                  <p className={`truncate text-sm ${isCurrent ? "text-playing" : "text-t1"}`}>{track.title ?? "Untitled"}</p>
+                  <p className={`truncate text-base ${isCurrent ? "text-playing" : "text-t1"}`}>{track.title ?? "Untitled"}</p>
                   <p className="truncate font-mono text-xs text-t3">{track.artistName}</p>
                 </div>
               </div>
