@@ -55,9 +55,12 @@ export function MobileLibraryView() {
   const [segment, setSegment] = useState<Segment>(STANDALONE ? "songs" : "crates");
   const [isCreatingCrate, setIsCreatingCrate] = useState(false);
   const hasMiniPlayer = usePlayerStore((s) => Boolean(s.currentTrack));
+  // Creating a crate hits the server (the paired PC in standalone), so there's nothing to offer
+  // without credentials — the Crates segment already shows a "not paired" message in that state.
+  const hasCredentials = useHasCredentials();
 
   return (
-    <div className="flex h-full flex-col pb-36 md:hidden">
+    <div className="flex h-full flex-col md:hidden">
       <div className="shrink-0 px-4 pt-4">
         <h1 className="text-2xl font-bold leading-[1.2] text-t1">Your Library</h1>
         <div className="mt-3.5 flex gap-1.5 overflow-x-auto pb-1">
@@ -76,7 +79,7 @@ export function MobileLibraryView() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-4">
+      <div className={`min-h-0 flex-1 overflow-y-auto px-4 pt-4 ${hasMiniPlayer ? "pb-24" : "pb-4"}`}>
         {segment === "crates" ? <MobileCratesList /> : null}
         {segment === "songs" ? <MobileSongsList /> : null}
         {segment === "artists" ? <MobileArtistsList /> : null}
@@ -85,7 +88,7 @@ export function MobileLibraryView() {
         ) : null}
       </div>
 
-      {segment === "crates" ? (
+      {segment === "crates" && hasCredentials ? (
         <button
           type="button"
           onClick={() => setIsCreatingCrate(true)}
@@ -231,7 +234,7 @@ function MobileSongsList() {
                 transition: isDragging ? "none" : "transform 200ms ease",
                 touchAction: "pan-y",
               }}
-              className={`flex items-center justify-between gap-3 border-b border-line bg-bg px-4 py-3 ${
+              className={`flex items-center justify-between gap-3 rounded-lg bg-bg px-4 py-3 ${
                 track.missing ? "cursor-not-allowed opacity-40" : "cursor-pointer"
               } ${isCurrent ? "bg-[var(--lf-tint)]" : ""}`}
               title={track.missing ? "File missing on disk" : undefined}

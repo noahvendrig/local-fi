@@ -40,7 +40,10 @@ export function CodeEntry({ value, onChange }: { value: string; onChange: (value
   }
 
   return (
-    <div className="flex gap-2" onPaste={handlePaste}>
+    // gap-1.5 + min-w-0 so eight boxes always fit the phone's width — flex items default to
+    // `min-width: auto`, and an <input>'s intrinsic preferred width is wide enough that without
+    // this the row overflows the viewport and the whole screen scrolls sideways.
+    <div className="flex gap-1.5" onPaste={handlePaste}>
       {chars.map((char, index) => (
         <input
           key={index}
@@ -53,8 +56,9 @@ export function CodeEntry({ value, onChange }: { value: string; onChange: (value
           inputMode="text"
           autoCapitalize="characters"
           maxLength={1}
+          size={1}
           aria-label={`Code character ${index + 1}`}
-          className="h-11 flex-1 rounded-lg border border-line bg-bg text-center font-mono text-lg font-medium text-t1 outline-none focus:border-acc"
+          className="h-11 min-w-0 flex-1 rounded-lg border border-line bg-bg text-center font-mono text-lg font-medium text-t1 outline-none focus:border-acc"
         />
       ))}
     </div>

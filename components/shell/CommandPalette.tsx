@@ -7,6 +7,8 @@ import { fetchAlbums, fetchArtists, fetchTracks, type TrackSummary } from "@/lib
 import { fetchPlaylists } from "@/lib/api/playlistsClient";
 import { revealTrackInFolder } from "@/lib/api/tracksClient";
 import { useHasCredentials } from "@/lib/api/http";
+import { getAllOfflineTracks } from "@/lib/offline/db";
+import { offlineTrackToSummary } from "@/lib/offline/trackSummary";
 import { formatDuration } from "@/lib/format/track";
 import { useCommandPaletteStore } from "@/lib/store/commandPalette";
 import { useDeviceStore } from "@/lib/store/device";
@@ -73,6 +75,15 @@ export function CommandPalette() {
     queryFn: () => fetchPlaylists({ q: trimmed, limit: RESULT_LIMIT }),
     enabled,
   });
+  // On-device tracks (files imported straight onto this phone) live only in IndexedDB and never
+  // reach the server search above — a library that's mostly phone-imported would otherwise return
+  // "no results" for every query. Matched client-side here against the same text. Not gated on
+  // credentials: on-device search should work even before the phone is paired to a PC.
+  const offlineTracksQuery = useQuery({
+    queryKey: ["offline", "tracks"],
+    queryFn: getAllOfflineTracks,
+    enabled: isOpen && trimmed.length > 0,
+  });
 
   // Local UI state resets whenever the palette closes, so a reopen always starts fresh —
   // routed through this one handler (called from event handlers, never from an effect body)
@@ -104,7 +115,17 @@ export function CommandPalette() {
   }, [isOpen]);
 
   const groups = useMemo(() => {
-    const tracks: FlatResult[] = (tracksQuery.data?.items ?? []).map((t) => ({
+    const q = trimmed.toLowerCase();
+    const serverTracks = tracksQuery.data?.items ?? [];
+    const serverTrackIds = new Set(serverTracks.map((t) => t.id));
+    // A phone-imported track matches on title, artist, or album — the server tracks query only
+    // filters on title, so this stays a little more forgiving. A copied-crate track that's also
+    // a real server row is left to its server copy (dropped here) so it isn't listed twice.
+    const offlineMatches = (offlineTracksQuery.data ?? [])
+      .filter((t) => !serverTrackIds.has(t.id))
+      .filter((t) => [t.title, t.artistName, t.albumTitle].some((f) => f?.toLowerCase().includes(q)))
+      .map(offlineTrackToSummary);
+    const tracks: FlatResult[] = [...serverTracks, ...offlineMatches].slice(0, RESULT_LIMIT).map((t) => ({
       group: "Tracks" as const,
       key: `track-${t.id}`,
       label: t.title ?? "Untitled",
@@ -133,7 +154,6 @@ export function CommandPalette() {
       sublabel: c.type === "smart" ? "Smart crate" : `${c.trackCount} track${c.trackCount === 1 ? "" : "s"}`,
       href: externalHref(`/crates/${c.id}`),
     }));
-    const q = trimmed.toLowerCase();
     const actions: FlatResult[] = [];
     if (q.length === 0 || "settings".startsWith(q) || q.includes("set")) {
       actions.push({
@@ -156,7 +176,7 @@ export function CommandPalette() {
       });
     }
     return { tracks, albums, artists, crates, actions };
-  }, [tracksQuery.data, albumsQuery.data, artistsQuery.data, cratesQuery.data, trimmed, device]);
+  }, [tracksQuery.data, albumsQuery.data, artistsQuery.data, cratesQuery.data, offlineTracksQuery.data, trimmed, device]);
 
   const flat = [...groups.actions, ...groups.tracks, ...groups.albums, ...groups.artists, ...groups.crates];
 

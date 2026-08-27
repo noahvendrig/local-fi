@@ -5,6 +5,12 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createPlaylist, type PlaylistType } from "@/lib/api/playlistsClient";
 
+// The standalone PWA ships no /crates/[id] route — there's no crate-detail screen at all, so it
+// can neither host the smart-rules builder nor navigate to a crate after creating it. There, a
+// new crate is always manual and we just drop back to the list (it refreshes via the query
+// invalidation below) rather than pushing to a route that would 404.
+const STANDALONE = process.env.NEXT_PUBLIC_STANDALONE === "true";
+
 export function NewCrateModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -21,7 +27,7 @@ export function NewCrateModal({ onClose }: { onClose: () => void }) {
     onSuccess: (playlist) => {
       queryClient.invalidateQueries({ queryKey: ["playlists"] });
       onClose();
-      router.push(`/crates/${playlist.id}`);
+      if (!STANDALONE) router.push(`/crates/${playlist.id}`);
     },
   });
 
@@ -65,22 +71,28 @@ export function NewCrateModal({ onClose }: { onClose: () => void }) {
           />
         </label>
 
-        <div className="mt-4 flex gap-2">
-          <TypeOption
-            label="Manual"
-            description="Pick tracks yourself, drag to reorder."
-            value="manual"
-            selected={type === "manual"}
-            onSelect={setType}
-          />
-          <TypeOption
-            label="Smart"
-            description="Auto-populated from rules."
-            value="smart"
-            selected={type === "smart"}
-            onSelect={setType}
-          />
-        </div>
+        {!STANDALONE && (
+          <div className="mt-4 flex gap-2">
+            <TypeOption
+              label="Manual"
+              description="Pick tracks yourself, drag to reorder."
+              value="manual"
+              selected={type === "manual"}
+              onSelect={setType}
+            />
+            <TypeOption
+              label="Smart"
+              description="Auto-populated from rules."
+              value="smart"
+              selected={type === "smart"}
+              onSelect={setType}
+            />
+          </div>
+        )}
+
+        {createMutation.isError ? (
+          <p className="mt-4 text-xs text-err">{(createMutation.error as Error).message}</p>
+        ) : null}
 
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-md border border-line px-3 py-1.5 text-sm text-t1 hover:bg-surf-2">

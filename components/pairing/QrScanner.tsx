@@ -37,6 +37,7 @@ export function QrScanner({ onScan }: { onScan: (payload: string) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
+  const lastPayloadRef = useRef<string | null>(null);
   const [status, setStatus] = useState<"starting" | "scanning" | "unavailable">("starting");
 
   useEffect(() => {
@@ -68,23 +69,36 @@ export function QrScanner({ onScan }: { onScan: (payload: string) => void }) {
     function scanLoop() {
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      if (!video || !canvas || video.readyState !== video.HAVE_ENOUGH_DATA) {
+      // Gate on videoWidth, not `readyState === HAVE_ENOUGH_DATA` (4): mobile Safari/Chrome keep
+      // a perfectly-playing camera stream at readyState 2–3 indefinitely, so the old check left
+      // the loop spinning forever without ever grabbing a frame — the camera showed but nothing
+      // scanned.
+      if (!video || !canvas || !video.videoWidth || video.readyState < video.HAVE_CURRENT_DATA) {
         rafRef.current = requestAnimationFrame(scanLoop);
         return;
       }
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
       const ctx = canvas.getContext("2d", { willReadFrequently: true });
       if (!ctx) {
         rafRef.current = requestAnimationFrame(scanLoop);
         return;
       }
+      // Downscale to a ~640px working frame — jsQR is a synchronous CPU decode and running it on
+      // a full 1080p+ phone frame every tick janks hard enough to miss the code.
+      const scale = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight));
+      canvas.width = Math.round(video.videoWidth * scale);
+      canvas.height = Math.round(video.videoHeight * scale);
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const result = jsQR(frame.data, frame.width, frame.height);
-      if (result?.data) {
+      if (result?.data && result.data !== lastPayloadRef.current) {
+        // Keep scanning after a hit rather than freezing the loop: if the parent's pairing
+        // attempt fails, holding the same QR back up should retry. Suppress only immediate
+        // duplicate frames of the same payload so we don't fire onScan 60×/sec.
+        lastPayloadRef.current = result.data;
         onScan(result.data);
-        return; // stop the loop — the parent unmounts this on a successful scan
+        setTimeout(() => {
+          lastPayloadRef.current = null;
+        }, 2000);
       }
       rafRef.current = requestAnimationFrame(scanLoop);
     }

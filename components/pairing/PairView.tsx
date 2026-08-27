@@ -100,7 +100,11 @@ export function PairView() {
   }, []);
 
   return (
-    <div className="mx-auto flex h-full max-w-md flex-col px-5 py-6">
+    // min-h-full (not h-full) + overflow-x-clip: the screen must grow to fit the camera square,
+    // the address card and the code card and let the parent <main> scroll to the bottom of it —
+    // pinning it to the viewport height cut the "Enter code instead" card off below the fold.
+    // overflow-x-clip is a belt-and-braces guard against any child forcing sideways scroll.
+    <div className="mx-auto flex min-h-full max-w-md flex-col overflow-x-clip px-5 pb-16 pt-6">
       <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-t3">Pair with a computer</p>
       <h1 className="text-2xl font-bold leading-[1.2] text-t1">Point at the QR code</h1>
       <p className="mt-1.5 font-mono text-xs text-t3">Open local‑fi on your PC → Devices</p>

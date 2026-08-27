@@ -98,7 +98,7 @@ export function ManualCrateTracklist({ playlist }: { playlist: PlaylistDetail })
                   role="button"
                   tabIndex={track.missing ? -1 : 0}
                   aria-label={`Play ${track.title ?? "Untitled"}`}
-                  className={`flex items-center justify-between gap-3 border-b border-line bg-bg px-10 py-3 ${
+                  className={`flex items-center justify-between gap-3 rounded-lg bg-bg px-10 py-3 ${
                     track.missing ? "cursor-not-allowed opacity-40" : "cursor-pointer"
                   } ${isCurrent ? "bg-[var(--lf-tint)]" : ""}`}
                   title={track.missing ? "File missing on disk" : undefined}

@@ -52,7 +52,12 @@ export async function GET(request: Request) {
   const sortCfg = TRACK_SORTS[sort];
   const conditions: SQL[] = [isNull(tracks.deletedAt)];
 
-  if (q) conditions.push(sql`lower(coalesce(${tracks.title}, '')) LIKE ${`%${q.toLowerCase()}%`}`);
+  if (q) {
+    const like = `%${q.toLowerCase()}%`;
+    conditions.push(
+      sql`(lower(coalesce(${tracks.title}, '')) LIKE ${like} OR lower(coalesce(${artists.name}, '')) LIKE ${like} OR lower(coalesce(${albums.title}, '')) LIKE ${like})`
+    );
+  }
   if (format && format.length > 0) conditions.push(inArray(tracks.format, format));
   if (lossless) conditions.push(eq(tracks.lossless, lossless === "true" ? 1 : 0));
   if (artistId) conditions.push(eq(tracks.artistId, artistId));
