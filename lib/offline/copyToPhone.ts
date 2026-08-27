@@ -90,6 +90,12 @@ export async function isCrateOffline(crateId: number): Promise<boolean> {
 export async function removeCrateOffline(crateId: number): Promise<void> {
   const crate = await getOfflineCrate(crateId);
   if (!crate) return;
+  // A locally-made crate owns no downloads — its tracks are ordinary on-device songs that live
+  // in "All songs" independently — so deleting it must never reach into the blob store.
+  if (crate.origin === "local") {
+    await deleteOfflineCrateRecord(crateId);
+    return;
+  }
   for (const trackId of crate.trackIds) {
     const stillNeeded = await isTrackReferencedByAnyCrate(trackId, crateId);
     if (stillNeeded) continue;

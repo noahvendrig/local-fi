@@ -31,6 +31,16 @@ export interface OfflineCrate {
   name: string;
   trackIds: number[];
   copiedAt: string;
+  /**
+   * How this crate got here. `"synced"` (or absent, for records written before this field
+   * existed) is a read-only copy of a PC playlist — `id` is the real server playlist id.
+   * `"local"` is a crate made on the phone itself with no PC involved (standalone build only);
+   * `id` is a client-generated negative number, mirroring how local-only tracks are keyed
+   * (lib/offline/localImport.ts), and its tracks are edited entirely client-side.
+   */
+  origin?: "synced" | "local";
+  /** Last client-side edit to a `"local"` crate (add/remove track, rename). */
+  updatedAt?: string;
 }
 
 type BlobKind = "audio" | "cover" | "waveform";

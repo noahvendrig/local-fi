@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createPlaylist, type PlaylistType } from "@/lib/api/playlistsClient";
+import { useHasCredentials } from "@/lib/api/http";
+import { createLocalCrate } from "@/lib/offline/localCrates";
 
 // The standalone PWA ships no /crates/[id] route — there's no crate-detail screen at all, so it
 // can neither host the smart-rules builder nor navigate to a crate after creating it. There, a
@@ -14,20 +16,31 @@ const STANDALONE = process.env.NEXT_PUBLIC_STANDALONE === "true";
 export function NewCrateModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const hasCredentials = useHasCredentials();
   const [name, setName] = useState("");
   const [type, setType] = useState<PlaylistType>("manual");
 
+  // With no PC to POST to, the standalone build makes the crate in IndexedDB instead — a
+  // phone-only crate the user edits entirely client-side (lib/offline/localCrates.ts).
+  const localMode = STANDALONE && !hasCredentials;
+
   const createMutation = useMutation({
-    mutationFn: () =>
-      createPlaylist({
+    mutationFn: async () => {
+      if (localMode) {
+        await createLocalCrate(name.trim());
+        return;
+      }
+      const playlist = await createPlaylist({
         name: name.trim(),
         type,
         rulesJson: type === "smart" ? { match: "all", conditions: [] } : undefined,
-      }),
-    onSuccess: (playlist) => {
-      queryClient.invalidateQueries({ queryKey: ["playlists"] });
-      onClose();
+      });
       if (!STANDALONE) router.push(`/crates/${playlist.id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["playlists"] });
+      queryClient.invalidateQueries({ queryKey: ["offline", "crates"] });
+      onClose();
     },
   });
 
@@ -89,6 +102,12 @@ export function NewCrateModal({ onClose }: { onClose: () => void }) {
             />
           </div>
         )}
+
+        {localMode ? (
+          <p className="mt-3 text-xs text-t3">
+            This crate stays on your phone. Pair with a computer later to sync crates from it.
+          </p>
+        ) : null}
 
         {createMutation.isError ? (
           <p className="mt-4 text-xs text-err">{(createMutation.error as Error).message}</p>

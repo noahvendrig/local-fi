@@ -11,6 +11,12 @@ import { NewCrateModal } from "@/components/crates/NewCrateModal";
 import { TrackRowActions } from "@/components/library/TrackRowActions";
 import { getAllOfflineCrates, getAllOfflineTracks, type OfflineCrate, type OfflineTrack } from "@/lib/offline/db";
 import { removeCrateOffline } from "@/lib/offline/copyToPhone";
+import {
+  addTracksToLocalCrate,
+  deleteLocalCrate,
+  removeTrackFromLocalCrate,
+  renameLocalCrate,
+} from "@/lib/offline/localCrates";
 import { offlineTrackToSummary } from "@/lib/offline/trackSummary";
 import { removeLocalTrack, uploadLocalTrackToPc } from "@/lib/offline/uploadToPc";
 import { useDeviceStore } from "@/lib/store/device";
@@ -88,33 +94,20 @@ export function MobileLibraryView() {
         ) : null}
       </div>
 
-      {segment === "crates" ? (
-        // Crates are the paired PC's playlists — there's no on-device crate store — so without
-        // credentials the "+" can't open the create modal (it would POST to a server that isn't
-        // there). Rather than hide the affordance and leave the tab a dead end, point it at
-        // pairing so the path to making a crate is still discoverable.
-        hasCredentials ? (
-          <button
-            type="button"
-            onClick={() => setIsCreatingCrate(true)}
-            aria-label="New crate"
-            className={`fixed right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-acc text-on-acc shadow-[var(--lf-shadow)] hover:bg-acc-2 md:hidden ${
-              hasMiniPlayer ? "bottom-[172px]" : "bottom-[100px]"
-            }`}
-          >
-            <PlusIcon />
-          </button>
-        ) : (
-          <Link
-            href="/pair"
-            aria-label="Pair with a computer to create crates"
-            className={`fixed right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-acc text-on-acc shadow-[var(--lf-shadow)] hover:bg-acc-2 md:hidden ${
-              hasMiniPlayer ? "bottom-[172px]" : "bottom-[100px]"
-            }`}
-          >
-            <PlusIcon />
-          </Link>
-        )
+      {segment === "crates" && (hasCredentials || STANDALONE) ? (
+        // Paired (or the LAN view, which always has credentials): opens the server-backed create
+        // modal. Standalone with no PC: the same modal, which then writes the crate to IndexedDB
+        // instead (NewCrateModal's localMode).
+        <button
+          type="button"
+          onClick={() => setIsCreatingCrate(true)}
+          aria-label="New crate"
+          className={`fixed right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-acc text-on-acc shadow-[var(--lf-shadow)] hover:bg-acc-2 md:hidden ${
+            hasMiniPlayer ? "bottom-[172px]" : "bottom-[100px]"
+          }`}
+        >
+          <PlusIcon />
+        </button>
       ) : null}
 
       {isCreatingCrate && <NewCrateModal onClose={() => setIsCreatingCrate(false)} />}
@@ -496,19 +489,32 @@ function MobileCratesList() {
   const offlineCratesQuery = useQuery({ queryKey: ["offline", "crates"], queryFn: getAllOfflineCrates });
   const offlineTracksQuery = useQuery({ queryKey: ["offline", "tracks"], queryFn: getAllOfflineTracks });
   const playContext = usePlayerStore((s) => s.playContext);
+  const [detailCrateId, setDetailCrateId] = useState<number | null>(null);
 
   const serverCrates = serverCratesQuery.data?.items ?? [];
   const offlineCrates = offlineCratesQuery.data ?? [];
   const offlineCrateById = new Map(offlineCrates.map((c) => [c.id, c]));
-  const offlineTracksById = new Map((offlineTracksQuery.data ?? []).map((t) => [t.id, t]));
+  const offlineTracks = offlineTracksQuery.data ?? [];
+  const offlineTracksById = new Map(offlineTracks.map((t) => [t.id, t]));
+  // Crates made on this phone (standalone build) — no server row ever, edited entirely here.
+  const localCrates = offlineCrates.filter((c) => c.origin === "local");
   // A copied crate carries the real server playlist id, so when paired it shows up in both
   // lists — its server row is the one rendered (with an offline marker); the extras below are
-  // crates whose PC is currently unreachable, so there's no detail page to link them to.
-  const offlineOnlyCrates = offlineCrates.filter((c) => !serverCrates.some((s) => s.id === c.id));
+  // copies whose PC is currently unreachable, so there's no detail page to link them to.
+  const copiedOnlyCrates = offlineCrates.filter(
+    (c) => c.origin !== "local" && !serverCrates.some((s) => s.id === c.id),
+  );
 
   const removeDownloadMutation = useMutation({
     mutationFn: (crateId: number) => removeCrateOffline(crateId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["offline"] }),
+  });
+  const deleteLocalMutation = useMutation({
+    mutationFn: (crateId: number) => deleteLocalCrate(crateId),
+    onSuccess: () => {
+      setDetailCrateId(null);
+      queryClient.invalidateQueries({ queryKey: ["offline", "crates"] });
+    },
   });
 
   function playOfflineCrate(crate: OfflineCrate) {
@@ -518,24 +524,22 @@ function MobileCratesList() {
     if (tracks.length > 0) playContext(tracks.map(offlineTrackToSummary));
   }
 
+  const detailCrate = detailCrateId != null ? offlineCrateById.get(detailCrateId) ?? null : null;
+
   const loading = (hasCredentials && serverCratesQuery.isLoading) || offlineCratesQuery.isLoading;
   if (loading && serverCrates.length === 0 && offlineCrates.length === 0) return null;
-  if (serverCrates.length === 0 && offlineOnlyCrates.length === 0) {
-    return hasCredentials ? (
-      <p className="py-10 text-center text-sm text-t3">No crates yet — tap + to make one.</p>
-    ) : (
+  if (serverCrates.length === 0 && copiedOnlyCrates.length === 0 && localCrates.length === 0) {
+    return STANDALONE ? (
       <div className="flex flex-col items-center gap-3 py-10 text-center">
-        <p className="max-w-xs text-sm text-t3">
-          Crates live on your computer. Pair with one to create crates and copy them here for
-          offline listening.
-        </p>
-        <Link
-          href="/pair"
-          className="rounded-lg border border-acc bg-acc px-4 py-2 text-[13px] font-semibold text-on-acc hover:border-acc-2 hover:bg-acc-2"
-        >
-          Pair with a computer
+        <p className="text-sm text-t3">No crates yet — tap + to make one on your phone.</p>
+        <Link href="/pair" className="text-sm font-medium text-acc-text hover:underline">
+          Or pair with a computer to pull crates from your library
         </Link>
       </div>
+    ) : hasCredentials ? (
+      <p className="py-10 text-center text-sm text-t3">No crates yet — tap + to make one.</p>
+    ) : (
+      <NotPairedMessage />
     );
   }
 
@@ -557,7 +561,15 @@ function MobileCratesList() {
           />
         );
       })}
-      {offlineOnlyCrates.map((crate) => (
+      {localCrates.map((crate) => (
+        <LocalCrateCard
+          key={`l-${crate.id}`}
+          crate={crate}
+          onOpen={() => setDetailCrateId(crate.id)}
+          onPlay={() => playOfflineCrate(crate)}
+        />
+      ))}
+      {copiedOnlyCrates.map((crate) => (
         <CrateCard
           key={`o-${crate.id}`}
           name={crate.name}
@@ -570,7 +582,227 @@ function MobileCratesList() {
           removing={removeDownloadMutation.isPending && removeDownloadMutation.variables === crate.id}
         />
       ))}
+
+      {detailCrate && detailCrate.origin === "local" ? (
+        <LocalCrateDetailSheet
+          crate={detailCrate}
+          allTracks={offlineTracks}
+          tracksById={offlineTracksById}
+          onClose={() => setDetailCrateId(null)}
+          onPlay={() => playOfflineCrate(detailCrate)}
+          onDelete={() => deleteLocalMutation.mutate(detailCrate.id)}
+          deleting={deleteLocalMutation.isPending}
+        />
+      ) : null}
     </div>
+  );
+}
+
+// A phone-only crate row: the whole row opens the editor sheet, with a play-from-cache button
+// up front. No "Remove download" — a local crate isn't a download, and deleting it lives in the
+// sheet next to rename so the row stays a single tap target.
+function LocalCrateCard({
+  crate,
+  onOpen,
+  onPlay,
+}: {
+  crate: OfflineCrate;
+  onOpen: () => void;
+  onPlay: () => void;
+}) {
+  return (
+    <div className="lf-card flex items-center gap-3 rounded-2xl px-3 py-2.5">
+      <button
+        type="button"
+        onClick={onPlay}
+        aria-label={`Play ${crate.name}`}
+        disabled={crate.trackIds.length === 0}
+        className="shrink-0 text-t1 disabled:opacity-30"
+      >
+        <PlayIcon size={18} />
+      </button>
+      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+        <div className="lf-hatch grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-[10px] font-mono text-[9px] text-t3">
+          crate
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm text-t1">{crate.name}</p>
+          <p className="font-mono text-xs text-t3">
+            {crate.trackIds.length} track{crate.trackIds.length === 1 ? "" : "s"} · on this phone
+          </p>
+        </div>
+      </button>
+    </div>
+  );
+}
+
+// Full-screen editor for a local crate (standalone build). Add/remove tracks and rename/delete —
+// no manual reordering yet (tracks stay in the order they were added).
+function LocalCrateDetailSheet({
+  crate,
+  allTracks,
+  tracksById,
+  onClose,
+  onPlay,
+  onDelete,
+  deleting,
+}: {
+  crate: OfflineCrate;
+  allTracks: OfflineTrack[];
+  tracksById: Map<number, OfflineTrack>;
+  onClose: () => void;
+  onPlay: () => void;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [draftName, setDraftName] = useState(crate.name);
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["offline", "crates"] });
+  const renameMutation = useMutation({
+    mutationFn: () => renameLocalCrate(crate.id, draftName),
+    onSuccess: () => {
+      setRenaming(false);
+      invalidate();
+    },
+  });
+  const removeTrackMutation = useMutation({
+    mutationFn: (trackId: number) => removeTrackFromLocalCrate(crate.id, trackId),
+    onSuccess: invalidate,
+  });
+  const addTracksMutation = useMutation({
+    mutationFn: (trackIds: number[]) => addTracksToLocalCrate(crate.id, trackIds),
+    onSuccess: () => {
+      setAdding(false);
+      invalidate();
+    },
+  });
+
+  const crateTracks = crate.trackIds
+    .map((id) => tracksById.get(id))
+    .filter((t): t is OfflineTrack => t != null);
+  const candidateTracks = allTracks.filter((t) => !crate.trackIds.includes(t.id));
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-bg md:hidden">
+      <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+        <button type="button" onClick={onClose} aria-label="Close" className="shrink-0 p-1 text-t2 hover:text-t1">
+          <BackIcon />
+        </button>
+        {renaming ? (
+          <form
+            className="flex flex-1 items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (draftName.trim()) renameMutation.mutate();
+            }}
+          >
+            <input
+              autoFocus
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
+              className="min-w-0 flex-1 rounded-md border border-line bg-surf-2 px-2 py-1 text-sm text-t1"
+            />
+            <button type="submit" disabled={!draftName.trim()} className="shrink-0 text-sm font-medium text-acc-text disabled:opacity-40">
+              Save
+            </button>
+          </form>
+        ) : (
+          <button type="button" onClick={() => setRenaming(true)} className="min-w-0 flex-1 truncate text-left text-base font-semibold text-t1">
+            {crate.name}
+          </button>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 px-4 py-3">
+        <button
+          type="button"
+          onClick={onPlay}
+          disabled={crateTracks.length === 0}
+          className="flex items-center gap-1.5 rounded-lg bg-acc px-3 py-1.5 text-sm font-medium text-on-acc disabled:opacity-40"
+        >
+          <PlayIcon size={15} /> Play
+        </button>
+        <button
+          type="button"
+          onClick={() => setAdding((v) => !v)}
+          className="rounded-lg border border-line px-3 py-1.5 text-sm text-t1 hover:bg-surf-2"
+        >
+          {adding ? "Done adding" : "Add tracks"}
+        </button>
+        <div className="flex-1" />
+        <button
+          type="button"
+          onClick={onDelete}
+          disabled={deleting}
+          className="rounded-lg px-2 py-1.5 text-xs font-medium text-err hover:bg-surf-2 disabled:opacity-40"
+        >
+          Delete crate
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8">
+        {adding ? (
+          candidateTracks.length === 0 ? (
+            <p className="py-10 text-center text-sm text-t3">Every on-device song is already in this crate.</p>
+          ) : (
+            candidateTracks.map((track) => (
+              <button
+                key={track.id}
+                type="button"
+                onClick={() => addTracksMutation.mutate([track.id])}
+                disabled={addTracksMutation.isPending}
+                className="flex w-full items-center justify-between gap-3 border-b border-line py-3 text-left disabled:opacity-50"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-t1">{track.title ?? "Untitled"}</p>
+                  <p className="truncate font-mono text-xs text-t3">{track.artistName ?? "Unknown artist"}</p>
+                </div>
+                <PlusIcon />
+              </button>
+            ))
+          )
+        ) : crateTracks.length === 0 ? (
+          <p className="py-10 text-center text-sm text-t3">No tracks yet — tap &ldquo;Add tracks&rdquo;.</p>
+        ) : (
+          crateTracks.map((track) => (
+            <div key={track.id} className="flex items-center justify-between gap-3 border-b border-line py-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm text-t1">{track.title ?? "Untitled"}</p>
+                <p className="truncate font-mono text-xs text-t3">{track.artistName ?? "Unknown artist"}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeTrackMutation.mutate(track.id)}
+                disabled={removeTrackMutation.isPending}
+                aria-label={`Remove ${track.title ?? "track"} from crate`}
+                className="shrink-0 p-1 text-t3 hover:text-err disabled:opacity-40"
+              >
+                <RemoveIcon />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BackIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M15 18l-6-6 6-6" />
+    </svg>
+  );
+}
+
+function RemoveIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+      <path d="M5 12h14" />
+    </svg>
   );
 }
 

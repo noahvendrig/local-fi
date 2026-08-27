@@ -13,7 +13,11 @@ function sanitizeChar(char: string): string {
 // functional regardless of whether the camera scanner above it can start.
 export function CodeEntry({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const chars = value.padEnd(CODE_LENGTH, " ").slice(0, CODE_LENGTH).split("");
+  // Strip formatting before mapping to boxes: `value` can arrive as the canonical hyphenated
+  // form ("ABCD-1234", e.g. from a QR scan normalized upstream), and slicing that to 8 chars
+  // would drop the last character and render the "-" inside a box.
+  const digits = value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const chars = digits.padEnd(CODE_LENGTH, " ").slice(0, CODE_LENGTH).split("");
 
   function setCharAt(index: number, char: string) {
     const next = chars.slice();

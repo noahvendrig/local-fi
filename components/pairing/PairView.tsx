@@ -52,7 +52,10 @@ export function PairView() {
         pairedAt: new Date().toISOString(),
       });
       setStatus("done");
-      router.push("/");
+      // Hold the "Paired" confirmation on screen briefly so the auto-connect visibly
+      // succeeded — otherwise the redirect fires so fast the user never sees why the
+      // screen changed.
+      setTimeout(() => router.push("/"), 900);
     } catch (err) {
       submittedRef.current = false;
       setStatus("error");
@@ -78,7 +81,18 @@ export function PairView() {
 
   function handleScan(payload: string) {
     const origin = extractOriginFromScan(payload);
-    if (origin) setScannedOrigin(origin);
+    if (origin) {
+      setScannedOrigin(origin);
+      // Mirror the scanned origin into the visible "Server address" field so the standalone
+      // user can see what it paired against (and correct it) — the QR encodes the PC's full
+      // LAN URL, so there's no reason to make them type it. Show it host:port like the
+      // placeholder; normalizeServerAddress re-adds the scheme if they edit it.
+      try {
+        setManualAddress(new URL(origin).host);
+      } catch {
+        setManualAddress(origin);
+      }
+    }
     const next = normalizePairingCode(extractCodeFromScan(payload));
     setCode(next);
     if (next.replace("-", "").length === 8) void submit(next, origin ?? resolvedOrigin());
@@ -113,6 +127,8 @@ export function PairView() {
         <QrScanner onScan={handleScan} />
       </div>
 
+      <PairStatus status={status} error={error} />
+
       {STANDALONE ? (
         <div className="mt-4 rounded-2xl border border-line bg-surf p-3.5">
           <p className="mb-2.5 text-sm text-t1">Server address</p>
@@ -136,9 +152,49 @@ export function PairView() {
         <p className="mb-2.5 text-sm text-t1">Enter code instead</p>
         <CodeEntry value={code} onChange={handleCodeChange} />
         <p className="mt-2.5 font-mono text-[11px] text-t3">
-          {status === "submitting" ? "Pairing…" : status === "error" && error ? error : "Same Wi‑Fi only"}
+          Connects automatically once all 8 characters are in — no button to press. Same Wi‑Fi only.
         </p>
       </div>
+    </div>
+  );
+}
+
+// Makes the button-free auto-connect legible: while `submit()` runs the user gets a spinner
+// and "Connecting…", on success a held "Paired" tick before the redirect, and a failed
+// attempt an inline reason. Idle renders nothing so the screen stays as designed.
+function PairStatus({ status, error }: { status: "idle" | "submitting" | "error" | "done"; error: string | null }) {
+  if (status === "idle") return null;
+
+  const tone =
+    status === "error"
+      ? "border-err/40 text-err"
+      : status === "done"
+        ? "border-acc/40 text-acc"
+        : "border-line text-t2";
+
+  return (
+    <div role="status" aria-live="polite" className={`mt-4 flex items-center gap-2.5 rounded-2xl border ${tone} bg-surf px-3.5 py-3`}>
+      {status === "submitting" ? (
+        <span className="lf-index-spin inline-flex shrink-0 text-acc" aria-hidden>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" opacity="0.25" />
+            <path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </span>
+      ) : status === "done" ? (
+        <span className="inline-flex shrink-0" aria-hidden>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M3 8.5 6.5 12 13 4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+      ) : null}
+      <p className="text-sm font-medium">
+        {status === "submitting"
+          ? "Connecting to your computer…"
+          : status === "done"
+            ? "Paired — opening your library…"
+            : error ?? "Pairing failed. Check the code and try again."}
+      </p>
     </div>
   );
 }
