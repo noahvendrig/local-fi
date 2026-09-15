@@ -104,12 +104,14 @@ export const importJobs = sqliteTable(
     createFolderPlaylists: integer("create_folder_playlists").notNull().default(0),
     /** Opt-in re-encode to Opus during upload (never applied to `folder_scan` jobs — those files are never touched). */
     compressAudio: integer("compress_audio").notNull().default(0),
+    /** `spotify_import` only — the crate (created up front, named after the playlist) each successfully-downloaded track gets appended to as it finishes. */
+    targetPlaylistId: integer("target_playlist_id").references(() => playlists.id, { onDelete: "set null" }),
     startedAt: text("started_at"),
     finishedAt: text("finished_at"),
     createdAt: text("created_at").notNull(),
   },
   (t) => [
-    check("chk_import_jobs_type", sql`${t.type} IN ('upload','scan','folder_scan')`),
+    check("chk_import_jobs_type", sql`${t.type} IN ('upload','scan','folder_scan','spotify_import')`),
     check(
       "chk_import_jobs_status",
       sql`${t.status} IN ('pending','running','completed','completed_with_errors','failed','cancelled')`
@@ -136,6 +138,8 @@ export const importJobFiles = sqliteTable(
     errorMessage: text("error_message"),
     bytesTotal: integer("bytes_total"),
     bytesProcessed: integer("bytes_processed"),
+    /** Set only for `spotify_import` files — the source track's {title, artists, album, durationMs, coverArtUrl} as JSON, fetched up front so progress UI has a name to show before a YouTube match is even found. */
+    metadataJson: text("metadata_json"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
@@ -143,7 +147,7 @@ export const importJobFiles = sqliteTable(
     index("idx_import_job_files_job").on(t.jobId),
     check(
       "chk_import_job_files_status",
-      sql`${t.status} IN ('queued','reading_tags','transcoding_waveform','saving','done','failed','duplicate_skipped')`
+      sql`${t.status} IN ('queued','matching','downloading','reading_tags','transcoding_waveform','saving','done','failed','duplicate_skipped')`
     ),
   ]
 );
@@ -199,11 +203,24 @@ export const tracks = sqliteTable(
     analysisError: text("analysis_error"),
     analyzedAt: text("analyzed_at"),
 
+    /** Audio-content fingerprint status for mixtape matching (lib/fingerprint/*) — unrelated to
+     *  the `fingerprint` column above, which is only a dedup hash of path+size+mtime. The actual
+     *  landmark/hash data never lives here; it's kept entirely inside python-backend's own
+     *  storage (a per-track sidecar file plus its in-memory inverted index), the same split
+     *  waveformPath/waveformStatus make between a scalar status here and the peak blob on disk. */
+    landmarkStatus: text("landmark_status").notNull().default("none"),
+    landmarkCount: integer("landmark_count"),
+    landmarkedAt: text("landmarked_at"),
+
     importJobId: integer("import_job_id").references(() => importJobs.id, { onDelete: "set null" }),
     dateAdded: text("date_added").notNull(),
     dateModified: text("date_modified"),
     missingSince: text("missing_since"),
     deletedAt: text("deleted_at"),
+
+    /** Provenance for tracks fetched from an external source rather than imported from a local file (e.g. 'spotify' for the Spotify/yt-dlp import flow) — null for ordinary file imports. */
+    sourceProvider: text("source_provider"),
+    sourceUrl: text("source_url"),
   },
   (t) => [
     uniqueIndex("idx_tracks_uuid").on(t.uuid),
@@ -232,6 +249,10 @@ export const tracks = sqliteTable(
     check(
       "chk_tracks_analysis_status",
       sql`${t.analysisStatus} IN ('none','queued','analyzing','ready','failed')`
+    ),
+    check(
+      "chk_tracks_landmark_status",
+      sql`${t.landmarkStatus} IN ('none','queued','processing','ready','failed')`
     ),
   ]
 );
@@ -279,6 +300,180 @@ export const analysisJobTracks = sqliteTable(
     check(
       "chk_analysis_job_tracks_status",
       sql`${t.status} IN ('queued','analyzing','done','failed')`
+    ),
+  ]
+);
+
+// Audio-fingerprint backfill/on-import job (mixtape-segmentation plan) — a separate job system
+// from analysisJobs (same shape, different table) because fingerprinting *does* run automatically
+// on import (see the comment on analysisJobs above for why BPM/key detection deliberately
+// doesn't), and because the actual DSP work happens on python-backend, not in this process — this
+// table's `pythonJobId` just tracks which job on that service a row corresponds to.
+export const fingerprintJobs = sqliteTable(
+  "fingerprint_jobs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    uuid: text("uuid").notNull().unique(),
+    /** The corresponding job id on python-backend's own in-memory job manager. */
+    pythonJobId: text("python_job_id"),
+    status: text("status").notNull().default("pending"),
+    totalTracks: integer("total_tracks").notNull().default(0),
+    processedTracks: integer("processed_tracks").notNull().default(0),
+    failedTracks: integer("failed_tracks").notNull().default(0),
+    startedAt: text("started_at"),
+    finishedAt: text("finished_at"),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [
+    check(
+      "chk_fingerprint_jobs_status",
+      sql`${t.status} IN ('pending','running','completed','completed_with_errors','failed','cancelled')`
+    ),
+  ]
+);
+
+export const fingerprintJobTracks = sqliteTable(
+  "fingerprint_job_tracks",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => fingerprintJobs.id, { onDelete: "cascade" }),
+    trackId: integer("track_id")
+      .notNull()
+      .references(() => tracks.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("queued"),
+    errorMessage: text("error_message"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [
+    index("idx_fingerprint_job_tracks_job").on(t.jobId),
+    check(
+      "chk_fingerprint_job_tracks_status",
+      sql`${t.status} IN ('queued','processing','done','failed')`
+    ),
+  ]
+);
+
+/**
+ * An uploaded DJ mix / mixtape awaiting (or already given) per-song segmentation against the
+ * local library. Deliberately not *itself modeled as* a row in `tracks` — a mixtape's identity
+ * (jobs, segments, matching state) lives entirely here. It does, however, get a companion `tracks`
+ * row (`libraryTrackId`) created alongside it at upload time so the full mix is playable from the
+ * regular library like any other track; that companion row is never audio-fingerprinted (see the
+ * comment on `insertMixtapeLibraryTrack` in app/api/v1/mixtapes/route.ts) so it can't pollute the
+ * landmark corpus that segment matching searches. The two rows share one physical audio file —
+ * deleting either one must delete both (see the DELETE handlers on this route and on
+ * app/api/v1/tracks/[id]/route.ts).
+ */
+export const mixtapes = sqliteTable(
+  "mixtapes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    uuid: text("uuid").notNull().unique(),
+    title: text("title").notNull(),
+    originalFilename: text("original_filename").notNull(),
+    /** Relative to LOCALFI_DATA_DIR/mixtapes/. */
+    path: text("path").notNull(),
+    fileSizeBytes: integer("file_size_bytes").notNull(),
+    durationSeconds: real("duration_seconds").notNull(),
+    format: text("format").notNull(),
+    codec: text("codec"),
+    bitrate: integer("bitrate"),
+    sampleRate: integer("sample_rate"),
+
+    waveformPath: text("waveform_path"),
+    waveformStatus: text("waveform_status").notNull().default("pending"),
+    waveformPeakCount: integer("waveform_peak_count"),
+    waveformAvgLevel: real("waveform_avg_level"),
+
+    analysisStatus: text("analysis_status").notNull().default("pending"),
+    latestJobId: integer("latest_job_id"),
+
+    /** The `tracks` row created alongside this mixtape so it shows up in the regular library —
+     *  see the table comment above. Null only for rows written before this existed. */
+    libraryTrackId: integer("library_track_id").references(() => tracks.id, { onDelete: "set null" }),
+
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [
+    check(
+      "chk_mixtapes_waveform_status",
+      sql`${t.waveformStatus} IN ('pending','processing','ready','failed')`
+    ),
+    check(
+      "chk_mixtapes_analysis_status",
+      sql`${t.analysisStatus} IN ('pending','queued','analyzing','ready','failed')`
+    ),
+  ]
+);
+
+// One long-running task with sequential stages, not many independent items -- unlike
+// import/analysis/fingerprint jobs (N items, item-level progress rows), so this carries
+// `stage`/`progressPct` instead of a totalTracks/processedTracks/failedTracks triple.
+export const mixtapeJobs = sqliteTable(
+  "mixtape_jobs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    uuid: text("uuid").notNull().unique(),
+    mixtapeId: integer("mixtape_id")
+      .notNull()
+      .references(() => mixtapes.id, { onDelete: "cascade" }),
+    /** The corresponding job id on python-backend's own in-memory job manager. */
+    pythonJobId: text("python_job_id"),
+    status: text("status").notNull().default("pending"),
+    stage: text("stage"),
+    progressPct: real("progress_pct").notNull().default(0),
+    matchedSegments: integer("matched_segments").notNull().default(0),
+    unrecognizedSegments: integer("unrecognized_segments").notNull().default(0),
+    errorMessage: text("error_message"),
+    startedAt: text("started_at"),
+    finishedAt: text("finished_at"),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [
+    index("idx_mixtape_jobs_mixtape").on(t.mixtapeId),
+    check(
+      "chk_mixtape_jobs_status",
+      sql`${t.status} IN ('pending','running','completed','completed_with_errors','failed','cancelled')`
+    ),
+    check(
+      "chk_mixtape_jobs_stage",
+      sql`${t.stage} IS NULL OR ${t.stage} IN ('decoding','fingerprinting','matching','done')`
+    ),
+  ]
+);
+
+export const mixtapeSegments = sqliteTable(
+  "mixtape_segments",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    mixtapeId: integer("mixtape_id")
+      .notNull()
+      .references(() => mixtapes.id, { onDelete: "cascade" }),
+    startSeconds: real("start_seconds").notNull(),
+    endSeconds: real("end_seconds").notNull(),
+    /** Null = unrecognized. */
+    matchedTrackId: integer("matched_track_id").references(() => tracks.id, { onDelete: "set null" }),
+    matchStatus: text("match_status").notNull().default("unrecognized"),
+    /** 0..1, null until a match exists. */
+    confidenceScore: real("confidence_score"),
+    /** Detected playback-speed ratio vs. the matched track's native speed (e.g. a DJ pitch-faded
+     *  transition), null until a match exists. */
+    matchedTempoRatio: real("matched_tempo_ratio"),
+    /** Where in the *matched track's own* timeline this segment starts, null until a match exists. */
+    sourceStartSeconds: real("source_start_seconds"),
+    position: integer("position").notNull().default(0),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [
+    index("idx_mixtape_segments_mixtape").on(t.mixtapeId, t.position),
+    check(
+      "chk_mixtape_segments_match_status",
+      sql`${t.matchStatus} IN ('auto_matched','manual','unrecognized','rejected')`
     ),
   ]
 );

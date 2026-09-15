@@ -1,0 +1,1 @@
+ALTER TABLE `import_jobs` ADD `target_playlist_id` integer REFERENCES playlists(id);

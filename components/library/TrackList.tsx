@@ -1,21 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { formatDuration, formatRate } from "@/lib/format/track";
-import type { TrackSummary } from "@/lib/api-client";
+import { formatDate, formatDuration, formatRate } from "@/lib/format/track";
+import type { TrackSort, TrackSummary } from "@/lib/api-client";
 import { usePlayerStore } from "@/lib/store/player";
 import { useSettingsStore } from "@/lib/store/settings";
 import { PlayingIcon } from "@/components/shell/PlayerIcons";
 import { TrackRowActions } from "./TrackRowActions";
 
-export function TrackList({ tracks }: { tracks: TrackSummary[] }) {
+interface TrackListProps {
+  tracks: TrackSummary[];
+  sort?: TrackSort;
+  onSortChange?: (sort: TrackSort) => void;
+}
+
+export function TrackList({ tracks, sort, onSortChange }: TrackListProps) {
   const currentTrackId = usePlayerStore((s) => s.currentTrack?.id);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const playTrack = usePlayerStore((s) => s.playTrack);
   const showFormatBadges = useSettingsStore((s) => s.showFormatBadges);
   const columns = showFormatBadges
-    ? "grid-cols-[32px_1fr_200px_120px_84px_64px_32px]"
-    : "grid-cols-[32px_1fr_200px_84px_64px_32px]";
+    ? "grid-cols-[32px_1fr_200px_100px_120px_84px_64px_32px]"
+    : "grid-cols-[32px_1fr_200px_100px_84px_64px_32px]";
 
   return (
     <div>
@@ -54,11 +60,29 @@ export function TrackList({ tracks }: { tracks: TrackSummary[] }) {
       <div className="hidden md:block">
       <div className={`mb-2 grid ${columns} gap-3 border-b border-line px-3 pb-2 text-[11px] font-medium uppercase tracking-[0.04em] text-t3`}>
         <span>#</span>
-        <span>Title</span>
-        <span>Album</span>
+        <SortHeader label="Title" ascKey="title_asc" descKey="title_desc" sort={sort} onSortChange={onSortChange} />
+        <SortHeader label="Album" ascKey="album_asc" descKey="album_desc" sort={sort} onSortChange={onSortChange} />
+        <SortHeader
+          label="Date Added"
+          ascKey="date_added_asc"
+          descKey="date_added_desc"
+          defaultDesc
+          sort={sort}
+          onSortChange={onSortChange}
+        />
         {showFormatBadges ? <span>Format</span> : null}
         <span>Rate</span>
-        <span className="text-right">Time</span>
+        <span className="flex justify-end">
+          <SortHeader
+            label="Time"
+            ascKey="duration_asc"
+            descKey="duration_desc"
+            defaultDesc
+            align="right"
+            sort={sort}
+            onSortChange={onSortChange}
+          />
+        </span>
         <span aria-hidden />
       </div>
       {tracks.map((track, i) => {
@@ -109,6 +133,7 @@ export function TrackList({ tracks }: { tracks: TrackSummary[] }) {
                 (track.albumTitle ?? "—")
               )}
             </span>
+            <span className="truncate font-mono text-xs text-t3">{formatDate(track.dateAdded)}</span>
             {showFormatBadges ? (
               <span className={`truncate font-mono text-xs ${track.lossless ? "text-ok" : "text-warn"}`}>
                 {track.format.toUpperCase()}
@@ -122,5 +147,44 @@ export function TrackList({ tracks }: { tracks: TrackSummary[] }) {
       })}
       </div>
     </div>
+  );
+}
+
+function SortHeader({
+  label,
+  ascKey,
+  descKey,
+  defaultDesc,
+  align,
+  sort,
+  onSortChange,
+}: {
+  label: string;
+  ascKey: TrackSort;
+  descKey: TrackSort;
+  defaultDesc?: boolean;
+  align?: "right";
+  sort?: TrackSort;
+  onSortChange?: (sort: TrackSort) => void;
+}) {
+  if (!onSortChange) return <span>{label}</span>;
+
+  const isAsc = sort === ascKey;
+  const isDesc = sort === descKey;
+  const isActive = isAsc || isDesc;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSortChange(isActive ? (isDesc ? ascKey : descKey) : defaultDesc ? descKey : ascKey)}
+      className={`inline-flex items-center gap-1 hover:text-t1 ${isActive ? "text-t1" : ""} ${
+        align === "right" ? "flex-row-reverse" : ""
+      }`}
+    >
+      <span>{label}</span>
+      <span aria-hidden className={isActive ? "" : "invisible"}>
+        {isDesc ? "▾" : "▴"}
+      </span>
+    </button>
   );
 }

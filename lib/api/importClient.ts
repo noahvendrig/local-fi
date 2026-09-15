@@ -1,5 +1,6 @@
 import type { CollectedFile } from "../ingest/collectFiles";
 import { apiUrl, authHeaders, withAuthQuery } from "./http";
+import { SpotifyNotConnectedError } from "./spotifyClient";
 import type { ImportJob, ImportJobWithFiles } from "./types";
 
 export { withAuthQuery };
@@ -34,6 +35,26 @@ export async function submitImport(
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     throw new Error(body?.error?.message ?? `Import failed (${res.status})`);
+  }
+
+  return res.json();
+}
+
+export async function submitSpotifyImport(
+  playlistUrl: string,
+  options: { createCrate?: boolean } = {},
+): Promise<ImportJobWithFiles> {
+  const res = await fetch(apiUrl("/api/v1/import/spotify"), {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ playlistUrl, createCrate: options.createCrate ?? false }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const message = body?.error?.message ?? `Spotify import failed (${res.status})`;
+    if (body?.error?.code === "spotify_not_connected") throw new SpotifyNotConnectedError(message);
+    throw new Error(message);
   }
 
   return res.json();

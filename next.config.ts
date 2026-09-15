@@ -15,6 +15,7 @@ import type { NextConfig } from "next";
 // hostname examples ("*.example.com") do. This is dev-only — production never runs this check.
 const nextConfig: NextConfig = {
   allowedDevOrigins: [
+    "127.0.0.1",
     "10.*.*.*",
     "172.16.*.*", "172.17.*.*", "172.18.*.*", "172.19.*.*",
     "172.20.*.*", "172.21.*.*", "172.22.*.*", "172.23.*.*",

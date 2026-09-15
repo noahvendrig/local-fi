@@ -5,6 +5,7 @@ export async function register() {
   const { getAuthToken } = await import("./lib/auth/token");
   const { getDb } = await import("./lib/db/client");
   const { isFfmpegAvailable } = await import("./lib/ffmpeg");
+  const { startPythonBackend } = await import("./lib/pythonBackend/process");
   const { sweepStaleImports } = await import("./lib/import/sweep");
   const { sweepExpiredTrash } = await import("./lib/library/trash");
   const { startAllWatchers } = await import("./lib/library/watcher");
@@ -22,4 +23,6 @@ export async function register() {
         "Set LOCALFI_FFMPEG_PATH to point at a specific binary instead."
     );
   }
+
+  await startPythonBackend();
 }

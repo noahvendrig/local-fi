@@ -7,6 +7,7 @@ import { publishJobUpdate } from "./events";
 import { createFolderPlaylistsForJob } from "./folderPlaylists";
 import { processFolderScanFile } from "./folderScanPipeline";
 import { processImportFile } from "./pipeline";
+import { processSpotifyImportFile } from "./spotifyPipeline";
 
 // In-process worker pool, no external job-queue system — single process, single
 // user (ARCHITECTURE.md §3.7). ffmpeg decode is CPU-heavy, so concurrency is capped.
@@ -96,6 +97,15 @@ export function enqueueImportJob(jobId: number): void {
           .run();
       } else if (job.type === "folder_scan" && file.stagedPath && file.libraryRootId != null) {
         await processFolderScanFile(jobId, file.id, file.stagedPath, file.originalFilename, file.libraryRootId);
+      } else if (job.type === "spotify_import" && file.metadataJson) {
+        await processSpotifyImportFile(
+          jobId,
+          file.id,
+          job.uuid,
+          file.metadataJson,
+          job.targetPlaylistId,
+          () => cancelledJobs.has(jobId),
+        );
       } else if (file.stagedPath) {
         await processImportFile(jobId, file.id, file.stagedPath, file.originalFilename, job.compressAudio === 1);
       }

@@ -10,7 +10,9 @@ import {
 } from "@/lib/store/settings";
 import { usePlayerStore } from "@/lib/store/player";
 import { formatDuration } from "@/lib/format/track";
+import { MixtapeFingerprintSection } from "./MixtapeFingerprintSection";
 import { MobileDevicesSection } from "./MobileDevicesSection";
+import { SpotifySection } from "./SpotifySection";
 
 // The standalone PWA has no waveform peaks or analyser wired up on the phone, so "Thin bar" is
 // the only progress style it can render — the picker is hidden there and the scrubber is forced
@@ -301,6 +303,8 @@ export function SettingsView() {
             Open import
           </Link>
         </div>
+        <SpotifySection />
+        <MixtapeFingerprintSection />
       </section>
     </div>
   );

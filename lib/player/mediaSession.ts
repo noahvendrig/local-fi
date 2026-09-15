@@ -1,9 +1,9 @@
 // Centralized navigator.mediaSession wiring — the lock-screen / notification / hardware-media-key
 // seam. Mounted once via components/shell/MediaSessionMount.tsx in both app/layout.tsx and
 // apps/standalone/app/layout.tsx. Source-aware: it reflects whichever transport source is
-// audible (useTransportSourceStore.activeSource) — the regular queue player (usePlayerStore) or
-// the DJ deck (useDjStore) — so its metadata, position and transport buttons always track the
-// deck the user actually hears.
+// audible (useTransportSourceStore.activeSource) — the regular queue player (usePlayerStore), the
+// DJ deck (useDjStore), or a mixtape (useMixtapePlayerStore) — so its metadata, position and
+// transport buttons always track the deck the user actually hears.
 //
 // Known limitation (see the playback architecture doc): every <audio> element is permanently
 // routed through Web Audio (lib/audio/equalizer.ts, createMediaElementSource — one-shot per
@@ -15,6 +15,7 @@ import { computeDjAdjustment } from "@/lib/audio/djMatch";
 import type { TrackSummary } from "@/lib/api-client";
 import { resolveArtworkSrc } from "@/lib/offline/playback";
 import { useDjStore } from "@/lib/store/dj";
+import { useMixtapePlayerStore } from "@/lib/store/mixtapePlayer";
 import { usePlayerStore } from "@/lib/store/player";
 import { useSettingsStore } from "@/lib/store/settings";
 import { useTransportSourceStore } from "@/lib/store/transportSource";
@@ -24,13 +25,19 @@ export interface MediaSessionController {
 }
 
 interface ActiveView {
-  kind: "regular" | "dj";
-  track: TrackSummary | null;
+  kind: "regular" | "dj" | "mixtape";
+  /** Unique id for change detection; null when nothing is loaded on the active source at all. */
+  key: string | null;
+  title: string | null;
+  artist: string;
+  album: string;
   isPlaying: boolean;
   position: number;
   duration: number;
   playbackRate: number;
   canSkip: boolean;
+  /** Only regular/DJ tracks have resolvable cover art; a mixtape falls back to the app icon. */
+  artworkTrack: TrackSummary | null;
 }
 
 const ICON_ARTWORK: MediaImage[] = [
@@ -52,23 +59,47 @@ function activeView(): ActiveView {
     );
     return {
       kind: "dj",
-      track: dj.currentTrack,
+      key: `dj:${dj.currentTrack.id}`,
+      title: dj.currentTrack.title,
+      artist: dj.currentTrack.artistName ?? "Unknown artist",
+      album: dj.currentTrack.albumTitle ?? "",
       isPlaying: dj.isPlaying,
       position: dj.currentTime,
       duration: dj.currentTrack.durationSeconds,
       playbackRate: tempoRatio || 1,
       canSkip: false,
+      artworkTrack: dj.currentTrack,
+    };
+  }
+  const mixtape = useMixtapePlayerStore.getState();
+  if (source === "mixtape" && mixtape.currentMixtape) {
+    return {
+      kind: "mixtape",
+      key: `mixtape:${mixtape.currentMixtape.id}`,
+      title: mixtape.currentMixtape.title,
+      artist: "Mixtape",
+      album: "",
+      isPlaying: mixtape.isPlaying,
+      position: mixtape.currentTime,
+      duration: mixtape.currentMixtape.durationSeconds,
+      playbackRate: 1,
+      canSkip: false,
+      artworkTrack: null,
     };
   }
   const player = usePlayerStore.getState();
   return {
     kind: "regular",
-    track: player.currentTrack,
+    key: player.currentTrack ? `regular:${player.currentTrack.id}` : null,
+    title: player.currentTrack?.title ?? null,
+    artist: player.currentTrack?.artistName ?? "Unknown artist",
+    album: player.currentTrack?.albumTitle ?? "",
     isPlaying: player.isPlaying,
     position: player.currentTime,
     duration: player.currentTrack?.durationSeconds ?? 0,
     playbackRate: 1,
     canSkip: true,
+    artworkTrack: player.currentTrack,
   };
 }
 
@@ -76,16 +107,21 @@ function seekActive(delta: number) {
   const view = activeView();
   const target = view.position + delta;
   if (view.kind === "dj") useDjStore.getState().seekTo(target);
+  else if (view.kind === "mixtape") useMixtapePlayerStore.getState().seekTo(target);
   else usePlayerStore.getState().seekTo(target);
 }
 
 function seekActiveTo(seconds: number) {
-  if (activeView().kind === "dj") useDjStore.getState().seekTo(seconds);
+  const kind = activeView().kind;
+  if (kind === "dj") useDjStore.getState().seekTo(seconds);
+  else if (kind === "mixtape") useMixtapePlayerStore.getState().seekTo(seconds);
   else usePlayerStore.getState().seekTo(seconds);
 }
 
 function setPlayingActive(playing: boolean) {
-  if (activeView().kind === "dj") useDjStore.getState().setDjPlaying(playing);
+  const kind = activeView().kind;
+  if (kind === "dj") useDjStore.getState().setDjPlaying(playing);
+  else if (kind === "mixtape") useMixtapePlayerStore.getState().setMixtapePlaying(playing);
   else usePlayerStore.getState().setPlaying(playing);
 }
 
@@ -138,10 +174,9 @@ export function startMediaSession(): MediaSessionController {
   };
 
   const applyMetadata = (view: ActiveView) => {
-    const track = view.track!;
-    const title = track.title ?? "Untitled";
-    const artist = track.artistName ?? "Unknown artist";
-    const album = track.albumTitle ?? "";
+    const title = view.title ?? "Untitled";
+    const artist = view.artist;
+    const album = view.album;
     // Text first, immediately (not gated on isPlaying) so the OS shows something at once; the
     // fallback icon keeps the lock screen from flashing blank while the real cover resolves.
     try {
@@ -149,6 +184,8 @@ export function startMediaSession(): MediaSessionController {
     } catch {
       return;
     }
+    const track = view.artworkTrack;
+    if (!track) return; // mixtapes have no resolvable artwork — keep the icon fallback
     const gen = ++artworkGen;
     void resolveArtworkSrc(track)
       .then((art) => {
@@ -172,10 +209,9 @@ export function startMediaSession(): MediaSessionController {
     if (disposed) return;
     const view = activeView();
 
-    const trackKey = view.track ? `${view.kind}:${view.track.id}` : null;
-    if (trackKey !== lastTrackKey) {
-      lastTrackKey = trackKey;
-      if (!view.track) {
+    if (view.key !== lastTrackKey) {
+      lastTrackKey = view.key;
+      if (!view.key) {
         artworkGen++;
         session.metadata = null;
         lastPlaybackState = null;
@@ -185,7 +221,7 @@ export function startMediaSession(): MediaSessionController {
       }
     }
 
-    if (!view.track) return;
+    if (!view.key) return;
 
     const playbackState: MediaSessionPlaybackState = view.isPlaying ? "playing" : "paused";
     if (playbackState !== lastPlaybackState) {
@@ -240,6 +276,7 @@ export function startMediaSession(): MediaSessionController {
     useTransportSourceStore.subscribe(schedule),
     usePlayerStore.subscribe(schedule),
     useDjStore.subscribe(schedule),
+    useMixtapePlayerStore.subscribe(schedule),
   ];
 
   update();

@@ -13,6 +13,8 @@ const TRACK_SORTS = {
   date_added_asc: { expr: tracks.dateAdded, dir: "asc" as const },
   title_asc: { expr: sql`coalesce(${tracks.title}, '')`, dir: "asc" as const },
   title_desc: { expr: sql`coalesce(${tracks.title}, '')`, dir: "desc" as const },
+  album_asc: { expr: sql`coalesce(${albums.title}, '')`, dir: "asc" as const },
+  album_desc: { expr: sql`coalesce(${albums.title}, '')`, dir: "desc" as const },
   duration_asc: { expr: tracks.durationSeconds, dir: "asc" as const },
   duration_desc: { expr: tracks.durationSeconds, dir: "desc" as const },
 };

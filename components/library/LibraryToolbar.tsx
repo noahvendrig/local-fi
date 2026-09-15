@@ -7,6 +7,7 @@ import { useLibraryStore, type LibraryViewMode } from "@/lib/store/library";
 const TRACK_SORT_OPTIONS: { value: TrackSort; label: string }[] = [
   { value: "date_added_desc", label: "Date added" },
   { value: "title_asc", label: "Title" },
+  { value: "album_asc", label: "Album" },
   { value: "duration_asc", label: "Duration" },
 ];
 

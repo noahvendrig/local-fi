@@ -84,7 +84,15 @@ export interface ArtistDetail {
   albums: AlbumSummary[];
 }
 
-export type TrackSort = "date_added_desc" | "date_added_asc" | "title_asc" | "title_desc" | "duration_asc" | "duration_desc";
+export type TrackSort =
+  | "date_added_desc"
+  | "date_added_asc"
+  | "title_asc"
+  | "title_desc"
+  | "album_asc"
+  | "album_desc"
+  | "duration_asc"
+  | "duration_desc";
 export type AlbumSort = "date_added_desc" | "date_added_asc" | "title_asc" | "title_desc" | "year_desc" | "year_asc";
 export type ArtistSort = "name_asc" | "name_desc";
 

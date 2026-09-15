@@ -45,3 +45,9 @@ next-env.d.ts
 
 # local-fi data dir (SQLite DB, auth token, media files) — never committed
 /data/
+
+# python-backend (venv, bytecode cache, its own default download dir)
+python-backend/.venv/
+python-backend/__pycache__/
+python-backend/**/__pycache__/
+python-backend/downloads/

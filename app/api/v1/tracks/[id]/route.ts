@@ -3,11 +3,12 @@ import { and, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb } from "@/lib/db/client";
-import { albums, artists, tracks } from "@/lib/db/schema";
+import { albums, artists, mixtapes, tracks } from "@/lib/db/schema";
 import { getTrackDetailRow, mapTrackDetailRow } from "@/lib/db/trackDetail";
 import { trackFingerprint } from "@/lib/import/fingerprint";
 import { ensureAlbumArtistLink, ensureTrackArtistLink, upsertAlbum, upsertArtist } from "@/lib/import/upsert";
 import { purgeTrack, softDeleteTrack } from "@/lib/library/trash";
+import { deleteMixtapeCascade } from "@/lib/mixtapes/delete";
 import { resolveTrackAbsPath } from "@/lib/storage/resolveTrackPath";
 import { isCamelotKey, normalizeCamelotCasing } from "@/lib/tags/camelotKey";
 import { writeTrackTags } from "@/lib/tags/writeTags";
@@ -155,6 +156,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 /**
  * DELETE /api/v1/tracks/:id — soft-remove by default (moves the file to trash/, sets deletedAt);
  * `?hard=true` permanently purges the row and file (Trash "delete forever", Health "Remove missing entry").
+ *
+ * A track that's the companion library row for a mixtape (mixtapes.libraryTrackId) shares its
+ * physical audio file with that mixtape — see the schema comment on `mixtapes` — so it can't be
+ * trashed or purged on its own without breaking the mixtape's own playback. Deleting it always
+ * cascades to deleting the whole mixtape instead, regardless of `?hard`.
  */
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -167,6 +173,12 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const db = getDb();
   const existing = db.select().from(tracks).where(eq(tracks.id, trackId)).get();
   if (!existing) return NOT_FOUND;
+
+  const parentMixtape = db.select({ id: mixtapes.id }).from(mixtapes).where(eq(mixtapes.libraryTrackId, trackId)).get();
+  if (parentMixtape) {
+    deleteMixtapeCascade(parentMixtape.id);
+    return new NextResponse(null, { status: 204 });
+  }
 
   try {
     if (hard) {

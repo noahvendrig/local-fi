@@ -6,7 +6,15 @@ import { isAuthorized } from "./lib/auth/verifyToken";
 // has ever been issued a device token (mobile plan Phase B). Everything else under
 // /api/v1/pairing/* (start/status/devices) stays behind the normal check below: only the
 // already-authenticated PC should be able to mint codes or manage/revoke paired devices.
-const UNAUTHENTICATED_PATHS = new Set(["/api/v1/pairing/complete"]);
+//
+// /api/v1/spotify/callback is here for a different reason: Spotify's own redirect back to
+// this URL (after the user grants access) is a plain top-level browser navigation, which
+// can't carry our Authorization header or ?token= — and its redirect_uri must exactly match
+// what's registered in the Spotify app dashboard, so we can't append one either. It's not
+// actually open, though: lib/spotify/client.ts's completeLogin() only succeeds given a
+// single-use Spotify `code` plus a `state` that matches the httpOnly cookie /spotify/login
+// set — and reaching /login at all still requires the normal auth token.
+const UNAUTHENTICATED_PATHS = new Set(["/api/v1/pairing/complete", "/api/v1/spotify/callback"]);
 
 // CORS: the standalone PWA (served from a static host, not this PC) makes every /api/v1/* call
 // cross-origin, including the pairing POST itself — without this, the browser blocks every

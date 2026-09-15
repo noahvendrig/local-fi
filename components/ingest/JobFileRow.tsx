@@ -2,6 +2,8 @@ import type { ImportJobFile } from "@/lib/api/types";
 
 const STATUS_LABEL: Record<ImportJobFile["status"], string> = {
   queued: "Queued",
+  matching: "Finding on YouTube…",
+  downloading: "Downloading…",
   reading_tags: "Reading tags…",
   transcoding_waveform: "Analyzing audio…",
   saving: "Saving…",
@@ -12,15 +14,17 @@ const STATUS_LABEL: Record<ImportJobFile["status"], string> = {
 
 const STATUS_PROGRESS: Record<ImportJobFile["status"], number> = {
   queued: 0,
-  reading_tags: 25,
-  transcoding_waveform: 62,
-  saving: 85,
+  matching: 8,
+  downloading: 18,
+  reading_tags: 45,
+  transcoding_waveform: 70,
+  saving: 88,
   done: 100,
   failed: 12,
   duplicate_skipped: 100,
 };
 
-const ACTIVE_STATUSES = new Set(["reading_tags", "transcoding_waveform", "saving"]);
+const ACTIVE_STATUSES = new Set(["matching", "downloading", "reading_tags", "transcoding_waveform", "saving"]);
 
 function formatBytes(bytes: number | null): string {
   if (bytes == null) return "—";

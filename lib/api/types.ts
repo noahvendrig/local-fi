@@ -8,6 +8,8 @@ export type ImportJobStatus =
 
 export type ImportJobFileStatus =
   | "queued"
+  | "matching"
+  | "downloading"
   | "reading_tags"
   | "transcoding_waveform"
   | "saving"
@@ -28,6 +30,8 @@ export interface ImportJobFile {
   errorMessage: string | null;
   bytesTotal: number | null;
   bytesProcessed: number | null;
+  /** Set on `spotify_import` files — the source track's metadata as JSON (see lib/spotify/client.ts's SpotifyTrackMetadata). */
+  metadataJson: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -35,7 +39,7 @@ export interface ImportJobFile {
 export interface ImportJob {
   id: number;
   uuid: string;
-  type: "upload" | "scan" | "folder_scan";
+  type: "upload" | "scan" | "folder_scan" | "spotify_import";
   status: ImportJobStatus;
   totalFiles: number;
   processedFiles: number;

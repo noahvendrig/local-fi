@@ -1,0 +1,211 @@
+import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, renameSync, statSync, unlinkSync } from "node:fs";
+import path from "node:path";
+import { asc, eq } from "drizzle-orm";
+import { generateKeyBetween } from "fractional-indexing";
+import { getDb } from "../db/client";
+import { playlistTracks } from "../db/schema";
+import { cancelPythonJob, postMatchJob, streamJobUntilDone } from "../pythonBackend/client";
+import type { SpotifyTrackMetadata } from "../spotify/client";
+import { publishJobUpdate } from "./events";
+import { insertTrackRow, markJobFileFailed, readTagsAndWaveform, setJobFileStatus, writeSidecars } from "./indexCommon";
+import { originalsDirFor, sanitizeFilename, stagingDirFor, toDataDirRelative } from "./paths";
+import { CorruptFileError, UnsupportedFormatError } from "./tags";
+
+/**
+ * Runs one Spotify playlist track through: YouTube match + download (delegated to
+ * the Python backend, see lib/pythonBackend/client.ts) -> tag extraction -> waveform
+ * generation -> atomic move into originals/ -> track insert, tagged with Spotify's
+ * clean metadata rather than yt-dlp's raw YouTube title. Mirrors the tail end of
+ * lib/import/pipeline.ts's processImportFile — never throws, failures are recorded
+ * on the import_job_files row so one bad track doesn't abort the rest of the playlist.
+ */
+export async function processSpotifyImportFile(
+  jobId: number,
+  jobFileId: number,
+  jobUuid: string,
+  metadataJson: string,
+  targetPlaylistId: number | null,
+  isCancelled: () => boolean
+): Promise<void> {
+  let metadata: SpotifyTrackMetadata;
+  try {
+    metadata = JSON.parse(metadataJson) as SpotifyTrackMetadata;
+  } catch {
+    markJobFileFailed(jobId, jobFileId, "Corrupt track metadata.");
+    publishJobUpdate(jobId);
+    return;
+  }
+
+  const artist = metadata.artists[0] ?? "Unknown Artist";
+  const outputDir = path.join(stagingDirFor(jobUuid), String(jobFileId));
+
+  try {
+    setJobFileStatus(jobFileId, "matching");
+    publishJobUpdate(jobId);
+
+    const created = await postMatchJob({
+      title: metadata.title,
+      artist,
+      durationMs: metadata.durationMs,
+      outputDir,
+    });
+
+    const finalJob = await streamJobUntilDone(created.id, (update) => {
+      if (isCancelled()) {
+        void cancelPythonJob(update.id);
+        return;
+      }
+      if (update.status === "matching" || update.status === "downloading") {
+        setJobFileStatus(jobFileId, update.status);
+        publishJobUpdate(jobId);
+      }
+    });
+
+    if (finalJob.status === "cancelled") {
+      markJobFileFailed(jobId, jobFileId, "Cancelled");
+      publishJobUpdate(jobId);
+      return;
+    }
+    if (finalJob.status !== "completed" || !finalJob.filepath) {
+      markJobFileFailed(jobId, jobFileId, finalJob.error || "Download failed.");
+      publishJobUpdate(jobId);
+      return;
+    }
+
+    await finishDownloadedTrack(jobId, jobFileId, finalJob.filepath, metadata, targetPlaylistId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Spotify import failed.";
+    markJobFileFailed(jobId, jobFileId, message);
+    publishJobUpdate(jobId);
+  }
+}
+
+async function finishDownloadedTrack(
+  jobId: number,
+  jobFileId: number,
+  downloadedPath: string,
+  metadata: SpotifyTrackMetadata,
+  targetPlaylistId: number | null
+): Promise<void> {
+  const artist = metadata.artists[0] ?? "Unknown Artist";
+  let waveformWritten: string | null = null;
+  let movedTo: string | null = null;
+
+  try {
+    setJobFileStatus(jobFileId, "reading_tags");
+    publishJobUpdate(jobId);
+
+    const originalFilename = path.basename(downloadedPath);
+    const extracted = await readTagsAndWaveform(downloadedPath, originalFilename);
+    const { waveform } = extracted;
+
+    let coverArt = extracted.tags.coverArt;
+    if (metadata.coverArtUrl) {
+      try {
+        const res = await fetch(metadata.coverArtUrl);
+        if (res.ok) {
+          coverArt = {
+            data: Buffer.from(await res.arrayBuffer()),
+            format: res.headers.get("content-type") || "image/jpeg",
+          };
+        }
+      } catch {
+        // Keep whatever ffmpeg/yt-dlp embedded (if anything) — cover art is a nice-to-have, not fatal.
+      }
+    }
+
+    const tags = {
+      ...extracted.tags,
+      title: metadata.title,
+      artist,
+      albumArtist: artist,
+      album: metadata.album ?? extracted.tags.album,
+      coverArt,
+    };
+
+    setJobFileStatus(jobFileId, "transcoding_waveform");
+    publishJobUpdate(jobId);
+
+    const trackUuid = randomUUID();
+    const { waveformAbsPath, coverArtRelativePath } = writeSidecars(trackUuid, tags, waveform);
+    waveformWritten = waveformAbsPath;
+
+    setJobFileStatus(jobFileId, "saving");
+    publishJobUpdate(jobId);
+
+    const destDir = originalsDirFor(trackUuid);
+    mkdirSync(destDir, { recursive: true });
+    const destPath = path.join(destDir, sanitizeFilename(originalFilename));
+    renameSync(downloadedPath, destPath);
+    movedTo = destPath;
+
+    const stat = statSync(destPath);
+    const relativePath = toDataDirRelative(destPath);
+
+    const track = insertTrackRow({
+      uuid: trackUuid,
+      relativePath,
+      libraryRootId: null,
+      fileSizeBytes: stat.size,
+      fileMtimeMs: stat.mtimeMs,
+      tags,
+      waveform,
+      waveformAbsPath,
+      coverArtRelativePath,
+      importJobId: jobId,
+      jobFileId,
+      sourceProvider: "spotify",
+      sourceUrl: metadata.spotifyUrl,
+    });
+
+    if (targetPlaylistId != null) {
+      appendTrackToCrate(targetPlaylistId, track.id);
+    }
+
+    publishJobUpdate(jobId);
+  } catch (err) {
+    if (movedTo && existsSync(movedTo)) {
+      try {
+        renameSync(movedTo, downloadedPath);
+      } catch {
+        // Staging dir may already be gone — leaving the file in originals/ untracked
+        // is safer than losing it; Health can surface it later.
+      }
+    }
+    if (waveformWritten && existsSync(waveformWritten)) {
+      try {
+        unlinkSync(waveformWritten);
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const message =
+      err instanceof UnsupportedFormatError || err instanceof CorruptFileError
+        ? err.message
+        : err instanceof Error
+          ? err.message
+          : "Unknown import error";
+
+    markJobFileFailed(jobId, jobFileId, message);
+    publishJobUpdate(jobId);
+  }
+}
+
+/** Appends a track to the end of the crate created for this playlist import (see app/api/v1/import/spotify/route.ts). Mirrors the position-computation in app/api/v1/playlists/[id]/tracks/route.ts. */
+function appendTrackToCrate(playlistId: number, trackId: number): void {
+  const db = getDb();
+  const positions = db
+    .select({ position: playlistTracks.position })
+    .from(playlistTracks)
+    .where(eq(playlistTracks.playlistId, playlistId))
+    .orderBy(asc(playlistTracks.position))
+    .all()
+    .map((r) => r.position);
+
+  const position = generateKeyBetween(positions[positions.length - 1] ?? null, null);
+  db.insert(playlistTracks)
+    .values({ playlistId, trackId, position, addedAt: new Date().toISOString() })
+    .run();
+}

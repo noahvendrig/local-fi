@@ -1,6 +1,14 @@
 import { create } from "zustand";
-import { cancelImportJob, fetchImportJob, fetchImportJobs, importJobEventsUrl, submitImport } from "@/lib/api/importClient";
+import {
+  cancelImportJob,
+  fetchImportJob,
+  fetchImportJobs,
+  importJobEventsUrl,
+  submitImport,
+  submitSpotifyImport,
+} from "@/lib/api/importClient";
 import type { ImportJob, ImportJobWithFiles } from "@/lib/api/types";
+import { SpotifyNotConnectedError } from "@/lib/api/spotifyClient";
 import { chunkFilesForUpload } from "@/lib/ingest/chunkFiles";
 import { hasSubfolders, type CollectedFile } from "@/lib/ingest/collectFiles";
 import { useSettingsStore } from "@/lib/store/settings";
@@ -16,6 +24,9 @@ interface IngestState {
   dragItemCount: number;
   jobs: ImportJobWithFiles[];
   error: string | null;
+  /** Set instead of `error` when a Spotify import fails specifically because no account is
+   *  connected yet — lets the UI show a "Connect Spotify" button instead of plain error text. */
+  spotifyNotConnected: boolean;
   uploadProgress: { copied: number; total: number } | null;
   /** Set when the collected files span subfolders — waiting on the user to pick per-folder playlists vs. a flat import. */
   pendingFolderImport: CollectedFile[] | null;
@@ -28,6 +39,10 @@ interface IngestState {
   resolveFolderImport: (createFolderPlaylists: boolean) => Promise<void>;
   cancelFolderImport: () => void;
   cancelJob: (jobId: number) => void;
+  /** Kicks off a Spotify playlist import and starts tracking its progress in the tray.
+   *  `createCrate` is false here (plain Import page) — pass true only from the "new
+   *  crate from Spotify" flow (NewCrateModal), which calls submitSpotifyImport directly. */
+  importFromSpotify: (playlistUrl: string) => Promise<void>;
   /** Adopts a job created elsewhere (e.g. a library-root add/rescan) into the tray so its
    *  progress shows live and the terminal-status effect refreshes the right queries once it finishes. */
   trackJob: (job: ImportJob) => void;
@@ -129,6 +144,7 @@ export const useIngestStore = create<IngestState>((set, get) => ({
   dragItemCount: 0,
   jobs: [],
   error: null,
+  spotifyNotConnected: false,
   uploadProgress: null,
   pendingFolderImport: null,
   setDragActive: (active, itemCount = 0) =>
@@ -169,6 +185,21 @@ export const useIngestStore = create<IngestState>((set, get) => ({
   cancelJob: (jobId) => {
     uploadAbort?.abort();
     void cancelImportJob(jobId);
+  },
+
+  importFromSpotify: async (playlistUrl) => {
+    set({ error: null, spotifyNotConnected: false });
+    try {
+      const job = await submitSpotifyImport(playlistUrl);
+      set((state) => ({ jobs: mergeJobs([job], state.jobs) }));
+      subscribeToJobEvents(job.id, set);
+    } catch (err) {
+      if (err instanceof SpotifyNotConnectedError) {
+        set({ spotifyNotConnected: true });
+        return;
+      }
+      set({ error: err instanceof Error ? err.message : "Spotify import failed." });
+    }
   },
 
   trackJob: (job) => {

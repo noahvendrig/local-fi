@@ -84,7 +84,7 @@ export function LibraryView() {
             <AlbumGrid albums={albums} />
           )
         ) : (
-          <TrackList tracks={tracks} />
+          <TrackList tracks={tracks} sort={trackSort} onSortChange={setTrackSort} />
         )}
 
         {viewMode === "grid" && albumsQuery.hasNextPage && (

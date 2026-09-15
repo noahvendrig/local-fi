@@ -4,6 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import { getDb } from "../db/client";
 import { albums, importJobFiles, importJobs, tracks } from "../db/schema";
 import { extForPictureFormat } from "./coverArt";
+import { enqueueTrackFingerprint } from "../fingerprint/queue";
 import { trackFingerprint } from "./fingerprint";
 import { artworkPathFor, toDataDirRelative, waveformPathFor } from "./paths";
 import { extractTags, type ExtractedTags } from "./tags";
@@ -58,6 +59,9 @@ export interface InsertTrackParams {
   coverArtRelativePath: string | null;
   importJobId: number;
   jobFileId: number;
+  /** Provenance for tracks fetched from an external source (e.g. 'spotify') — omitted/null for ordinary file imports. */
+  sourceProvider?: string | null;
+  sourceUrl?: string | null;
 }
 
 /** Artist/album upsert + track insert + job bookkeeping, in one transaction — shared by both import flows. */
@@ -67,7 +71,7 @@ export function insertTrackRow(params: InsertTrackParams): typeof tracks.$inferS
   const now = new Date().toISOString();
   const { tags, waveform } = params;
 
-  return db.transaction((tx) => {
+  const track = db.transaction((tx) => {
     const artist = upsertArtist(tx, tags.artist);
     const albumArtist = tags.albumArtist ? upsertArtist(tx, tags.albumArtist) : artist;
     const album = tags.album ? upsertAlbum(tx, tags.album, albumArtist.id, tags.year) : null;
@@ -116,6 +120,8 @@ export function insertTrackRow(params: InsertTrackParams): typeof tracks.$inferS
         waveformAvgLevel: waveform.avgLevel,
         rawTagsJson: tags.rawTagsJson,
         importJobId: params.importJobId,
+        sourceProvider: params.sourceProvider ?? null,
+        sourceUrl: params.sourceUrl ?? null,
         dateAdded: now,
       })
       .returning()
@@ -135,6 +141,13 @@ export function insertTrackRow(params: InsertTrackParams): typeof tracks.$inferS
 
     return track;
   });
+
+  // Fire-and-forget, same non-blocking treatment as waveform generation earlier in this
+  // pipeline — the track is already visible in the library with landmarkStatus "queued";
+  // audio fingerprinting for mixtape matching (see lib/fingerprint/) finishes in the background.
+  enqueueTrackFingerprint(track.id);
+
+  return track;
 }
 
 export function setJobFileStatus(jobFileId: number, status: string, extra: Record<string, unknown> = {}): void {

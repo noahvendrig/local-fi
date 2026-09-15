@@ -3,11 +3,14 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { withAuthQuery } from "@/lib/api/http";
+import { mixtapeWaveformUrl } from "@/lib/api/mixtapesClient";
 import { resolveWaveform } from "@/lib/offline/playback";
 import { usePlayerStore } from "@/lib/store/player";
 import { useDjStore } from "@/lib/store/dj";
+import { useMixtapePlayerStore } from "@/lib/store/mixtapePlayer";
 import { useTransportSourceStore } from "@/lib/store/transportSource";
 import { useSettingsStore } from "@/lib/store/settings";
+import { fetchWaveform } from "@/lib/waveform/parse";
 import { WaveformScrubber } from "./WaveformScrubber";
 import { EqualizerPopover } from "./EqualizerPopover";
 import { HoverTip, IconButton } from "./IconButton";
@@ -58,18 +61,44 @@ export function TransportBar() {
   const djSeekTo = useDjStore((s) => s.seekTo);
   const activeSource = useTransportSourceStore((s) => s.activeSource);
 
+  const mixtapeNowPlaying = useMixtapePlayerStore((s) => s.currentMixtape);
+  const mixtapeIsPlaying = useMixtapePlayerStore((s) => s.isPlaying);
+  const mixtapeCurrentTime = useMixtapePlayerStore((s) => s.currentTime);
+  const setMixtapePlaying = useMixtapePlayerStore((s) => s.setMixtapePlaying);
+  const mixtapeSeekTo = useMixtapePlayerStore((s) => s.seekTo);
+  const mixtapeWaveform = useMixtapePlayerStore((s) => s.waveform);
+  const setMixtapeWaveform = useMixtapePlayerStore((s) => s.setWaveform);
+
   const { audioARef, audioBRef, handleTimeUpdate, handleEnded, handlePlay, handlePause } = usePlaybackEngine();
 
   // Which deck the bar shows/controls is tracked explicitly (useTransportSourceStore), set by
   // whichever store's track-selection actions last ran — NOT derived from isPlaying, so pausing
   // the DJ deck from this bar can't make it silently fall back to a leftover regular track.
   const djActive = activeSource === "dj" && djTrack != null;
+  const mixtapeActive = activeSource === "mixtape" && mixtapeNowPlaying != null;
   const displayTrack = djActive ? djTrack : currentTrack;
   const displayIsPlaying = djActive ? djIsPlaying : isPlaying;
   const displayCurrentTime = djActive ? djCurrentTime : currentTime;
   const displayTogglePlay = djActive ? () => setDjPlaying(!djIsPlaying) : togglePlay;
   const displaySeek = djActive ? djSeekTo : seekTo;
   const duration = displayTrack?.durationSeconds ?? 0;
+
+  useEffect(() => {
+    setMixtapeWaveform(null);
+    if (!mixtapeNowPlaying) return;
+    let cancelled = false;
+    fetchWaveform(mixtapeWaveformUrl(mixtapeNowPlaying.id))
+      .then((data) => {
+        if (!cancelled) setMixtapeWaveform(data);
+      })
+      .catch(() => {
+        if (!cancelled) setMixtapeWaveform(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setMixtapeWaveform is a stable store action
+  }, [mixtapeNowPlaying?.id]);
 
   // Fetch the displayed track's peak sidecar whenever it changes (currentTime itself is
   // reset to 0 by the store action that changed the track, not here — see lib/store/player.ts).
@@ -111,7 +140,61 @@ export function TransportBar() {
         onPause={() => handlePause(1)}
       />
 
-      {displayTrack ? (
+      {mixtapeActive && mixtapeNowPlaying ? (
+        <>
+          <div
+            className="group relative flex w-[250px] shrink-0 cursor-default items-center gap-3 text-left"
+            aria-label="Now Playing"
+          >
+            <div className="lf-hatch h-14 w-14 shrink-0 overflow-hidden rounded-xl shadow-[var(--lf-art-shadow)]">
+              <div className="flex h-full w-full items-center justify-center text-t3" aria-hidden>
+                <AlbumPlaceholderIcon />
+              </div>
+            </div>
+            <div className="min-w-0">
+              <p className="truncate font-mono text-[10px] uppercase tracking-[0.06em] text-acc-text">Mixtape</p>
+              <p
+                className={`truncate text-sm ${mixtapeIsPlaying ? "text-playing" : "text-t1"}`}
+                title={mixtapeNowPlaying.title}
+              >
+                {mixtapeNowPlaying.title}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1.5">
+            <IconButton onClick={playPrevious} label="Previous" size="lg" disabled>
+              <PreviousIcon size={26} />
+            </IconButton>
+            <button
+              type="button"
+              onClick={() => setMixtapePlaying(!mixtapeIsPlaying)}
+              aria-label={mixtapeIsPlaying ? "Pause" : "Play"}
+              className="lf-top group relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-acc bg-acc text-on-acc hover:border-acc-2 hover:bg-acc-2"
+            >
+              {mixtapeIsPlaying ? <PauseIcon size={20} /> : <PlayIcon size={26} />}
+              <HoverTip text={mixtapeIsPlaying ? "Pause" : "Play"} />
+            </button>
+            <IconButton onClick={playNext} label="Next" size="lg" disabled>
+              <NextIcon size={26} />
+            </IconButton>
+          </div>
+
+          <WaveformScrubber
+            waveform={mixtapeWaveform}
+            currentTime={mixtapeCurrentTime}
+            duration={mixtapeNowPlaying.durationSeconds}
+            onSeek={mixtapeSeekTo}
+            disabled={false}
+          />
+
+          <div className="flex shrink-0 items-center gap-1.5">
+            {showFormatBadges ? (
+              <span className="hidden font-mono text-[11px] text-ok xl:inline">{mixtapeNowPlaying.format.toUpperCase()}</span>
+            ) : null}
+          </div>
+        </>
+      ) : displayTrack ? (
         <>
           <div
             role="button"

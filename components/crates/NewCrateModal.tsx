@@ -3,9 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { submitSpotifyImport } from "@/lib/api/importClient";
 import { createPlaylist, type PlaylistType } from "@/lib/api/playlistsClient";
 import { useHasCredentials } from "@/lib/api/http";
+import { useSpotifyLoginUrl, SpotifyNotConnectedError } from "@/lib/api/spotifyClient";
 import { createLocalCrate } from "@/lib/offline/localCrates";
+import { useIngestStore } from "@/lib/store/ingest";
 
 // The standalone PWA ships no /crates/[id] route — there's no crate-detail screen at all, so it
 // can neither host the smart-rules builder nor navigate to a crate after creating it. There, a
@@ -17,15 +20,25 @@ export function NewCrateModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const hasCredentials = useHasCredentials();
+  const loginUrl = useSpotifyLoginUrl();
+  const trackJob = useIngestStore((s) => s.trackJob);
   const [name, setName] = useState("");
   const [type, setType] = useState<PlaylistType>("manual");
+  const [source, setSource] = useState<"blank" | "spotify">("blank");
+  const [spotifyUrl, setSpotifyUrl] = useState("");
 
   // With no PC to POST to, the standalone build makes the crate in IndexedDB instead — a
   // phone-only crate the user edits entirely client-side (lib/offline/localCrates.ts).
+  // Spotify import needs the server-side Python backend, so it's unavailable here too.
   const localMode = STANDALONE && !hasCredentials;
 
   const createMutation = useMutation({
     mutationFn: async () => {
+      if (source === "spotify") {
+        const job = await submitSpotifyImport(spotifyUrl.trim(), { createCrate: true });
+        trackJob(job);
+        return;
+      }
       if (localMode) {
         await createLocalCrate(name.trim());
         return;
@@ -44,6 +57,8 @@ export function NewCrateModal({ onClose }: { onClose: () => void }) {
     },
   });
 
+  const canSubmit = source === "spotify" ? spotifyUrl.trim().length > 0 : name.trim().length > 0;
+
   return (
     <div
       role="dialog"
@@ -56,7 +71,7 @@ export function NewCrateModal({ onClose }: { onClose: () => void }) {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (name.trim()) createMutation.mutate();
+          if (canSubmit) createMutation.mutate();
         }}
         className="w-full max-w-sm rounded-3xl border border-line bg-surf p-6 shadow-[var(--lf-shadow)]"
         onClick={(e) => e.stopPropagation()}
@@ -73,18 +88,46 @@ export function NewCrateModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <label className="mt-4 flex flex-col gap-1 text-xs text-t2">
-          Name
-          <input
-            autoFocus
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="rounded-md border border-line bg-surf-2 px-2 py-1.5 text-sm text-t1"
-          />
-        </label>
+        {!localMode && (
+          <div className="mt-4 flex gap-2">
+            <SourceOption label="Blank" description="Name it and add tracks yourself." value="blank" selected={source === "blank"} onSelect={setSource} />
+            <SourceOption
+              label="From Spotify"
+              description="Paste one of your playlist links to download and fill it."
+              value="spotify"
+              selected={source === "spotify"}
+              onSelect={setSource}
+            />
+          </div>
+        )}
 
-        {!STANDALONE && (
+        {source === "spotify" ? (
+          <label className="mt-4 flex flex-col gap-1 text-xs text-t2">
+            Spotify playlist link
+            <input
+              autoFocus
+              type="url"
+              inputMode="url"
+              value={spotifyUrl}
+              onChange={(e) => setSpotifyUrl(e.target.value)}
+              placeholder="https://open.spotify.com/playlist/…"
+              className="rounded-md border border-line bg-surf-2 px-2 py-1.5 text-sm text-t1 placeholder:text-t3"
+            />
+          </label>
+        ) : (
+          <label className="mt-4 flex flex-col gap-1 text-xs text-t2">
+            Name
+            <input
+              autoFocus
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="rounded-md border border-line bg-surf-2 px-2 py-1.5 text-sm text-t1"
+            />
+          </label>
+        )}
+
+        {source === "blank" && !STANDALONE && (
           <div className="mt-4 flex gap-2">
             <TypeOption
               label="Manual"
@@ -103,13 +146,27 @@ export function NewCrateModal({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {localMode ? (
+        {source === "spotify" ? (
+          <p className="mt-3 text-xs text-t3">
+            Tracks are matched on YouTube and downloaded — this crate fills in as they finish, tracked in the import tray.
+          </p>
+        ) : localMode ? (
           <p className="mt-3 text-xs text-t3">
             This crate stays on your phone. Pair with a computer later to sync crates from it.
           </p>
         ) : null}
 
-        {createMutation.isError ? (
+        {createMutation.isError && createMutation.error instanceof SpotifyNotConnectedError ? (
+          <p className="mt-4 flex flex-wrap items-center gap-2 text-xs text-err">
+            Connect your Spotify account first.
+            <a
+              href={loginUrl}
+              className="rounded-md border border-line bg-surf px-2 py-1 text-[11px] font-medium text-t1 hover:border-acc"
+            >
+              Connect Spotify
+            </a>
+          </p>
+        ) : createMutation.isError ? (
           <p className="mt-4 text-xs text-err">{(createMutation.error as Error).message}</p>
         ) : null}
 
@@ -119,7 +176,7 @@ export function NewCrateModal({ onClose }: { onClose: () => void }) {
           </button>
           <button
             type="submit"
-            disabled={!name.trim() || createMutation.isPending}
+            disabled={!canSubmit || createMutation.isPending}
             className="rounded-lg bg-acc px-3 py-1.5 text-sm font-medium text-on-acc hover:bg-acc-2 disabled:opacity-50"
           >
             {createMutation.isPending ? "Creating…" : "Create"}
@@ -127,6 +184,31 @@ export function NewCrateModal({ onClose }: { onClose: () => void }) {
         </div>
       </form>
     </div>
+  );
+}
+
+function SourceOption({
+  label,
+  description,
+  value,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  description: string;
+  value: "blank" | "spotify";
+  selected: boolean;
+  onSelect: (v: "blank" | "spotify") => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(value)}
+      className={`flex-1 rounded-lg border px-3 py-2 text-left ${selected ? "border-acc bg-[var(--lf-tint)]" : "border-line hover:bg-surf-2"}`}
+    >
+      <p className="text-sm font-medium text-t1">{label}</p>
+      <p className="mt-0.5 text-xs text-t3">{description}</p>
+    </button>
   );
 }
 

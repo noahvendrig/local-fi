@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { label: "Home", icon: HomeIcon, href: "/", match: (path: string) => path === "/" },
   { label: "Library", icon: LibraryIcon, href: "/library", match: (path: string) => path.startsWith("/library") || path.startsWith("/albums") || path.startsWith("/artists") },
   { label: "Crates", icon: CratesIcon, href: "/crates", match: (path: string) => path.startsWith("/crates") },
+  { label: "Mixtapes", icon: MixtapesIcon, href: "/mixtapes", match: (path: string) => path.startsWith("/mixtapes") },
   { label: "Import", icon: ImportIcon, href: "/import", match: (path: string) => path.startsWith("/import") },
 ] as const;
 
@@ -206,6 +207,15 @@ function CratesIcon() {
       <rect x="3" y="4" width="18" height="4" rx="1" />
       <rect x="3" y="10" width="18" height="4" rx="1" />
       <rect x="3" y="16" width="18" height="4" rx="1" />
+    </svg>
+  );
+}
+
+function MixtapesIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 15V9a2 2 0 0 1 2-2h5l7-3v16l-7-3H6a2 2 0 0 1-2-2z" />
+      <path d="M17 9a3 3 0 0 1 0 6" />
     </svg>
   );
 }

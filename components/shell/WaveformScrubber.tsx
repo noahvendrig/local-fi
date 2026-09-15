@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { formatDuration } from "@/lib/format/track";
 import { getPlaybackEqualizer } from "@/lib/audio/equalizer";
 import { useSettingsStore } from "@/lib/store/settings";
+import { drawWaveformPeaks } from "@/lib/waveform/drawWaveform";
 import type { WaveformData } from "@/lib/waveform/parse";
 
 interface WaveformScrubberProps {
@@ -62,21 +63,16 @@ export function WaveformScrubber({ waveform, currentTime, duration, onSeek, disa
       return;
     }
 
-    const centerY = height / 2;
-    const { peakCount, mins, maxs } = waveform;
-    const playedCount = Math.floor(playedRatio * peakCount);
-
-    for (let x = 0; x < width; x++) {
-      const peakIndex = Math.min(peakCount - 1, Math.floor((x / width) * peakCount));
-      const min = mins[peakIndex];
-      const max = maxs[peakIndex];
-      const top = centerY - Math.max(max, 0.04) * centerY;
-      const bottom = centerY - Math.min(min, -0.04) * centerY;
-      ctx.fillStyle = peakIndex < playedCount ? playedColor : unplayedColor;
-      ctx.globalAlpha = peakIndex < playedCount ? 1 : 0.55;
-      ctx.fillRect(x, top, 1, Math.max(1, bottom - top));
-    }
-    ctx.globalAlpha = 1;
+    drawWaveformPeaks(ctx, {
+      width,
+      height,
+      peakCount: waveform.peakCount,
+      mins: waveform.mins,
+      maxs: waveform.maxs,
+      playedRatio,
+      playedColor,
+      unplayedColor,
+    });
   }, [waveform, playedRatio, progressStyle, palette, theme]);
 
   useEffect(() => {

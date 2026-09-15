@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useSpotifyLoginUrl } from "@/lib/api/spotifyClient";
 import { filterAudioFiles } from "@/lib/ingest/collectFiles";
 import { useCommandPaletteStore } from "@/lib/store/commandPalette";
 import { useIngestStore } from "@/lib/store/ingest";
@@ -18,10 +19,15 @@ export function ImportView() {
   const dragItemCount = useIngestStore((s) => s.dragItemCount);
   const jobs = useIngestStore((s) => s.jobs);
   const error = useIngestStore((s) => s.error);
+  const spotifyNotConnected = useIngestStore((s) => s.spotifyNotConnected);
+  const loginUrl = useSpotifyLoginUrl();
   const submitFiles = useIngestStore((s) => s.submitFiles);
   const cancelJob = useIngestStore((s) => s.cancelJob);
+  const importFromSpotify = useIngestStore((s) => s.importFromSpotify);
   const uploadProgress = useIngestStore((s) => s.uploadProgress);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const [spotifyUrl, setSpotifyUrl] = useState("");
+  const [isSubmittingSpotify, setIsSubmittingSpotify] = useState(false);
 
   useEffect(() => {
     void useIngestStore.getState().hydrateJobs();
@@ -68,6 +74,19 @@ export function ImportView() {
       return;
     }
     void submitFiles(audio);
+  }
+
+  async function handleSpotifySubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const url = spotifyUrl.trim();
+    if (!url || isSubmittingSpotify) return;
+    setIsSubmittingSpotify(true);
+    try {
+      await importFromSpotify(url);
+      setSpotifyUrl("");
+    } finally {
+      setIsSubmittingSpotify(false);
+    }
   }
 
   return (
@@ -125,7 +144,37 @@ export function ImportView() {
           <p className="mt-1.5 font-mono text-xs text-t3">FLAC · ALAC · MP3 · WAV · AIFF · OGG · OPUS · WEBM</p>
         </button>
 
-        {error ? <p className="mt-4 text-sm text-err">{error}</p> : null}
+        <form onSubmit={handleSpotifySubmit} className="mt-4 flex items-center gap-2.5">
+          <input
+            type="url"
+            inputMode="url"
+            value={spotifyUrl}
+            onChange={(e) => setSpotifyUrl(e.target.value)}
+            placeholder="Paste a link to one of your Spotify playlists…"
+            className="flex-1 rounded-lg border border-line bg-surf px-3 py-2 text-sm text-t1 placeholder:text-t3 focus:border-acc focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={!spotifyUrl.trim() || isSubmittingSpotify}
+            className="whitespace-nowrap rounded-lg border border-line bg-surf px-3 py-2 text-[13px] text-t2 hover:border-acc hover:text-t1 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isSubmittingSpotify ? "Finding tracks…" : "Import from Spotify"}
+          </button>
+        </form>
+
+        {spotifyNotConnected ? (
+          <p className="mt-4 flex flex-wrap items-center gap-2 text-sm text-err">
+            Connect your Spotify account to import playlists.
+            <a
+              href={loginUrl}
+              className="rounded-md border border-line bg-surf px-2.5 py-1 text-xs font-medium text-t1 hover:border-acc"
+            >
+              Connect Spotify
+            </a>
+          </p>
+        ) : error ? (
+          <p className="mt-4 text-sm text-err">{error}</p>
+        ) : null}
 
         {files.length > 0 ? (
           <section className="mt-8">
