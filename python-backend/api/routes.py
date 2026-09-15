@@ -118,6 +118,8 @@ async def download_file(job_id: str):
     name = job.filename or Path(job.filepath).name
     if name.lower().endswith(".mp3"):
         media_type = "audio/mpeg"
+    elif name.lower().endswith(".opus"):
+        media_type = "audio/ogg"
     elif name.lower().endswith(".mp4"):
         media_type = "video/mp4"
     elif name.lower().endswith(".webm"):

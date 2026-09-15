@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, renameSync, statSync, unlinkSync } from "node:fs";
 import path from "node:path";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { generateKeyBetween } from "fractional-indexing";
 import { getDb } from "../db/client";
-import { playlistTracks } from "../db/schema";
+import { importJobs, playlistTracks, tracks } from "../db/schema";
 import { cancelPythonJob, postMatchJob, streamJobUntilDone } from "../pythonBackend/client";
 import type { SpotifyTrackMetadata } from "../spotify/client";
 import { publishJobUpdate } from "./events";
@@ -39,6 +39,29 @@ export async function processSpotifyImportFile(
 
   const artist = metadata.artists[0] ?? "Unknown Artist";
   const outputDir = path.join(stagingDirFor(jobUuid), String(jobFileId));
+
+  // Same Spotify track already in the library (re-importing a playlist, or the same song
+  // showing up in two playlists) — skip the YouTube match + download entirely and just point
+  // the target playlist at the existing track. Mirrors folderScanPipeline's duplicate_skipped
+  // handling for watched-folder rescans.
+  const db = getDb();
+  const existingTrack = db
+    .select({ id: tracks.id })
+    .from(tracks)
+    .where(and(eq(tracks.sourceProvider, "spotify"), eq(tracks.sourceUrl, metadata.spotifyUrl), isNull(tracks.deletedAt)))
+    .get();
+  if (existingTrack) {
+    setJobFileStatus(jobFileId, "duplicate_skipped", { trackId: existingTrack.id });
+    db.update(importJobs)
+      .set({ processedFiles: sql`${importJobs.processedFiles} + 1` })
+      .where(eq(importJobs.id, jobId))
+      .run();
+    if (targetPlaylistId != null) {
+      appendTrackToCrate(targetPlaylistId, existingTrack.id);
+    }
+    publishJobUpdate(jobId);
+    return;
+  }
 
   try {
     setJobFileStatus(jobFileId, "matching");

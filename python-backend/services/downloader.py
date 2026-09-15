@@ -135,8 +135,12 @@ def download_video(
         ydl_opts["postprocessors"] = [
             {
                 "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "192",
+                # YouTube/SoundCloud "bestaudio" is already Opus in most cases, so this is a
+                # stream copy (no re-encode) rather than a lossy transcode like mp3 was —
+                # smaller files at equal or better quality. Only re-encodes (at this bitrate,
+                # VBR) when the source audio codec isn't already opus.
+                "preferredcodec": "opus",
+                "preferredquality": "128",
             }
         ]
         if not check_ffmpeg():
@@ -160,8 +164,8 @@ def download_video(
             if info:
                 prepared = ydl.prepare_filename(info)
                 if mode == DownloadMode.AUDIO:
-                    # Audio postprocessor changes extension to mp3
-                    prepared = str(Path(prepared).with_suffix(".mp3"))
+                    # Audio postprocessor changes extension to opus
+                    prepared = str(Path(prepared).with_suffix(".opus"))
                 result_path["path"] = Path(prepared)
     except yt_dlp.utils.DownloadError as e:
         raise RuntimeError(friendly_error(e)) from e
