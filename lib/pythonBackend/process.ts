@@ -37,6 +37,19 @@ export async function isPythonBackendAvailable(): Promise<boolean> {
   }
 }
 
+/** Polls /api/health until it responds or `timeoutMs` elapses. Bridges the gap between `spawn()`
+ *  returning (immediately) and uvicorn actually binding the port + finishing its own imports —
+ *  without this, requests fired right after dev-server startup (AI DJ stems jobs, in particular)
+ *  see ECONNREFUSED and get misreported as a permanent failure instead of a brief startup race. */
+async function waitForPythonBackend(timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await isPythonBackendAvailable()) return true;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+  return false;
+}
+
 /**
  * Spawns the Python backend if nothing is already answering on its port — safe to
  * call once at startup. Never throws: a missing/misconfigured Python setup just
@@ -85,5 +98,13 @@ export async function startPythonBackend(): Promise<void> {
         if (child && !child.killed) child.kill();
       });
     }
+  }
+
+  const ready = await waitForPythonBackend(20000);
+  if (!ready) {
+    console.warn(
+      "[local-fi] Python backend didn't answer /api/health within 20s of starting — it may still be booting " +
+        "(first-time torch/demucs imports can be slow). AI DJ stem separation and Spotify import may briefly 503."
+    );
   }
 }

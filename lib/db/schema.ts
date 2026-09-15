@@ -203,6 +203,12 @@ export const tracks = sqliteTable(
     analysisError: text("analysis_error"),
     analyzedAt: text("analyzed_at"),
 
+    /** Beat-grid sidecar for AI DJ beatmatching (lib/analysis/beatGrid.ts) — same scalar-status/disk-blob
+     *  split as waveformPath/waveformStatus above. The blob is a small JSON array of beat timestamps
+     *  (seconds) from music-tempo's Beatroot output, computed alongside bpm/key detection. */
+    beatGridStatus: text("beat_grid_status").notNull().default("none"),
+    beatGridPath: text("beat_grid_path"),
+
     /** Audio-content fingerprint status for mixtape matching (lib/fingerprint/*) — unrelated to
      *  the `fingerprint` column above, which is only a dedup hash of path+size+mtime. The actual
      *  landmark/hash data never lives here; it's kept entirely inside python-backend's own
@@ -256,6 +262,7 @@ export const tracks = sqliteTable(
       "chk_tracks_analysis_status",
       sql`${t.analysisStatus} IN ('none','queued','analyzing','ready','failed')`
     ),
+    check("chk_tracks_beat_grid_status", sql`${t.beatGridStatus} IN ('none','ready','failed')`),
     check(
       "chk_tracks_landmark_status",
       sql`${t.landmarkStatus} IN ('none','queued','processing','ready','failed')`

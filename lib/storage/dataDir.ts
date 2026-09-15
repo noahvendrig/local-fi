@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 // See ARCHITECTURE.md §2 for the full layout this bootstraps.
-const SUBDIRS = ["originals", "artwork", "waveforms", "staging", "trash", "tmp", "mixtapes"] as const;
+const SUBDIRS = ["originals", "artwork", "waveforms", "beatgrids", "staging", "trash", "tmp", "mixtapes"] as const;
 
 export function getDataDir(): string {
   // Runtime-only storage outside the source tree — never meant to be traced/bundled.

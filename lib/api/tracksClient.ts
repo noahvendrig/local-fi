@@ -106,3 +106,16 @@ export function revealTrackInFolder(id: number): Promise<void> {
 export function recordPlay(id: number): Promise<void> {
   return request(`/api/v1/tracks/${id}/play`, { method: "POST" });
 }
+
+export interface TrackBeatGrid {
+  bpm: number;
+  /** All detected beat timestamps (seconds). */
+  beats: number[];
+  /** Bar-1 ("beat one") timestamps (seconds) — see lib/analysis/beatGrid.ts's estimateDownbeats. */
+  downbeats: number[];
+}
+
+/** GET /api/v1/tracks/:id/beat-grid — used by the AI DJ session to bar-align transitions. */
+export function fetchBeatGrid(id: number): Promise<TrackBeatGrid> {
+  return request(`/api/v1/tracks/${id}/beat-grid`);
+}

@@ -18,6 +18,11 @@ export function waveformPathFor(trackUuid: string): string {
   return path.join(getDataDir(), "waveforms", shardOf(trackUuid), `${trackUuid}.lfpk`);
 }
 
+/** JSON array of beat timestamps (seconds) — see beatGridStatus/beatGridPath on the tracks table. */
+export function beatGridPathFor(trackUuid: string): string {
+  return path.join(getDataDir(), "beatgrids", shardOf(trackUuid), `${trackUuid}.json`);
+}
+
 export function artworkPathFor(trackUuid: string, ext: string): string {
   return path.join(getDataDir(), "artwork", shardOf(trackUuid), `${trackUuid}.${ext}`);
 }

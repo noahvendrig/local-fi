@@ -244,6 +244,12 @@ export function CrateDetailView({ playlistId }: { playlistId: number }) {
             >
               DJ view
             </Link>
+            <Link
+              href={`/crates/${playlistId}/ai-dj`}
+              className="flex items-center gap-2 rounded-lg border border-line px-4 py-2.5 text-[13px] font-medium text-t1 hover:border-acc hover:bg-surf-2"
+            >
+              AI DJ
+            </Link>
           </div>
           {exportError ? <p className="mt-2 text-xs text-err">{exportError}</p> : null}
 

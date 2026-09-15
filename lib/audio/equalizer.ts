@@ -9,6 +9,15 @@ import { EQ_BAND_HZ, EQ_Q, dbToLinear, type EqState } from "./eqConfig";
 
 export type DeckId = 0 | 1;
 
+/** Caller-chosen key identifying one live AI DJ stem source, e.g. `${trackId}:vocals`. */
+export type AiDjStemHandle = string;
+
+interface AiDjStemNode {
+  source: AudioBufferSourceNode;
+  st: SoundTouchNode;
+  gain: GainNode;
+}
+
 const SOUNDTOUCH_PROCESSOR_URL = "/soundtouch-processor.js";
 
 /**
@@ -49,6 +58,15 @@ class PlaybackEqualizer {
   // recreate one, or React Strict Mode's dev-only double effect invoke (mount/cleanup/mount on
   // the same element) throws InvalidStateError on the second connect.
   private djSourceCache = new WeakMap<HTMLAudioElement, MediaElementAudioSourceNode>();
+
+  // AI DJ (§Phase 6) — a separate, isolated chain from the single-source DJ chain above, since a
+  // live AI DJ transition needs up to 4 simultaneous stem sources at once (outgoing vocals/
+  // instrumental fading out, incoming vocals/instrumental fading in). Each stem is keyed by a
+  // caller-chosen handle rather than a fixed slot, so useAiDjEngine.ts can track "current" and
+  // "next" independently of a hardcoded deck count. Feeds the same shared mixer as everything
+  // else, so EQ/volume apply uniformly.
+  private aiDjStems = new Map<AiDjStemHandle, AiDjStemNode>();
+  private aiDjProcessorRegistered: Promise<void> | null = null;
 
   connectDeck(audio: HTMLAudioElement, deck: DeckId): void {
     if (this.sourceNodes[deck] && this.connectedElements[deck] === audio) return;
@@ -185,6 +203,146 @@ class PlaybackEqualizer {
     if (!ctx || !stNode) return;
     stNode.playbackRate.setValueAtTime(tempoRatio, ctx.currentTime);
     stNode.pitchSemitones.setValueAtTime(pitchSemitones, ctx.currentTime);
+  }
+
+  /** The shared AudioContext's current time, or null before it's been created. Lets callers (e.g.
+   *  useAiDjEngine) schedule AI DJ stem starts/fades against the same clock this class uses. */
+  getAudioContextTime(): number | null {
+    return this.audioContext?.currentTime ?? null;
+  }
+
+  /** Ensures the shared AudioContext exists and decodes audio the same way DJ-mode stems will
+   *  play back through — used by decodeStemBuffer.ts so a fetched stem WAV is decoded against
+   *  the exact context it will later be scheduled on. */
+  ensureAudioContext(): AudioContext | null {
+    return this.ensureContext();
+  }
+
+  private async ensureAiDjWorklet(): Promise<{ ctx: AudioContext; SoundTouchNodeCtor: typeof SoundTouchNode } | null> {
+    const ctx = this.ensureContext();
+    if (!ctx || !this.mixerNode) return null;
+    const { SoundTouchNode: SoundTouchNodeCtor } = await import("@soundtouchjs/audio-worklet");
+    if (!this.aiDjProcessorRegistered) {
+      this.aiDjProcessorRegistered = SoundTouchNodeCtor.register(ctx, SOUNDTOUCH_PROCESSOR_URL);
+    }
+    await this.aiDjProcessorRegistered;
+    return { ctx, SoundTouchNodeCtor };
+  }
+
+  /**
+   * Starts one AI DJ stem buffer (a decoded vocals/instrumental/full-mix AudioBuffer) through its
+   * own SoundTouch time-stretch node into the shared mixer, keyed by `handle`. Each call creates a
+   * fresh AudioBufferSourceNode — per the Web Audio spec a source can only ever be started once —
+   * so call this again with the same handle only after that handle's previous node has
+   * ended/stopped (disconnectAiDjStem clears it immediately if you need to replace it early).
+   * `when` and the returned schedule are in the shared AudioContext's clock (getAudioContextTime).
+   */
+  async startAiDjStem(
+    handle: AiDjStemHandle,
+    buffer: AudioBuffer,
+    opts: { when: number; offsetSec?: number; tempoRatio?: number; pitchSemitones?: number; gain?: number }
+  ): Promise<void> {
+    const ready = await this.ensureAiDjWorklet();
+    if (!ready || !this.mixerNode) return;
+    const { ctx, SoundTouchNodeCtor } = ready;
+
+    this.disconnectAiDjStem(handle);
+
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    const st = new SoundTouchNodeCtor({ context: ctx });
+    st.playbackRate.setValueAtTime(opts.tempoRatio ?? 1, ctx.currentTime);
+    st.pitchSemitones.setValueAtTime(opts.pitchSemitones ?? 0, ctx.currentTime);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(opts.gain ?? 1, ctx.currentTime);
+
+    source.connect(st);
+    st.connect(gain);
+    gain.connect(this.mixerNode);
+
+    const node: AiDjStemNode = { source, st, gain };
+    source.onended = () => {
+      if (this.aiDjStems.get(handle) !== node) return; // handle was already replaced/cleared
+      st.disconnect();
+      gain.disconnect();
+      source.disconnect();
+      this.aiDjStems.delete(handle);
+    };
+
+    source.start(Math.max(ctx.currentTime, opts.when), Math.max(0, opts.offsetSec ?? 0));
+    this.aiDjStems.set(handle, node);
+  }
+
+  /** Immediately (no ramp) sets a stem's live tempo ratio / pitch shift. */
+  setAiDjStemTempoPitch(handle: AiDjStemHandle, tempoRatio: number, pitchSemitones: number): void {
+    const node = this.aiDjStems.get(handle);
+    const ctx = this.audioContext;
+    if (!node || !ctx) return;
+    node.st.playbackRate.setValueAtTime(tempoRatio, ctx.currentTime);
+    node.st.pitchSemitones.setValueAtTime(pitchSemitones, ctx.currentTime);
+  }
+
+  /** Linearly ramps a stem's tempo ratio / pitch shift to a target, finishing at `when + durationSec` — used to ease a just-transitioned-in track back to its own native tempo once it's the only one playing. */
+  rampAiDjStemTempoPitch(handle: AiDjStemHandle, targetTempoRatio: number, targetPitchSemitones: number, when: number, durationSec: number): void {
+    const node = this.aiDjStems.get(handle);
+    if (!node) return;
+    const rate = node.st.playbackRate;
+    const pitch = node.st.pitchSemitones;
+    rate.cancelScheduledValues(when);
+    rate.setValueAtTime(rate.value, when);
+    rate.linearRampToValueAtTime(targetTempoRatio, when + Math.max(0.05, durationSec));
+    pitch.cancelScheduledValues(when);
+    pitch.setValueAtTime(pitch.value, when);
+    pitch.linearRampToValueAtTime(targetPitchSemitones, when + Math.max(0.05, durationSec));
+  }
+
+  /** Immediately (no ramp) sets a stem's gain — e.g. to hard-mute one that's already faded out. */
+  setAiDjStemGain(handle: AiDjStemHandle, gain: number): void {
+    const node = this.aiDjStems.get(handle);
+    const ctx = this.audioContext;
+    if (!node || !ctx) return;
+    node.gain.gain.cancelScheduledValues(ctx.currentTime);
+    node.gain.gain.setValueAtTime(gain, ctx.currentTime);
+  }
+
+  /** Schedules an equal-power gain ramp (see crossfade.ts's curves) on a stem, starting at AudioContext time `when`. */
+  scheduleAiDjStemGain(handle: AiDjStemHandle, curve: Float32Array, when: number, durationSec: number): void {
+    const node = this.aiDjStems.get(handle);
+    if (!node) return;
+    node.gain.gain.cancelScheduledValues(when);
+    node.gain.gain.setValueCurveAtTime(curve, when, Math.max(0.05, durationSec));
+  }
+
+  /** Stops an AI DJ stem's source at AudioContext time `when` (default: immediately). Its onended handler tears down the rest of the chain. */
+  stopAiDjStem(handle: AiDjStemHandle, when?: number): void {
+    const node = this.aiDjStems.get(handle);
+    if (!node) return;
+    try {
+      node.source.stop(when);
+    } catch {
+      // Already stopped/ended — nothing to do.
+    }
+  }
+
+  /** Immediately tears down and forgets an AI DJ stem, whether or not it was still playing. */
+  disconnectAiDjStem(handle: AiDjStemHandle): void {
+    const node = this.aiDjStems.get(handle);
+    if (!node) return;
+    node.source.onended = null;
+    try {
+      node.source.stop();
+    } catch {
+      // Already stopped/ended.
+    }
+    node.source.disconnect();
+    node.st.disconnect();
+    node.gain.disconnect();
+    this.aiDjStems.delete(handle);
+  }
+
+  /** Tears down every live AI DJ stem — called when a session ends or the route unmounts. */
+  disconnectAllAiDjStems(): void {
+    for (const handle of Array.from(this.aiDjStems.keys())) this.disconnectAiDjStem(handle);
   }
 
   private ensureContext(): AudioContext | null {

@@ -3,6 +3,7 @@ import time
 from pathlib import Path
 
 from config import DOWNLOAD_DIR, FILE_TTL_HOURS
+from services.stems.storage import cleanup_stale_stem_sessions
 
 
 def cleanup_old_files() -> int:
@@ -20,4 +21,5 @@ def cleanup_old_files() -> int:
                 deleted += 1
         except OSError:
             pass
+    deleted += cleanup_stale_stem_sessions()
     return deleted

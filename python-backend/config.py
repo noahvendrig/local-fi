@@ -58,3 +58,20 @@ SIMILARITY_DATA_DIR.mkdir(parents=True, exist_ok=True)
 # schemas package (models/schemas.py, models/fingerprint_schemas.py).
 similarity_model_path_env = os.getenv("LOCALFI_SIMILARITY_MODEL_PATH", "").strip()
 SIMILARITY_MODEL_PATH = Path(similarity_model_path_env) if similarity_model_path_env else (ROOT_DIR / "weights" / "cnn14.onnx")
+
+# Temp stem-separation output for the AI DJ feature (services/stems/). Deliberately namespaced
+# under "tmp" (not alongside FINGERPRINT_DATA_DIR/SIMILARITY_DATA_DIR above) -- AI DJ sessions are
+# ephemeral by design, so this directory is swept on a TTL (services/cleanup.py) rather than kept
+# as durable derived data. Same env-defaulting shape as the dirs above.
+stems_data_dir_env = os.getenv("STEMS_DATA_DIR", "").strip()
+if stems_data_dir_env:
+    STEMS_DATA_DIR = Path(stems_data_dir_env)
+elif localfi_data_dir_env:
+    STEMS_DATA_DIR = Path(localfi_data_dir_env) / "tmp" / "stems"
+else:
+    STEMS_DATA_DIR = ROOT_DIR / "tmp" / "stems"
+STEMS_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+STEMS_MAX_CONCURRENT_JOBS = int(os.getenv("STEMS_MAX_CONCURRENT_JOBS", "1"))
+# How long a session's separated stems are kept before the cleanup sweep deletes them.
+STEMS_SESSION_TTL_HOURS = float(os.getenv("STEMS_SESSION_TTL_HOURS", "2"))

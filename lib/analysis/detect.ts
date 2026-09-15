@@ -3,7 +3,8 @@ import { getDb } from "../db/client";
 import { analysisJobTracks, analysisJobs, tracks } from "../db/schema";
 import { resolveTrackAbsPath } from "../storage/resolveTrackPath";
 import { publishAnalysisJobUpdate } from "./events";
-import { detectBpm } from "./bpmDetect";
+import { detectBeatGrid } from "./bpmDetect";
+import { estimateDownbeats, persistBeatGrid } from "./beatGrid";
 import { detectKey } from "./keyDetect";
 import { ANALYSIS_SAMPLE_RATE, decodeMonoPcmF32 } from "./pcmDecode";
 
@@ -27,21 +28,33 @@ export async function analyzeTrack(trackId: number, jobTrackId: number, jobId: n
 
     const needsBpm = track.bpm == null;
     const needsKey = track.key == null;
+    const needsBeatGrid = track.beatGridStatus !== "ready";
 
     let bpm = track.bpm;
     let bpmSource = track.bpmSource;
     let key = track.key;
     let keySource = track.keySource;
+    let beatGridStatus = track.beatGridStatus;
+    let beatGridPath = track.beatGridPath;
 
-    if (needsBpm || needsKey) {
+    if (needsBpm || needsKey || needsBeatGrid) {
       const absPath = resolveTrackAbsPath(track);
       const samples = await decodeMonoPcmF32(absPath, ANALYSIS_SAMPLE_RATE);
 
-      if (needsBpm) {
-        const detected = detectBpm(samples, ANALYSIS_SAMPLE_RATE);
-        if (detected != null) {
-          bpm = detected;
+      if (needsBpm || needsBeatGrid) {
+        // Beatroot's beat grid comes out of the same pass as its tempo estimate, so a beat-grid-only
+        // backfill (a track with a tagged bpm but no grid yet) still runs this detector — the tempo
+        // it returns is simply discarded when bpmSource is already 'tag'/'manual'.
+        const detected = detectBeatGrid(samples, ANALYSIS_SAMPLE_RATE);
+        if (needsBpm && detected != null) {
+          bpm = detected.tempo;
           bpmSource = "detected";
+        }
+        if (needsBeatGrid) {
+          beatGridStatus = detected != null ? "ready" : "failed";
+          beatGridPath = detected != null
+            ? persistBeatGrid(track.uuid, detected.beats, estimateDownbeats(detected.beats, samples, ANALYSIS_SAMPLE_RATE))
+            : beatGridPath;
         }
       }
       if (needsKey) {
@@ -54,7 +67,7 @@ export async function analyzeTrack(trackId: number, jobTrackId: number, jobId: n
     }
 
     db.update(tracks)
-      .set({ bpm, bpmSource, key, keySource, analysisStatus: "ready", analysisError: null, analyzedAt: now() })
+      .set({ bpm, bpmSource, key, keySource, beatGridStatus, beatGridPath, analysisStatus: "ready", analysisError: null, analyzedAt: now() })
       .where(eq(tracks.id, trackId))
       .run();
     db.update(analysisJobTracks).set({ status: "done", updatedAt: now() }).where(eq(analysisJobTracks.id, jobTrackId)).run();

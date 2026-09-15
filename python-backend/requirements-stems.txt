@@ -1,0 +1,16 @@
+# Optional extras for the AI DJ feature's stem separation (services/stems/). Kept out of
+# requirements.txt because torch is large and GPU-wheel-specific -- the base app boots and serves
+# every other route (downloads, fingerprinting, Smart Shuffle) without these installed. AI DJ
+# itself degrades gracefully too: services/stems/separator.py raises ModelNotAvailableError when
+# these aren't present, which the job manager treats as one failed transition (falls back to a
+# plain crossfade), never a crash.
+#
+# `pip install -r requirements-stems.txt` as-is installs the CPU-only torch build, which works but
+# is slow for a 3-4 minute track. For a CUDA build matching your GPU driver, install torch/torchaudio
+# from PyTorch's own index instead -- see https://pytorch.org/get-started/locally/ for the exact
+# command for your platform/CUDA version, e.g. for CUDA 12.1:
+#   pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+# then `pip install demucs>=4.0.0` separately so it doesn't reinstall a different torch build.
+torch
+torchaudio
+demucs>=4.0.0
