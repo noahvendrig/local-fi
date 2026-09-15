@@ -51,3 +51,4 @@ python-backend/.venv/
 python-backend/__pycache__/
 python-backend/**/__pycache__/
 python-backend/downloads/
+python-backend/fingerprints/
