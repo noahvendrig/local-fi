@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchPlaylist } from "@/lib/api/playlistsClient";
 import { sequenceCrateForAiDj } from "@/lib/audio/aiDjSequencer";
@@ -30,6 +30,16 @@ export function AiDjCrateView({ playlistId }: { playlistId: number }) {
   const started = sessionId != null;
 
   const sequenced = useMemo(() => (playlist ? sequenceCrateForAiDj(playlist.tracks) : null), [playlist]);
+
+  // Prefilled from the set's first (anchor) track once sequencing resolves, then left to the user
+  // to adjust — every track in the session gets time-stretched to this one shared tempo. Derived
+  // rather than seeded via an effect: the field shows the user's edit once they've made one, and
+  // falls back to the live suggestion until then.
+  const suggestedBpm = sequenced?.order[0]?.bpm ?? null;
+  const [targetBpmOverride, setTargetBpmOverride] = useState<string | null>(null);
+  const targetBpmInput = targetBpmOverride ?? (suggestedBpm != null ? String(Math.round(suggestedBpm)) : "");
+  const targetBpm = Number(targetBpmInput);
+  const targetBpmValid = Number.isFinite(targetBpm) && targetBpm > 0;
 
   if (isLoading) return null;
 
@@ -82,15 +92,29 @@ export function AiDjCrateView({ playlistId }: { playlistId: number }) {
             </p>
           ) : (
             <>
+              <label className="flex items-center gap-2 text-[13px] text-t2">
+                Set BPM
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={targetBpmInput}
+                  onChange={(e) => setTargetBpmOverride(e.target.value)}
+                  className="w-20 rounded-lg border border-line bg-bg px-2 py-1.5 text-[13px] text-t1 focus:border-acc focus:outline-none"
+                  aria-label="AI DJ target BPM"
+                />
+              </label>
               <button
                 type="button"
-                onClick={() => void engine.beginSession(playlistId, sequenced.order, sequenced.skipped.length)}
-                className="flex items-center gap-2 rounded-lg bg-acc px-4 py-2.5 text-[13px] font-medium text-on-acc hover:opacity-90"
+                disabled={!targetBpmValid}
+                onClick={() => targetBpmValid && void engine.beginSession(playlistId, sequenced.order, sequenced.skipped.length, targetBpm)}
+                className="flex items-center gap-2 rounded-lg bg-acc px-4 py-2.5 text-[13px] font-medium text-on-acc hover:opacity-90 disabled:opacity-50"
               >
                 ▶ Start AI DJ set
               </button>
               <p className="text-[13px] text-t2">
-                Auto-mixes {sequenced.order.length} track{sequenced.order.length === 1 ? "" : "s"} with beatmatched stem-mashup transitions.
+                Auto-mixes {sequenced.order.length} track{sequenced.order.length === 1 ? "" : "s"}, all locked to{" "}
+                {targetBpmValid ? targetBpm : "—"} BPM, with beatmatched stem-mashup transitions.
                 {sequenced.skipped.length > 0
                   ? ` ${sequenced.skipped.length} track${sequenced.skipped.length === 1 ? "" : "s"} skipped (no BPM).`
                   : ""}

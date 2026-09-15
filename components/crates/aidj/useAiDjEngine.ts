@@ -8,11 +8,14 @@ import { fetchBeatGrid } from "@/lib/api/tracksClient";
 import { equalPowerInCurve, equalPowerOutCurve } from "@/lib/audio/crossfade";
 import { decodeStemBuffer } from "@/lib/audio/decodeStemBuffer";
 import { getPlaybackEqualizer } from "@/lib/audio/equalizer";
+import { findLoopSection, sumAudioBuffers, type LoopSection } from "@/lib/audio/loopPointDetect";
 import { computeTransitionPlan, type TransitionPlan, type TransitionTrackInfo } from "@/lib/audio/transitionPlan";
+import { transposeCamelotKey } from "@/lib/tags/camelotKey";
 import { useAiDjStore, type AiDjPrepStatus } from "@/lib/store/aiDj";
 import { useDjStore } from "@/lib/store/dj";
 import { useMixtapePlayerStore } from "@/lib/store/mixtapePlayer";
 import { usePlayerStore } from "@/lib/store/player";
+import { useTransportSourceStore } from "@/lib/store/transportSource";
 
 /** How long before a transition's bar-aligned start we give up waiting on stem separation and
  *  commit to a plain crossfade instead — the transition must never stall or gap. */
@@ -44,11 +47,16 @@ interface CurrentRuntime {
   track: PlaylistTrackItem;
   index: number;
   handles: StemHandles | FullHandle;
-  /** Anchor for mapping AudioContext time to this track's own, rate-1 logical position — valid
-   *  because a "current" track's own playback rate is always 1 once settled (only the *incoming*
-   *  side of a transition is ever time-stretched; see transitionPlan.ts). */
+  /** Anchor for mapping AudioContext time to this track's own, native-file-timeline position:
+   *  nativePos(t) = anchorPosition + (t - anchorContextTime) * tempoRatio. tempoRatio is this
+   *  track's permanent targetBpm/ownBpm stretch factor — every AI DJ track is locked to the same
+   *  session-wide tempo for its whole playing lifetime, so there's no separate "settled" rate. */
   anchorPosition: number;
   anchorContextTime: number;
+  tempoRatio: number;
+  /** Permanent semitone shift already applied to this track (see chooseKeyShift in
+   *  transitionPlan.ts) — needed to work out its *effective* key when planning the next transition. */
+  pitchSemitones: number;
   timers: number[];
 }
 
@@ -60,6 +68,20 @@ function isFullHandle(handles: StemHandles | FullHandle): handles is FullHandle 
   return "full" in handles;
 }
 
+/** Pause/resume/toggle only ever touch the shared AudioContext singleton + the shared store, so
+ *  they're exposed as free functions TransportBar can call without holding a reference to the
+ *  per-route engine controller instance. */
+export function pauseAiDjPlayback(): void {
+  const ctx = getPlaybackEqualizer().ensureAudioContext();
+  if (ctx) void ctx.suspend();
+  useAiDjStore.getState().setPlaying(false);
+}
+
+export function resumeAiDjPlayback(): void {
+  void getPlaybackEqualizer().resume();
+  useAiDjStore.getState().setPlaying(true);
+}
+
 /**
  * Drives one AI DJ session end-to-end: sequencing was already done by the caller
  * (sequenceCrateForAiDj), so this just plays through `order`, running the JIT background stem-
@@ -67,24 +89,33 @@ function isFullHandle(handles: StemHandles | FullHandle): handles is FullHandle 
  * beatmatched stem-mashup transition (or a plain crossfade fallback if prep doesn't finish in
  * time) between each pair. One controller instance per mounted AI DJ route — see useAiDjEngine
  * below. All scheduling math lives here; transitionPlan.ts stays pure/synchronous.
+ *
+ * Every track in the set is locked to one session-wide tempo (targetBpm, chosen by the user at
+ * session start) — see CurrentRuntime.tempoRatio — and each transition's incoming track is only
+ * pitch-shifted when its own key doesn't already mix well with the outgoing track's *effective*
+ * key (chooseKeyShift in transitionPlan.ts), so the key journey moves around the Camelot wheel
+ * instead of collapsing every track onto one pitch.
  */
 export class AiDjEngineController {
   private sessionId: string | null = null;
   private order: PlaylistTrackItem[] = [];
+  private targetBpm = 120;
   private prepEntries = new Map<number, PrepEntry>();
   private beatGridCache = new Map<number, { bpm: number; downbeats: number[] }>();
   private currentRuntime: CurrentRuntime | null = null;
 
-  async beginSession(playlistId: number, order: PlaylistTrackItem[], skippedCount: number): Promise<void> {
+  async beginSession(playlistId: number, order: PlaylistTrackItem[], skippedCount: number, targetBpm: number): Promise<void> {
     this.endSession();
     const store = useAiDjStore.getState();
-    store.startSession(playlistId, order, skippedCount);
+    store.startSession(playlistId, order, skippedCount, targetBpm);
     this.sessionId = useAiDjStore.getState().sessionId;
     this.order = order;
+    this.targetBpm = targetBpm;
 
     usePlayerStore.getState().setPlaying(false);
     useMixtapePlayerStore.getState().setMixtapePlaying(false);
     useDjStore.getState().setDjPlaying(false);
+    useTransportSourceStore.getState().setActiveSource("aidj");
 
     fetchAiDjDeviceInfo()
       .then((info) => store.setDeviceInfo({ available: info.available, device: info.device, cudaDeviceName: info.cuda_device_name }))
@@ -94,14 +125,11 @@ export class AiDjEngineController {
   }
 
   pause(): void {
-    const ctx = getPlaybackEqualizer().ensureAudioContext();
-    if (ctx) void ctx.suspend();
-    useAiDjStore.getState().setPlaying(false);
+    pauseAiDjPlayback();
   }
 
   resume(): void {
-    void getPlaybackEqualizer().resume();
-    useAiDjStore.getState().setPlaying(true);
+    resumeAiDjPlayback();
   }
 
   togglePlayPause(): void {
@@ -156,6 +184,12 @@ export class AiDjEngineController {
     return `${trackId}:full`;
   }
 
+  /** targetBpm/track's-own-bpm — the permanent time-stretch ratio every AI DJ track plays at, from
+   *  the moment it starts through to when it's eventually the outgoing side of a later transition. */
+  private tempoRatioFor(track: PlaylistTrackItem): number {
+    return track.bpm ? this.targetBpm / track.bpm : 1;
+  }
+
   private async getBeatGrid(track: PlaylistTrackItem): Promise<{ bpm: number; downbeats: number[] }> {
     const cached = this.beatGridCache.get(track.id);
     if (cached) return cached;
@@ -177,6 +211,25 @@ export class AiDjEngineController {
     const buffer = await decodeStemBuffer(streamUrl(track.id));
     entry.fullBuffer = buffer;
     return buffer;
+  }
+
+  /** Looks for a safe (post-halfway, near-identically-repeating) loop point in `track`'s own
+   *  audio, using its already-separated stems summed back into an approximate full mix — a chorus
+   *  won't false-positive this way, since its vocals vary even though the instrumental repeats.
+   *  Returns null (falling back to computeTransitionPlan's default end-of-track point) whenever
+   *  those stems aren't ready yet; see the module doc comment on prepStems for why that's usually
+   *  fine in practice. */
+  private findSafeLoopSection(track: PlaylistTrackItem, info: TransitionTrackInfo): LoopSection | null {
+    const entry = this.prepFor(track.id);
+    if (!entry.vocalsBuffer || !entry.instrumentalBuffer) return null;
+    const ctx = getPlaybackEqualizer().ensureAudioContext();
+    if (!ctx) return null;
+    try {
+      const mix = sumAudioBuffers(entry.vocalsBuffer, entry.instrumentalBuffer, ctx);
+      return findLoopSection(mix, info.bpm, info.downbeats, info.durationSeconds);
+    } catch {
+      return null;
+    }
   }
 
   /** JIT background pipeline: separates one track's stems and decodes both buffers, updating the
@@ -217,9 +270,18 @@ export class AiDjEngineController {
     }
   }
 
+  private publishRuntimeAnchor(runtime: CurrentRuntime): void {
+    useAiDjStore.getState().setRuntimeAnchor({
+      anchorContextTime: runtime.anchorContextTime,
+      anchorPosition: runtime.anchorPosition,
+      tempoRatio: runtime.tempoRatio,
+    });
+  }
+
   /** Starts `order[index]` with no crossfade — used for the session's very first track and after
    *  a manual skip. Prefers already-separated stems (e.g. this track finished prepping as
-   *  "next" before the skip landed on it) over a fresh whole-mix fetch. */
+   *  "next" before the skip landed on it) over a fresh whole-mix fetch. The first track (and any
+   *  track landed on via skip) starts at its own native key — there's no predecessor to match. */
   private async playColdFromIndex(index: number): Promise<void> {
     const track = this.order[index];
     const store = useAiDjStore.getState();
@@ -243,19 +305,20 @@ export class AiDjEngineController {
 
     const entry = this.prepFor(track.id);
     const startAt = ctx.currentTime + START_PAD_SEC;
+    const tempoRatio = this.tempoRatioFor(track);
     let runtime: CurrentRuntime;
 
     try {
       if (entry.status === "ready" && entry.vocalsBuffer && entry.instrumentalBuffer) {
         const handles = this.stemHandlesFor(track.id);
-        await eq.startAiDjStem(handles.vocals, entry.vocalsBuffer, { when: startAt, gain: 1 });
-        await eq.startAiDjStem(handles.instrumental, entry.instrumentalBuffer, { when: startAt, gain: 1 });
-        runtime = { track, index, handles, anchorPosition: 0, anchorContextTime: startAt, timers: [] };
+        await eq.startAiDjStem(handles.vocals, entry.vocalsBuffer, { when: startAt, gain: 1, tempoRatio });
+        await eq.startAiDjStem(handles.instrumental, entry.instrumentalBuffer, { when: startAt, gain: 1, tempoRatio });
+        runtime = { track, index, handles, anchorPosition: 0, anchorContextTime: startAt, tempoRatio, pitchSemitones: 0, timers: [] };
       } else {
         const full = await this.ensureFallbackBuffer(track);
         const handle = this.fullHandleFor(track.id);
-        await eq.startAiDjStem(handle, full, { when: startAt, gain: 1 });
-        runtime = { track, index, handles: { full: handle }, anchorPosition: 0, anchorContextTime: startAt, timers: [] };
+        await eq.startAiDjStem(handle, full, { when: startAt, gain: 1, tempoRatio });
+        runtime = { track, index, handles: { full: handle }, anchorPosition: 0, anchorContextTime: startAt, tempoRatio, pitchSemitones: 0, timers: [] };
       }
     } catch (err) {
       store.setError(err instanceof Error ? err.message : "Could not start playback.");
@@ -267,6 +330,7 @@ export class AiDjEngineController {
     store.setLoading(false);
     store.setPlaying(true);
     store.setTransition(null);
+    this.publishRuntimeAnchor(runtime);
 
     if (isFullHandle(runtime.handles)) void this.prepStems(track);
     const next = this.order[index + 1];
@@ -296,11 +360,13 @@ export class AiDjEngineController {
       durationSeconds: next.durationSeconds,
       downbeats: nextGrid.downbeats,
     };
-    const plan = computeTransitionPlan(outgoingInfo, incomingInfo);
+    const outgoingEffectiveKey = runtime.track.key ? (transposeCamelotKey(runtime.track.key, runtime.pitchSemitones) ?? runtime.track.key) : null;
+    const loopSection = this.findSafeLoopSection(runtime.track, outgoingInfo);
+    const plan = computeTransitionPlan(outgoingInfo, incomingInfo, this.targetBpm, outgoingEffectiveKey, loopSection);
 
     const ctx = getPlaybackEqualizer().ensureAudioContext();
     if (!ctx) return;
-    const triggerContextTime = runtime.anchorContextTime + (plan.outgoingStartSec - runtime.anchorPosition);
+    const triggerContextTime = runtime.anchorContextTime + (plan.outgoingStartSec - runtime.anchorPosition) / runtime.tempoRatio;
     const now = ctx.currentTime;
 
     const deadlineDelayMs = Math.max(0, (triggerContextTime - DEADLINE_LEAD_SEC - now) * 1000);
@@ -309,6 +375,20 @@ export class AiDjEngineController {
     const deadlineTimer = window.setTimeout(() => this.checkPrepDeadline(next), deadlineDelayMs);
     const triggerTimer = window.setTimeout(() => void this.performTransition(runtime, next, plan, triggerContextTime), triggerDelayMs);
     runtime.timers.push(deadlineTimer, triggerTimer);
+
+    if (plan.loopRegion) {
+      // Whatever's currently playing for this track (full mix or its own stems) should hold on
+      // the verified-safe loop once it gets there, in case it reaches that point before the
+      // trigger fires and swaps in fresh (already-looping) sources of its own.
+      const eq = getPlaybackEqualizer();
+      const handles = runtime.handles;
+      if (isFullHandle(handles)) {
+        eq.setAiDjStemLoop(handles.full, plan.loopRegion.startSec, plan.loopRegion.endSec);
+      } else {
+        eq.setAiDjStemLoop(handles.vocals, plan.loopRegion.startSec, plan.loopRegion.endSec);
+        eq.setAiDjStemLoop(handles.instrumental, plan.loopRegion.startSec, plan.loopRegion.endSec);
+      }
+    }
   }
 
   private checkPrepDeadline(next: PlaylistTrackItem): void {
@@ -340,7 +420,7 @@ export class AiDjEngineController {
       return;
     }
     const at = Math.max(ctx.currentTime + START_PAD_SEC, triggerContextTime);
-    this.performFallbackTransition(runtime, next, nextIndex, full, at);
+    this.performFallbackTransition(runtime, next, nextIndex, full, at, plan);
   }
 
   private async performMashupTransition(
@@ -379,14 +459,26 @@ export class AiDjEngineController {
       if (selfEntry.vocalsBuffer && selfEntry.instrumentalBuffer) {
         // Swap the full-mix buffer for this track's own stems at the exact trigger instant, same
         // offset — inaudible, since vocals+instrumental sum back to the same mix — so the
-        // outgoing side of the mashup has independently-fadeable vocals/instrumental too.
+        // outgoing side of the mashup has independently-fadeable vocals/instrumental too. These
+        // are fresh source nodes, so they need their own tempoRatio/loop settings even though the
+        // full-mix source they replace already had them.
         const selfHandles = this.stemHandlesFor(runtime.track.id);
-        await eq.startAiDjStem(selfHandles.vocals, selfEntry.vocalsBuffer, { when: triggerContextTime, offsetSec: plan.outgoingStartSec, gain: 1 });
+        await eq.startAiDjStem(selfHandles.vocals, selfEntry.vocalsBuffer, {
+          when: triggerContextTime,
+          offsetSec: plan.outgoingStartSec,
+          gain: 1,
+          tempoRatio: runtime.tempoRatio,
+        });
         await eq.startAiDjStem(selfHandles.instrumental, selfEntry.instrumentalBuffer, {
           when: triggerContextTime,
           offsetSec: plan.outgoingStartSec,
           gain: 1,
+          tempoRatio: runtime.tempoRatio,
         });
+        if (plan.loopRegion) {
+          eq.setAiDjStemLoop(selfHandles.vocals, plan.loopRegion.startSec, plan.loopRegion.endSec);
+          eq.setAiDjStemLoop(selfHandles.instrumental, plan.loopRegion.startSec, plan.loopRegion.endSec);
+        }
         eq.stopAiDjStem(outHandles.full, triggerContextTime);
         eq.scheduleAiDjStemGain(selfHandles.vocals, equalPowerOutCurve(1), vocalsFadeStart, plan.vocalsFade.durationSec);
         eq.scheduleAiDjStemGain(selfHandles.instrumental, equalPowerOutCurve(1), instrumentalFadeStart, plan.instrumentalFade.durationSec);
@@ -407,14 +499,24 @@ export class AiDjEngineController {
 
     eq.scheduleAiDjStemGain(nextHandles.vocals, equalPowerInCurve(1), vocalsFadeStart, plan.vocalsFade.durationSec);
     eq.scheduleAiDjStemGain(nextHandles.instrumental, equalPowerInCurve(1), instrumentalFadeStart, plan.instrumentalFade.durationSec);
-    eq.rampAiDjStemTempoPitch(nextHandles.vocals, 1, 0, instrumentalFadeStart, plan.instrumentalFade.durationSec);
-    eq.rampAiDjStemTempoPitch(nextHandles.instrumental, 1, 0, instrumentalFadeStart, plan.instrumentalFade.durationSec);
+    // No tempo/pitch ramp-back: incoming is already at its permanent session values
+    // (plan.incomingTempoRatio / plan.incomingPitchSemitones) and simply keeps playing at them.
 
-    const logicalPositionAtSettle =
-      plan.incomingTempoRatio * (plan.incomingLeadInSec + plan.vocalsFade.durationSec) +
-      ((plan.incomingTempoRatio + 1) / 2) * plan.instrumentalFade.durationSec;
+    const logicalPositionAtSettle = plan.incomingTempoRatio * (transitionEnd - incomingStartAt);
 
-    this.commitTransition(runtime, next, nextIndex, nextHandles, logicalPositionAtSettle, transitionEnd, triggerContextTime, plan.totalDurationSec, "mashup");
+    this.commitTransition(
+      runtime,
+      next,
+      nextIndex,
+      nextHandles,
+      logicalPositionAtSettle,
+      transitionEnd,
+      triggerContextTime,
+      plan.totalDurationSec,
+      "mashup",
+      plan.incomingTempoRatio,
+      plan.incomingPitchSemitones
+    );
   }
 
   private performFallbackTransition(
@@ -422,11 +524,13 @@ export class AiDjEngineController {
     next: PlaylistTrackItem,
     nextIndex: number,
     fullBuffer: AudioBuffer,
-    triggerContextTime: number
+    triggerContextTime: number,
+    plan: TransitionPlan
   ): void {
     const eq = getPlaybackEqualizer();
     const nextHandle = this.fullHandleFor(next.id);
-    void eq.startAiDjStem(nextHandle, fullBuffer, { when: triggerContextTime, gain: 0 });
+    const tempoRatio = this.tempoRatioFor(next);
+    void eq.startAiDjStem(nextHandle, fullBuffer, { when: triggerContextTime, gain: 0, tempoRatio, pitchSemitones: plan.incomingPitchSemitones });
     eq.scheduleAiDjStemGain(nextHandle, equalPowerInCurve(1), triggerContextTime, FALLBACK_CROSSFADE_SEC);
 
     const outHandles = runtime.handles;
@@ -449,7 +553,9 @@ export class AiDjEngineController {
       triggerContextTime,
       triggerContextTime,
       FALLBACK_CROSSFADE_SEC,
-      "fallback"
+      "fallback",
+      tempoRatio,
+      plan.incomingPitchSemitones
     );
   }
 
@@ -462,16 +568,19 @@ export class AiDjEngineController {
     anchorContextTime: number,
     transitionStart: number,
     transitionDuration: number,
-    kind: "mashup" | "fallback"
+    kind: "mashup" | "fallback",
+    tempoRatio: number,
+    pitchSemitones: number
   ): void {
     for (const t of oldRuntime.timers) window.clearTimeout(t);
 
-    const runtime: CurrentRuntime = { track, index, handles, anchorPosition, anchorContextTime, timers: [] };
+    const runtime: CurrentRuntime = { track, index, handles, anchorPosition, anchorContextTime, tempoRatio, pitchSemitones, timers: [] };
     this.currentRuntime = runtime;
 
     const store = useAiDjStore.getState();
     store.advanceToIndex(index);
     store.setTransition({ startContextTime: transitionStart, totalDurationSec: transitionDuration, fromTrackId: oldRuntime.track.id, toTrackId: track.id, kind });
+    this.publishRuntimeAnchor(runtime);
 
     const ctx = getPlaybackEqualizer().ensureAudioContext();
     const clearDelayMs = Math.max(0, (transitionStart + transitionDuration - (ctx?.currentTime ?? transitionStart)) * 1000);

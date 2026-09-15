@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { withAuthQuery } from "@/lib/api/http";
 import { mixtapeWaveformUrl } from "@/lib/api/mixtapesClient";
+import { pauseAiDjPlayback, resumeAiDjPlayback } from "@/components/crates/aidj/useAiDjEngine";
+import { getPlaybackEqualizer } from "@/lib/audio/equalizer";
 import { resolveWaveform } from "@/lib/offline/playback";
 import { usePlayerStore } from "@/lib/store/player";
+import { useAiDjStore, type AiDjRuntimeAnchor } from "@/lib/store/aiDj";
 import { useDjStore } from "@/lib/store/dj";
 import { useMixtapePlayerStore } from "@/lib/store/mixtapePlayer";
 import { useTransportSourceStore } from "@/lib/store/transportSource";
@@ -27,6 +30,28 @@ import {
   ShuffleIcon,
   SmartShuffleIcon,
 } from "./PlayerIcons";
+
+/** AI DJ plays through Web Audio buffer sources, not an <audio> element, so it has no native
+ *  timeupdate event — this derives a live position from the shared AudioContext clock against
+ *  whatever anchor the engine last published (see useAiDjStore's runtimeAnchor), the same way
+ *  AiDjNowPlaying's TransitionProgress derives its bar. Naturally holds steady while paused, since
+ *  a suspended AudioContext's currentTime stops advancing on its own. */
+function useAiDjLiveCurrentTime(anchor: AiDjRuntimeAnchor | null): number {
+  const [time, setTime] = useState(0);
+  useEffect(() => {
+    if (!anchor) return;
+    let raf: number;
+    const tick = () => {
+      const ctx = getPlaybackEqualizer().ensureAudioContext();
+      const now = ctx?.currentTime ?? anchor.anchorContextTime;
+      setTime(Math.max(0, anchor.anchorPosition + (now - anchor.anchorContextTime) * anchor.tempoRatio));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [anchor]);
+  return time;
+}
 
 // Persistent 88px transport bar, mounted once in the root layout so it survives
 // route navigation (ARCHITECTURE.md M4/M5). Owns the dual <audio> decks — every
@@ -75,6 +100,14 @@ export function TransportBar() {
   const mixtapeWaveform = useMixtapePlayerStore((s) => s.waveform);
   const setMixtapeWaveform = useMixtapePlayerStore((s) => s.setWaveform);
 
+  const aiDjOrder = useAiDjStore((s) => s.order);
+  const aiDjCurrentIndex = useAiDjStore((s) => s.currentIndex);
+  const aiDjSessionId = useAiDjStore((s) => s.sessionId);
+  const aiDjIsPlaying = useAiDjStore((s) => s.isPlaying);
+  const aiDjRuntimeAnchor = useAiDjStore((s) => s.runtimeAnchor);
+  const aiDjTrack = aiDjOrder[aiDjCurrentIndex] ?? null;
+  const aiDjCurrentTime = useAiDjLiveCurrentTime(aiDjRuntimeAnchor);
+
   const { audioARef, audioBRef, handleTimeUpdate, handleEnded, handlePlay, handlePause } = usePlaybackEngine();
   useSmartShuffle();
 
@@ -83,12 +116,20 @@ export function TransportBar() {
   // the DJ deck from this bar can't make it silently fall back to a leftover regular track.
   const djActive = activeSource === "dj" && djTrack != null;
   const mixtapeActive = activeSource === "mixtape" && mixtapeNowPlaying != null;
-  const displayTrack = djActive ? djTrack : currentTrack;
-  const displayIsPlaying = djActive ? djIsPlaying : isPlaying;
-  const displayCurrentTime = djActive ? djCurrentTime : currentTime;
-  const displayTogglePlay = djActive ? () => setDjPlaying(!djIsPlaying) : togglePlay;
-  const displaySeek = djActive ? djSeekTo : seekTo;
+  const aiDjActive = activeSource === "aidj" && aiDjSessionId != null && aiDjTrack != null;
+  const displayTrack = aiDjActive ? aiDjTrack : djActive ? djTrack : currentTrack;
+  const displayIsPlaying = aiDjActive ? aiDjIsPlaying : djActive ? djIsPlaying : isPlaying;
+  const displayCurrentTime = aiDjActive ? aiDjCurrentTime : djActive ? djCurrentTime : currentTime;
+  const displayTogglePlay = aiDjActive
+    ? () => (aiDjIsPlaying ? pauseAiDjPlayback() : resumeAiDjPlayback())
+    : djActive
+      ? () => setDjPlaying(!djIsPlaying)
+      : togglePlay;
+  const displaySeek = aiDjActive ? () => {} : djActive ? djSeekTo : seekTo;
   const duration = displayTrack?.durationSeconds ?? 0;
+  // Prev/next/shuffle/repeat and scrubbing aren't supported for a live AI DJ session (same
+  // treatment as the DJ deck) — its transport is start/skip/pause only, driven from the AI DJ page.
+  const transportLocked = djActive || aiDjActive;
 
   useEffect(() => {
     setMixtapeWaveform(null);
@@ -206,17 +247,17 @@ export function TransportBar() {
           <div
             role="button"
             tabIndex={0}
-            onClick={() => !djActive && openNowPlaying()}
+            onClick={() => !transportLocked && openNowPlaying()}
             onKeyDown={(e) => {
-              if (!djActive && (e.key === "Enter" || e.key === " ")) {
+              if (!transportLocked && (e.key === "Enter" || e.key === " ")) {
                 e.preventDefault();
                 openNowPlaying();
               }
             }}
-            className={`group relative flex w-[250px] shrink-0 items-center gap-3 text-left ${djActive ? "cursor-default" : "cursor-pointer"}`}
+            className={`group relative flex w-[250px] shrink-0 items-center gap-3 text-left ${transportLocked ? "cursor-default" : "cursor-pointer"}`}
             aria-label="Now Playing"
           >
-            {!djActive && <HoverTip text="Now Playing" />}
+            {!transportLocked && <HoverTip text="Now Playing" />}
             <div className="lf-hatch h-14 w-14 shrink-0 overflow-hidden rounded-xl shadow-[var(--lf-art-shadow)]">
               {displayTrack.coverArtUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element -- local-only images
@@ -228,8 +269,8 @@ export function TransportBar() {
               )}
             </div>
             <div className="min-w-0">
-              {djActive && (
-                <p className="truncate font-mono text-[10px] uppercase tracking-[0.06em] text-acc-text">DJ deck</p>
+              {transportLocked && (
+                <p className="truncate font-mono text-[10px] uppercase tracking-[0.06em] text-acc-text">{aiDjActive ? "AI DJ" : "DJ deck"}</p>
               )}
               <p
                 className={`truncate text-sm ${displayIsPlaying ? "text-playing" : "text-t1"}`}
@@ -255,7 +296,7 @@ export function TransportBar() {
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5">
-            <IconButton onClick={playPrevious} label="Previous" size="lg" disabled={djActive}>
+            <IconButton onClick={playPrevious} label="Previous" size="lg" disabled={transportLocked}>
               <PreviousIcon size={26} />
             </IconButton>
             <button
@@ -267,7 +308,7 @@ export function TransportBar() {
               {displayIsPlaying ? <PauseIcon size={20} /> : <PlayIcon size={26} />}
               <HoverTip text={displayIsPlaying ? "Pause" : "Play"} />
             </button>
-            <IconButton onClick={playNext} label="Next" size="lg" disabled={djActive}>
+            <IconButton onClick={playNext} label="Next" size="lg" disabled={transportLocked}>
               <NextIcon size={26} />
             </IconButton>
           </div>
@@ -277,11 +318,11 @@ export function TransportBar() {
             currentTime={displayCurrentTime}
             duration={duration}
             onSeek={displaySeek}
-            disabled={false}
+            disabled={aiDjActive}
           />
 
           <div className="flex shrink-0 items-center gap-1.5">
-            <IconButton onClick={toggleShuffle} label="Shuffle" active={shuffleMode === "random"} size="lg" disabled={djActive}>
+            <IconButton onClick={toggleShuffle} label="Shuffle" active={shuffleMode === "random"} size="lg" disabled={transportLocked}>
               <ShuffleIcon size={24} />
             </IconButton>
             <IconButton
@@ -289,7 +330,7 @@ export function TransportBar() {
               label="Smart Shuffle"
               active={shuffleMode === "smart"}
               size="lg"
-              disabled={djActive || !smartShuffleAvailable}
+              disabled={transportLocked || !smartShuffleAvailable}
             >
               <SmartShuffleIcon size={24} />
             </IconButton>
@@ -298,7 +339,7 @@ export function TransportBar() {
               label={repeatMode === "one" ? "Repeat one" : repeatMode === "all" ? "Repeat all" : "Repeat"}
               active={repeatMode !== "off"}
               size="lg"
-              disabled={djActive}
+              disabled={transportLocked}
             >
               {repeatMode === "one" ? <RepeatOneIcon size={24} /> : <RepeatIcon size={24} />}
             </IconButton>

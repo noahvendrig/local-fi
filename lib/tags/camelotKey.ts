@@ -111,6 +111,15 @@ export function camelotKeyToSemitone(camelot: string): number | null {
   return parsed.mode === "A" ? SEMITONE_BY_NOTE_MINOR[parsed.number - 1] : SEMITONE_BY_NOTE_MAJOR[parsed.number - 1];
 }
 
+/** Camelot notation shifted by a live pitch adjustment (e.g. AI DJ key-lock semitones), keeping
+ *  its mode fixed — used to work out a track's *effective* key while it's being pitch-shifted. */
+export function transposeCamelotKey(camelot: string, semitones: number): string | null {
+  const parsed = parseCamelotKey(camelot);
+  const base = camelotKeyToSemitone(camelot);
+  if (!parsed || base == null) return null;
+  return semitoneToCamelotKey(base + semitones, parsed.mode === "A" ? "minor" : "major");
+}
+
 /** Shortest distance around the 12-position wheel, ignoring A/B mode. */
 export function camelotWheelDistance(a: number, b: number): number {
   const diff = Math.abs(a - b);

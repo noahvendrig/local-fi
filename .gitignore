@@ -54,3 +54,5 @@ python-backend/downloads/
 python-backend/fingerprints/
 python-backend/similarity/
 python-backend/weights/
+# AI DJ stem-separation output (ephemeral session files)
+python-backend/tmp/stems/

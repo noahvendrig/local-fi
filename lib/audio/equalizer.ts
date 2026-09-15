@@ -282,18 +282,17 @@ class PlaybackEqualizer {
     node.st.pitchSemitones.setValueAtTime(pitchSemitones, ctx.currentTime);
   }
 
-  /** Linearly ramps a stem's tempo ratio / pitch shift to a target, finishing at `when + durationSec` — used to ease a just-transitioned-in track back to its own native tempo once it's the only one playing. */
-  rampAiDjStemTempoPitch(handle: AiDjStemHandle, targetTempoRatio: number, targetPitchSemitones: number, when: number, durationSec: number): void {
+  /** Sets a stem's underlying buffer source to natively loop [loopStartSec, loopEndSec) once
+   *  playback reaches that region — used to hold an outgoing AI DJ track on a verified-safe,
+   *  repeating phrase (see lib/audio/loopPointDetect.ts) for as long as a transition needs,
+   *  instead of letting it play forward into unrepeated material. Safe to call before playback
+   *  reaches loopStart; the source plays through normally up to loopEnd once, then wraps. */
+  setAiDjStemLoop(handle: AiDjStemHandle, loopStartSec: number, loopEndSec: number): void {
     const node = this.aiDjStems.get(handle);
     if (!node) return;
-    const rate = node.st.playbackRate;
-    const pitch = node.st.pitchSemitones;
-    rate.cancelScheduledValues(when);
-    rate.setValueAtTime(rate.value, when);
-    rate.linearRampToValueAtTime(targetTempoRatio, when + Math.max(0.05, durationSec));
-    pitch.cancelScheduledValues(when);
-    pitch.setValueAtTime(pitch.value, when);
-    pitch.linearRampToValueAtTime(targetPitchSemitones, when + Math.max(0.05, durationSec));
+    node.source.loop = true;
+    node.source.loopStart = loopStartSec;
+    node.source.loopEnd = loopEndSec;
   }
 
   /** Immediately (no ramp) sets a stem's gain — e.g. to hard-mute one that's already faded out. */

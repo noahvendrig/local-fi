@@ -64,6 +64,7 @@ export function AiDjNowPlaying() {
   const order = useAiDjStore((s) => s.order);
   const currentIndex = useAiDjStore((s) => s.currentIndex);
   const error = useAiDjStore((s) => s.error);
+  const targetBpm = useAiDjStore((s) => s.targetBpm);
   const current = order[currentIndex];
   const next = order[currentIndex + 1];
 
@@ -78,6 +79,11 @@ export function AiDjNowPlaying() {
             <div className="h-10 w-px flex-none bg-line" />
             <TrackLine track={next} label="Up next" />
           </>
+        )}
+        {targetBpm != null && (
+          <span className="ml-auto flex-none rounded-full border border-line px-2.5 py-1 font-mono text-[11px] text-t3">
+            locked · {targetBpm} bpm
+          </span>
         )}
       </div>
       <TransitionProgress />
