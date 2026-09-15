@@ -71,7 +71,8 @@ export async function POST(request: Request) {
 
     if (memberIds.length === 0) return NextResponse.json({ track: null });
 
-    const matches = await fetchSimilarTrack(trackId, { candidateIds: memberIds, topK: 1 });
+    const matches = await fetchSimilarTrack(trackId, { candidateIds: memberIds, topK: 2 });
+    logTopMatches(db, track.title, matches, `crate ${queueSource.crateId}`);
     const winner = matches[0];
     if (!winner) return NextResponse.json({ track: null });
     const [summary] = getTrackSummariesByIds(db, [winner.track_id]);
@@ -79,9 +80,35 @@ export async function POST(request: Request) {
   }
 
   // Whole library: let python-backend serve its precomputed k-NN graph (no candidate_ids).
-  const matches = await fetchSimilarTrack(trackId, { excludeIds: [...excludeSet], topK: 1 });
+  const matches = await fetchSimilarTrack(trackId, { excludeIds: [...excludeSet], topK: 2 });
+  logTopMatches(db, track.title, matches, "whole library");
   const winner = matches[0];
   if (!winner) return NextResponse.json({ track: null });
   const [summary] = getTrackSummariesByIds(db, [winner.track_id]);
   return NextResponse.json({ track: summary ?? null });
+}
+
+/** Debug aid: logs the top-2 closest tracks for the currently playing track so the actual
+ *  similarity output can be sanity-checked against what's playing, without needing to inspect
+ *  python-backend directly. Logs to the Next.js server console (not the browser). */
+function logTopMatches(
+  db: ReturnType<typeof getDb>,
+  currentTitle: string | null,
+  matches: { track_id: number; score: number }[],
+  scope: string
+) {
+  if (matches.length === 0) {
+    console.log(`[smart-shuffle] "${currentTitle}" (${scope}): no candidates`);
+    return;
+  }
+  const summaries = getTrackSummariesByIds(db, matches.map((m) => m.track_id));
+  const byId = new Map(summaries.map((s) => [s.id, s]));
+  const lines = matches
+    .map((m) => {
+      const s = byId.get(m.track_id);
+      const label = s ? `${s.title} — ${s.artistName ?? "Unknown"}` : `track ${m.track_id}`;
+      return `${label} (${m.score.toFixed(4)})`;
+    })
+    .join("; ");
+  console.log(`[smart-shuffle] "${currentTitle}" (${scope}) top matches: ${lines}`);
 }

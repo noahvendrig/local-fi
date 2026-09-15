@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useRef } from "react";
 import { fetchArtist, fetchTracks } from "@/lib/api-client";
 import { usePlayerStore } from "@/lib/store/player";
+import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
 import { PlayIcon } from "@/components/shell/PlayerIcons";
 import { TrackList } from "./TrackList";
 
@@ -27,6 +29,13 @@ export function ArtistDetailView({ artistId }: { artistId: number }) {
   const playContext = usePlayerStore((s) => s.playContext);
   const enqueue = usePlayerStore((s) => s.enqueue);
 
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const tracksSentinelRef = useInfiniteScroll({
+    onLoadMore: () => tracksQuery.fetchNextPage(),
+    hasMore: (tracksQuery.hasNextPage ?? false) && !tracksQuery.isFetchingNextPage,
+    rootRef: scrollRef,
+  });
+
   if (isLoading) return null;
 
   if (error || !artist) {
@@ -43,7 +52,7 @@ export function ArtistDetailView({ artistId }: { artistId: number }) {
   const tracks = tracksQuery.data?.pages.flatMap((p) => p.items) ?? [];
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto px-10 py-8">
+    <div ref={scrollRef} className="flex h-full flex-col overflow-y-auto px-10 py-8">
       <Link href="/library" className="w-fit text-xs font-medium text-t3 hover:text-t1">
         ← Library
       </Link>
@@ -85,15 +94,10 @@ export function ArtistDetailView({ artistId }: { artistId: number }) {
         )}
 
         {tracksQuery.hasNextPage && (
-          <div className="flex justify-center pt-6">
-            <button
-              type="button"
-              onClick={() => tracksQuery.fetchNextPage()}
-              disabled={tracksQuery.isFetchingNextPage}
-              className="rounded-md border border-line px-4 py-1.5 text-xs text-t2 hover:bg-surf-2 disabled:opacity-50"
-            >
-              {tracksQuery.isFetchingNextPage ? "Loading…" : "Load more"}
-            </button>
+          <div ref={tracksSentinelRef} className="flex justify-center pt-6">
+            {tracksQuery.isFetchingNextPage ? (
+              <span className="lf-index-spin h-4 w-4 rounded-full border-[1.5px] border-line border-t-acc" />
+            ) : null}
           </div>
         )}
       </div>

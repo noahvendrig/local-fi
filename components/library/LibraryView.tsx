@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { forwardRef, useRef, useState } from "react";
 import { fetchAlbums, fetchTracks } from "@/lib/api-client";
 import type { AlbumSort, TrackSort } from "@/lib/api-client";
 import { useLibraryStore } from "@/lib/store/library";
+import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
 import { AlbumGrid } from "./AlbumGrid";
 import { LibraryToolbar } from "./LibraryToolbar";
 import { MobileLibraryView } from "./MobileLibraryView";
@@ -38,6 +39,18 @@ export function LibraryView() {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: viewMode === "grid",
+  });
+
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const albumsSentinelRef = useInfiniteScroll({
+    onLoadMore: () => albumsQuery.fetchNextPage(),
+    hasMore: viewMode === "grid" && (albumsQuery.hasNextPage ?? false) && !albumsQuery.isFetchingNextPage,
+    rootRef: scrollRef,
+  });
+  const tracksSentinelRef = useInfiniteScroll({
+    onLoadMore: () => tracksQuery.fetchNextPage(),
+    hasMore: viewMode === "list" && (tracksQuery.hasNextPage ?? false) && !tracksQuery.isFetchingNextPage,
+    rootRef: scrollRef,
   });
 
   if (anyTracksQuery.isLoading) return null;
@@ -76,7 +89,7 @@ export function LibraryView() {
         meta={meta}
       />
 
-      <div className="flex-1 overflow-y-auto px-10 pb-8">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-10 pb-8">
         {viewMode === "grid" ? (
           albums.length === 0 && !albumsQuery.isLoading ? (
             <EmptyAlbums />
@@ -88,10 +101,10 @@ export function LibraryView() {
         )}
 
         {viewMode === "grid" && albumsQuery.hasNextPage && (
-          <LoadMoreButton onClick={() => albumsQuery.fetchNextPage()} loading={albumsQuery.isFetchingNextPage} />
+          <LoadMoreSentinel ref={albumsSentinelRef} loading={albumsQuery.isFetchingNextPage} />
         )}
         {viewMode === "list" && tracksQuery.hasNextPage && (
-          <LoadMoreButton onClick={() => tracksQuery.fetchNextPage()} loading={tracksQuery.isFetchingNextPage} />
+          <LoadMoreSentinel ref={tracksSentinelRef} loading={tracksQuery.isFetchingNextPage} />
         )}
       </div>
       </div>
@@ -111,17 +124,13 @@ function EmptyAlbums() {
   );
 }
 
-function LoadMoreButton({ onClick, loading }: { onClick: () => void; loading: boolean }) {
+const LoadMoreSentinel = forwardRef<HTMLDivElement, { loading: boolean }>(function LoadMoreSentinel(
+  { loading },
+  ref,
+) {
   return (
-    <div className="flex justify-center pt-6">
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={loading}
-        className="rounded-md border border-line px-4 py-1.5 text-xs text-t2 hover:bg-surf-2 disabled:opacity-50"
-      >
-        {loading ? "Loading…" : "Load more"}
-      </button>
+    <div ref={ref} className="flex justify-center pt-6">
+      {loading ? <span className="lf-index-spin h-4 w-4 rounded-full border-[1.5px] border-line border-t-acc" /> : null}
     </div>
   );
-}
+});
