@@ -15,6 +15,7 @@ import { WaveformScrubber } from "./WaveformScrubber";
 import { EqualizerPopover } from "./EqualizerPopover";
 import { HoverTip, IconButton } from "./IconButton";
 import { usePlaybackEngine } from "./usePlaybackEngine";
+import { useSmartShuffle } from "./useSmartShuffle";
 import {
   AlbumPlaceholderIcon,
   NextIcon,
@@ -24,6 +25,7 @@ import {
   RepeatIcon,
   RepeatOneIcon,
   ShuffleIcon,
+  SmartShuffleIcon,
 } from "./PlayerIcons";
 
 // Persistent 88px transport bar, mounted once in the root layout so it survives
@@ -37,8 +39,12 @@ export function TransportBar() {
   const playPrevious = usePlayerStore((s) => s.playPrevious);
   const repeatMode = usePlayerStore((s) => s.repeatMode);
   const toggleRepeatMode = usePlayerStore((s) => s.toggleRepeatMode);
-  const shuffle = usePlayerStore((s) => s.shuffle);
+  const shuffleMode = usePlayerStore((s) => s.shuffleMode);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
+  const toggleSmartShuffle = usePlayerStore((s) => s.toggleSmartShuffle);
+  const smartShuffleAvailable = usePlayerStore(
+    (s) => (s.sourceQueue.length > 0 ? s.sourceQueue : s.queue).filter((t) => t.similarityStatus === "ready").length >= 2
+  );
   const volume = usePlayerStore((s) => s.volume);
   const setVolume = usePlayerStore((s) => s.setVolume);
   const currentTime = usePlayerStore((s) => s.currentTime);
@@ -70,6 +76,7 @@ export function TransportBar() {
   const setMixtapeWaveform = useMixtapePlayerStore((s) => s.setWaveform);
 
   const { audioARef, audioBRef, handleTimeUpdate, handleEnded, handlePlay, handlePause } = usePlaybackEngine();
+  useSmartShuffle();
 
   // Which deck the bar shows/controls is tracked explicitly (useTransportSourceStore), set by
   // whichever store's track-selection actions last ran — NOT derived from isPlaying, so pausing
@@ -274,8 +281,17 @@ export function TransportBar() {
           />
 
           <div className="flex shrink-0 items-center gap-1.5">
-            <IconButton onClick={toggleShuffle} label="Shuffle" active={shuffle} size="lg" disabled={djActive}>
+            <IconButton onClick={toggleShuffle} label="Shuffle" active={shuffleMode === "random"} size="lg" disabled={djActive}>
               <ShuffleIcon size={24} />
+            </IconButton>
+            <IconButton
+              onClick={toggleSmartShuffle}
+              label="Smart Shuffle"
+              active={shuffleMode === "smart"}
+              size="lg"
+              disabled={djActive || !smartShuffleAvailable}
+            >
+              <SmartShuffleIcon size={24} />
             </IconButton>
             <IconButton
               onClick={toggleRepeatMode}

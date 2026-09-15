@@ -1,0 +1,1 @@
+ALTER TABLE `playback_state` DROP COLUMN `shuffle`;

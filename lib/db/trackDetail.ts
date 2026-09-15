@@ -44,6 +44,7 @@ export const trackDetailSelectColumns = {
   keySource: tracks.keySource,
   analysisStatus: tracks.analysisStatus,
   analysisError: tracks.analysisError,
+  similarityStatus: tracks.similarityStatus,
 };
 
 type TrackDetailRow = {
@@ -82,6 +83,7 @@ type TrackDetailRow = {
   keySource: string | null;
   analysisStatus: string;
   analysisError: string | null;
+  similarityStatus: string;
 };
 
 export function mapTrackDetailRow(row: TrackDetailRow): TrackDetail {
@@ -124,6 +126,7 @@ export function mapTrackDetailRow(row: TrackDetailRow): TrackDetail {
     keySource: row.keySource as TrackDetail["keySource"],
     analysisStatus: row.analysisStatus as TrackDetail["analysisStatus"],
     analysisError: row.analysisError,
+    similarityStatus: row.similarityStatus as TrackDetail["similarityStatus"],
   };
 }
 

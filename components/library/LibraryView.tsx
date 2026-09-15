@@ -84,7 +84,7 @@ export function LibraryView() {
             <AlbumGrid albums={albums} />
           )
         ) : (
-          <TrackList tracks={tracks} sort={trackSort} onSortChange={setTrackSort} />
+          <TrackList tracks={tracks} sort={trackSort} onSortChange={setTrackSort} source={{ type: "allSongs" }} />
         )}
 
         {viewMode === "grid" && albumsQuery.hasNextPage && (

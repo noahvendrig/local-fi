@@ -212,6 +212,12 @@ export const tracks = sqliteTable(
     landmarkCount: integer("landmark_count"),
     landmarkedAt: text("landmarked_at"),
 
+    /** Audio-similarity embedding status for Smart Shuffle (services/similarity/) — same split as
+     *  landmarkStatus above: the embedding vector and k-NN graph never live here, only in
+     *  python-backend's own sidecar files + in-memory index. */
+    similarityStatus: text("similarity_status").notNull().default("none"),
+    similarityAnalyzedAt: text("similarity_analyzed_at"),
+
     importJobId: integer("import_job_id").references(() => importJobs.id, { onDelete: "set null" }),
     dateAdded: text("date_added").notNull(),
     dateModified: text("date_modified"),
@@ -253,6 +259,10 @@ export const tracks = sqliteTable(
     check(
       "chk_tracks_landmark_status",
       sql`${t.landmarkStatus} IN ('none','queued','processing','ready','failed')`
+    ),
+    check(
+      "chk_tracks_similarity_status",
+      sql`${t.similarityStatus} IN ('none','queued','processing','ready','failed')`
     ),
   ]
 );
@@ -351,6 +361,56 @@ export const fingerprintJobTracks = sqliteTable(
     index("idx_fingerprint_job_tracks_job").on(t.jobId),
     check(
       "chk_fingerprint_job_tracks_status",
+      sql`${t.status} IN ('queued','processing','done','failed')`
+    ),
+  ]
+);
+
+// Audio-similarity embedding backfill/on-import job for Smart Shuffle (services/similarity/) —
+// same shape/rationale as fingerprintJobs above (a separate table from analysisJobs because this
+// *does* run automatically on import, and the DSP work happens on python-backend, not here).
+export const similarityJobs = sqliteTable(
+  "similarity_jobs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    uuid: text("uuid").notNull().unique(),
+    /** The corresponding job id on python-backend's own in-memory job manager. */
+    pythonJobId: text("python_job_id"),
+    status: text("status").notNull().default("pending"),
+    totalTracks: integer("total_tracks").notNull().default(0),
+    processedTracks: integer("processed_tracks").notNull().default(0),
+    failedTracks: integer("failed_tracks").notNull().default(0),
+    startedAt: text("started_at"),
+    finishedAt: text("finished_at"),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [
+    check(
+      "chk_similarity_jobs_status",
+      sql`${t.status} IN ('pending','running','completed','completed_with_errors','failed','cancelled')`
+    ),
+  ]
+);
+
+export const similarityJobTracks = sqliteTable(
+  "similarity_job_tracks",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => similarityJobs.id, { onDelete: "cascade" }),
+    trackId: integer("track_id")
+      .notNull()
+      .references(() => tracks.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("queued"),
+    errorMessage: text("error_message"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [
+    index("idx_similarity_job_tracks_job").on(t.jobId),
+    check(
+      "chk_similarity_job_tracks_status",
       sql`${t.status} IN ('queued','processing','done','failed')`
     ),
   ]
@@ -555,11 +615,12 @@ export const playbackState = sqliteTable("playback_state", {
   isPlaying: integer("is_playing").notNull().default(0),
   volume: real("volume").notNull().default(1.0),
   repeatMode: text("repeat_mode").notNull().default("off"),
-  shuffle: integer("shuffle").notNull().default(0),
+  shuffleMode: text("shuffle_mode").notNull().default("off"),
   eqJson: text("eq_json"),
   updatedAt: text("updated_at").notNull(),
 }, (t) => [
   check("chk_playback_state_repeat_mode", sql`${t.repeatMode} IN ('off','all','one')`),
+  check("chk_playback_state_shuffle_mode", sql`${t.shuffleMode} IN ('off','random','smart')`),
 ]);
 
 export const settings = sqliteTable("settings", {

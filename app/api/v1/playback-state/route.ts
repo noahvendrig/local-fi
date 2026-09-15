@@ -17,7 +17,7 @@ const PutSchema = z.object({
   isPlaying: z.boolean().optional(),
   volume: z.number().min(0).max(1).optional(),
   repeatMode: z.enum(["off", "all", "one"]).optional(),
-  shuffle: z.boolean().optional(),
+  shuffleMode: z.enum(["off", "random", "smart"]).optional(),
   eq: z
     .object({
       enabled: z.boolean(),
@@ -49,7 +49,7 @@ function toResponseBody(db: Db) {
     isPlaying: row ? row.isPlaying === 1 : false,
     volume: row?.volume ?? 1,
     repeatMode: row?.repeatMode ?? "off",
-    shuffle: row ? row.shuffle === 1 : false,
+    shuffleMode: row?.shuffleMode ?? "off",
     eq: parseEqJson(row?.eqJson),
     updatedAt: row?.updatedAt ?? null,
   };
@@ -84,7 +84,7 @@ export async function PUT(request: Request) {
     isPlaying: patch.isPlaying !== undefined ? (patch.isPlaying ? 1 : 0) : (existing?.isPlaying ?? 0),
     volume: patch.volume ?? existing?.volume ?? 1,
     repeatMode: patch.repeatMode ?? existing?.repeatMode ?? "off",
-    shuffle: patch.shuffle !== undefined ? (patch.shuffle ? 1 : 0) : (existing?.shuffle ?? 0),
+    shuffleMode: patch.shuffleMode ?? existing?.shuffleMode ?? "off",
     eqJson: patch.eq ? JSON.stringify(parseEqState(patch.eq)) : (existing?.eqJson ?? null),
     updatedAt: now,
   };

@@ -46,6 +46,15 @@ export function ShuffleIcon({ size = 14 }: IconSizeProps) {
   );
 }
 
+export function SmartShuffleIcon({ size = 14 }: IconSizeProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M11 2l1.8 5.2L18 9l-5.2 1.8L11 16l-1.8-5.2L4 9l5.2-1.8z" />
+      <path d="M18.5 14l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z" />
+    </svg>
+  );
+}
+
 export function RepeatIcon({ size = 14 }: IconSizeProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

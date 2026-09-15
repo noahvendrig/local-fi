@@ -41,3 +41,20 @@ elif localfi_data_dir_env:
 else:
     FINGERPRINT_DATA_DIR = ROOT_DIR / "fingerprints"
 FINGERPRINT_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+# Embedding sidecars + k-NN graph for Smart Shuffle audio similarity (services/similarity/).
+# Same defaulting shape as FINGERPRINT_DATA_DIR above.
+similarity_data_dir_env = os.getenv("SIMILARITY_DATA_DIR", "").strip()
+if similarity_data_dir_env:
+    SIMILARITY_DATA_DIR = Path(similarity_data_dir_env)
+elif localfi_data_dir_env:
+    SIMILARITY_DATA_DIR = Path(localfi_data_dir_env) / "similarity"
+else:
+    SIMILARITY_DATA_DIR = ROOT_DIR / "similarity"
+SIMILARITY_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+# ONNX weights for the pretrained audio-embedding model (see scripts/export_similarity_model.py).
+# Lives under weights/, not models/ -- that name is already taken by this backend's pydantic
+# schemas package (models/schemas.py, models/fingerprint_schemas.py).
+similarity_model_path_env = os.getenv("LOCALFI_SIMILARITY_MODEL_PATH", "").strip()
+SIMILARITY_MODEL_PATH = Path(similarity_model_path_env) if similarity_model_path_env else (ROOT_DIR / "weights" / "cnn14.onnx")

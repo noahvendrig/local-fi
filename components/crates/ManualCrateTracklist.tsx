@@ -88,11 +88,11 @@ export function ManualCrateTracklist({ playlist }: { playlist: PlaylistDetail })
             return (
               <div key={track.entryId ?? track.id} className="relative -mx-10 overflow-hidden">
                 <div
-                  onClick={() => !track.missing && playTrack(track, playlist.tracks)}
+                  onClick={() => !track.missing && playTrack(track, playlist.tracks, { type: "crate", crateId: playlist.id })}
                   onKeyDown={(e) => {
                     if ((e.key === "Enter" || e.key === " ") && !track.missing) {
                       e.preventDefault();
-                      playTrack(track, playlist.tracks);
+                      playTrack(track, playlist.tracks, { type: "crate", crateId: playlist.id });
                     }
                   }}
                   role="button"
@@ -158,7 +158,7 @@ export function ManualCrateTracklist({ playlist }: { playlist: PlaylistDetail })
                     dragIndexRef.current = null;
                     setDragOverIndex(null);
                   }}
-                  onClick={() => !track.missing && playTrack(track, playlist.tracks)}
+                  onClick={() => !track.missing && playTrack(track, playlist.tracks, { type: "crate", crateId: playlist.id })}
                   className={`cursor-pointer border-b border-line last:border-b-0 hover:bg-surf-2 ${dragOverIndex === i ? "bg-[var(--lf-tint)]" : ""} ${isCurrent ? "bg-[var(--lf-tint)]" : ""} ${track.missing ? "opacity-40" : ""}`}
                   title={track.missing ? "File missing on disk" : undefined}
                 >

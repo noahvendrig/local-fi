@@ -30,6 +30,9 @@ export interface TrackSummary {
   /** Camelot notation, e.g. "8A". */
   key: string | null;
   analysisStatus: "none" | "queued" | "analyzing" | "ready" | "failed";
+  /** Audio-similarity embedding status for Smart Shuffle — "ready" means this track has a vector
+   *  in python-backend's similarity index and can be a Smart Shuffle candidate/suggestion. */
+  similarityStatus: "none" | "queued" | "processing" | "ready" | "failed";
 }
 
 export interface AlbumSummary {

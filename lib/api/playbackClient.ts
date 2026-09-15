@@ -3,6 +3,7 @@ import type { EqState } from "@/lib/audio/eqConfig";
 import { apiUrl, authHeaders } from "./http";
 
 export type RepeatMode = "off" | "all" | "one";
+export type ShuffleMode = "off" | "random" | "smart";
 
 export interface PlaybackStateDTO {
   sessionKey: string;
@@ -12,7 +13,7 @@ export interface PlaybackStateDTO {
   isPlaying: boolean;
   volume: number;
   repeatMode: RepeatMode;
-  shuffle: boolean;
+  shuffleMode: ShuffleMode;
   eq: EqState;
   updatedAt: string | null;
 }
@@ -24,7 +25,7 @@ export interface PlaybackStatePatch {
   isPlaying?: boolean;
   volume?: number;
   repeatMode?: RepeatMode;
-  shuffle?: boolean;
+  shuffleMode?: ShuffleMode;
   eq?: EqState;
 }
 

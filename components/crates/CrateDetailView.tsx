@@ -98,7 +98,7 @@ export function CrateDetailView({ playlistId }: { playlistId: number }) {
             <p className="max-w-xs text-sm text-t2">Can&rsquo;t reach the server right now, but this crate is available offline.</p>
             <button
               type="button"
-              onClick={() => playContext(offlineCopy.tracks.map(offlineTrackToSummary))}
+              onClick={() => playContext(offlineCopy.tracks.map(offlineTrackToSummary), { type: "crate", crateId: playlistId })}
               className="lf-top mt-1 flex items-center gap-2 rounded-lg border border-acc bg-acc px-5 py-2.5 text-[13px] font-semibold text-on-acc hover:border-acc-2 hover:bg-acc-2"
             >
               <PlayIcon /> Play offline copy
@@ -210,7 +210,7 @@ export function CrateDetailView({ playlistId }: { playlistId: number }) {
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => playContext(playlist.tracks)}
+              onClick={() => playContext(playlist.tracks, { type: "crate", crateId: playlistId })}
               disabled={playlist.tracks.length === 0}
               className="lf-top flex items-center gap-2 rounded-lg border border-acc bg-acc px-5 py-2.5 text-[13px] font-semibold text-on-acc hover:border-acc-2 hover:bg-acc-2 disabled:opacity-50"
             >

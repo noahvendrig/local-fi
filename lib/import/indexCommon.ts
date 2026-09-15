@@ -5,6 +5,7 @@ import { getDb } from "../db/client";
 import { albums, importJobFiles, importJobs, tracks } from "../db/schema";
 import { extForPictureFormat } from "./coverArt";
 import { enqueueTrackFingerprint } from "../fingerprint/queue";
+import { enqueueTrackSimilarity } from "../similarity/queue";
 import { trackFingerprint } from "./fingerprint";
 import { artworkPathFor, toDataDirRelative, waveformPathFor } from "./paths";
 import { extractTags, type ExtractedTags } from "./tags";
@@ -146,6 +147,8 @@ export function insertTrackRow(params: InsertTrackParams): typeof tracks.$inferS
   // pipeline — the track is already visible in the library with landmarkStatus "queued";
   // audio fingerprinting for mixtape matching (see lib/fingerprint/) finishes in the background.
   enqueueTrackFingerprint(track.id);
+  // Same treatment for the Smart Shuffle audio-similarity embedding (see lib/similarity/).
+  enqueueTrackSimilarity(track.id);
 
   return track;
 }

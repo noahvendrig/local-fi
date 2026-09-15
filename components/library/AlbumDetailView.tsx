@@ -101,7 +101,7 @@ export function AlbumDetailView({ albumId }: { albumId: number }) {
           <div className="flex flex-wrap items-center justify-center gap-2.5 sm:justify-start">
             <button
               type="button"
-              onClick={() => playContext(album.tracks)}
+              onClick={() => playContext(album.tracks, { type: "album", albumId: album.id })}
               disabled={album.tracks.length === 0}
               className="lf-top flex items-center gap-2 rounded-lg border border-acc bg-acc px-5 py-2.5 text-[13px] font-semibold text-on-acc hover:border-acc-2 hover:bg-acc-2 disabled:opacity-50"
             >
@@ -138,11 +138,11 @@ export function AlbumDetailView({ albumId }: { albumId: number }) {
               return (
                 <div
                   key={track.id}
-                  onClick={() => !track.missing && playTrack(track, album.tracks)}
+                  onClick={() => !track.missing && playTrack(track, album.tracks, { type: "album", albumId: album.id })}
                   onKeyDown={(e) => {
                     if ((e.key === "Enter" || e.key === " ") && !track.missing) {
                       e.preventDefault();
-                      playTrack(track, album.tracks);
+                      playTrack(track, album.tracks, { type: "album", albumId: album.id });
                     }
                   }}
                   role="button"

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { TrackSummary } from "@/lib/api-client";
 import { hasCredentials } from "@/lib/api/http";
-import { fetchPlaybackState, putPlaybackState, type RepeatMode } from "@/lib/api/playbackClient";
+import { fetchPlaybackState, putPlaybackState, type RepeatMode, type ShuffleMode } from "@/lib/api/playbackClient";
 import {
   DEFAULT_EQ_STATE,
   matchPresetId,
@@ -33,6 +33,21 @@ function shuffledQueueFrom(queue: TrackSummary[], currentIndex: number): { queue
   return { queue: [selected, ...rest], currentIndex: 0 };
 }
 
+/** Where the current queue came from — only `crate` restricts Smart Shuffle's candidate pool to
+ *  that crate's members; album/artist/allSongs (and no context at all) all mean "whole library"
+ *  for Smart Shuffle purposes (see app/api/v1/smart-suggest/route.ts). */
+export type QueueSource =
+  | { type: "allSongs" }
+  | { type: "crate"; crateId: number }
+  | { type: "album"; albumId: number }
+  | { type: "artist"; artistId: number };
+
+const RECENTLY_PLAYED_LIMIT = 20;
+
+function pushRecentlyPlayed(recentlyPlayed: number[], trackId: number): number[] {
+  return [trackId, ...recentlyPlayed.filter((id) => id !== trackId)].slice(0, RECENTLY_PLAYED_LIMIT);
+}
+
 interface PlayerState {
   currentTrack: TrackSummary | null;
   queue: TrackSummary[];
@@ -42,7 +57,15 @@ interface PlayerState {
   isPlaying: boolean;
   volume: number;
   repeatMode: RepeatMode;
-  shuffle: boolean;
+  shuffleMode: ShuffleMode;
+  /** Where the current queue came from (crate/album/artist/allSongs); drives Smart Shuffle's
+   *  candidate-pool scoping. Set explicitly by playTrack/playContext on every call, never
+   *  carried over, so switching context always clears stale scope. */
+  queueSource: QueueSource | null;
+  /** Ring buffer of recently-played track ids (most recent first), capped at
+   *  RECENTLY_PLAYED_LIMIT — passed to Smart Shuffle so it doesn't loop between two
+   *  mutually-similar tracks. */
+  recentlyPlayed: number[];
   /** Requested audio-element position; TransportBar's effect applies it and clears it. */
   pendingSeekSeconds: number | null;
   /** Live position, driven by TransportBar's <audio> onTimeUpdate — the single source shared
@@ -62,10 +85,12 @@ interface PlayerState {
   eqPreset: EqPresetId;
 
   hydrate: () => Promise<void>;
-  /** Selects a track; re-clicking the already-current track toggles play/pause instead of restarting it. */
-  playTrack: (track: TrackSummary, queueContext?: TrackSummary[]) => void;
+  /** Selects a track; re-clicking the already-current track toggles play/pause instead of restarting it.
+   *  `source` describes where queueContext came from (crate/album/artist/allSongs); omit for
+   *  ad-hoc queues (e.g. a single track with no list context). */
+  playTrack: (track: TrackSummary, queueContext?: TrackSummary[], source?: QueueSource) => void;
   /** Plays a list from the start, or from a random track when shuffle is on. */
-  playContext: (tracks: TrackSummary[]) => void;
+  playContext: (tracks: TrackSummary[], source?: QueueSource) => void;
   /** Appends tracks to the end of the queue; if nothing is playing, starts playback instead. */
   enqueue: (tracks: TrackSummary[]) => void;
   togglePlay: () => void;
@@ -80,6 +105,12 @@ interface PlayerState {
   playPrevious: () => void;
   toggleRepeatMode: () => void;
   toggleShuffle: () => void;
+  toggleSmartShuffle: () => void;
+  /** Splices a Smart Shuffle suggestion in as the track right after `afterTrackId`, if that's
+   *  still the current track and smart shuffle is still on (guards against a stale/late response
+   *  landing after the user skipped elsewhere or turned smart shuffle off). See
+   *  components/shell/useSmartShuffle.ts for the caller. */
+  setSmartUpcoming: (afterTrackId: number, track: TrackSummary) => void;
   reorderQueue: (fromIndex: number, toIndex: number) => void;
   removeFromQueue: (index: number) => void;
   /** Drops every occurrence of a library track from the queue (used when removing from the library). */
@@ -117,7 +148,7 @@ function schedulePersist(get: () => PlayerState) {
       isPlaying: s.isPlaying,
       volume: s.volume,
       repeatMode: s.repeatMode,
-      shuffle: s.shuffle,
+      shuffleMode: s.shuffleMode,
       eq: {
         enabled: s.eqEnabled,
         gains: s.eqGains,
@@ -136,7 +167,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   isPlaying: false,
   volume: 1,
   repeatMode: "off",
-  shuffle: false,
+  shuffleMode: "off",
+  queueSource: null,
+  recentlyPlayed: [],
   pendingSeekSeconds: null,
   currentTime: 0,
   waveform: null,
@@ -167,7 +200,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         currentTrack,
         volume: data.volume,
         repeatMode: data.repeatMode,
-        shuffle: data.shuffle,
+        shuffleMode: data.shuffleMode,
         eqEnabled: data.eq?.enabled ?? DEFAULT_EQ_STATE.enabled,
         eqGains: [...(data.eq?.gains ?? DEFAULT_EQ_STATE.gains)],
         eqPreamp: data.eq?.preamp ?? DEFAULT_EQ_STATE.preamp,
@@ -182,8 +215,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }
   },
 
-  playTrack: (track, queueContext) => {
-    const { currentTrack, isPlaying, shuffle } = get();
+  playTrack: (track, queueContext, source) => {
+    const { currentTrack, isPlaying, shuffleMode } = get();
     useTransportSourceStore.getState().setActiveSource("regular");
     if (currentTrack?.id === track.id) {
       const next = !isPlaying;
@@ -201,7 +234,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     let queue = [...sourceQueue];
     let currentIndex = queue.findIndex((t) => t.id === track.id);
     if (currentIndex < 0) currentIndex = 0;
-    if (shuffle) {
+    if (shuffleMode === "random") {
       const shuffled = shuffledQueueFrom(queue, currentIndex);
       queue = shuffled.queue;
       currentIndex = shuffled.currentIndex;
@@ -211,6 +244,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       queue,
       sourceQueue,
       currentIndex,
+      queueSource: source ?? null,
+      recentlyPlayed: pushRecentlyPlayed(get().recentlyPlayed, track.id),
       isPlaying: true,
       currentTime: 0,
       pendingSeekSeconds: null,
@@ -218,32 +253,33 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     schedulePersist(get);
   },
 
-  playContext: (tracks) => {
+  playContext: (tracks, source) => {
     if (tracks.length === 0) return;
-    const startIndex = get().shuffle ? Math.floor(Math.random() * tracks.length) : 0;
-    get().playTrack(tracks[startIndex], tracks);
+    const startIndex = get().shuffleMode === "random" ? Math.floor(Math.random() * tracks.length) : 0;
+    get().playTrack(tracks[startIndex], tracks, source);
   },
 
   enqueue: (tracksToAdd) => {
     if (tracksToAdd.length === 0) return;
-    const { queue, sourceQueue, currentTrack, currentIndex, shuffle } = get();
+    const { queue, sourceQueue, currentTrack, currentIndex, shuffleMode } = get();
     const nextSource = [...sourceQueue, ...tracksToAdd];
     if (!currentTrack) {
       // Nothing playing: queuing starts playback, matching common player UX.
       useTransportSourceStore.getState().setActiveSource("regular");
       useDjStore.getState().setDjPlaying(false);
       useMixtapePlayerStore.getState().setMixtapePlaying(false);
-      const nextQueue = shuffle ? shuffleInPlace([...tracksToAdd]) : [...tracksToAdd];
+      const nextQueue = shuffleMode === "random" ? shuffleInPlace([...tracksToAdd]) : [...tracksToAdd];
       set({
         currentTrack: nextQueue[0],
         queue: nextQueue,
         sourceQueue: [...tracksToAdd],
         currentIndex: 0,
+        recentlyPlayed: pushRecentlyPlayed(get().recentlyPlayed, nextQueue[0].id),
         isPlaying: true,
         currentTime: 0,
         pendingSeekSeconds: null,
       });
-    } else if (shuffle) {
+    } else if (shuffleMode === "random") {
       const nextQueue = queue.slice();
       for (const added of shuffleInPlace([...tracksToAdd])) {
         const upcomingSlots = nextQueue.length - currentIndex;
@@ -331,7 +367,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }
     useDjStore.getState().setDjPlaying(false);
     useMixtapePlayerStore.getState().setMixtapePlaying(false);
-    set({ currentIndex: nextIndex, currentTrack: queue[nextIndex], isPlaying: true, currentTime: 0, pendingSeekSeconds: null });
+    set({
+      currentIndex: nextIndex,
+      currentTrack: queue[nextIndex],
+      recentlyPlayed: pushRecentlyPlayed(get().recentlyPlayed, queue[nextIndex].id),
+      isPlaying: true,
+      currentTime: 0,
+      pendingSeekSeconds: null,
+    });
     schedulePersist(get);
   },
 
@@ -349,7 +392,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }
     useDjStore.getState().setDjPlaying(false);
     useMixtapePlayerStore.getState().setMixtapePlaying(false);
-    set({ currentIndex: prevIndex, currentTrack: queue[prevIndex], isPlaying: true, currentTime: 0, pendingSeekSeconds: null });
+    set({
+      currentIndex: prevIndex,
+      currentTrack: queue[prevIndex],
+      recentlyPlayed: pushRecentlyPlayed(get().recentlyPlayed, queue[prevIndex].id),
+      isPlaying: true,
+      currentTime: 0,
+      pendingSeekSeconds: null,
+    });
     schedulePersist(get);
   },
 
@@ -359,7 +409,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     useTransportSourceStore.getState().setActiveSource("regular");
     useDjStore.getState().setDjPlaying(false);
     useMixtapePlayerStore.getState().setMixtapePlaying(false);
-    set({ currentIndex: index, currentTrack: queue[index], isPlaying: true, currentTime: 0, pendingSeekSeconds: null });
+    set({
+      currentIndex: index,
+      currentTrack: queue[index],
+      recentlyPlayed: pushRecentlyPlayed(get().recentlyPlayed, queue[index].id),
+      isPlaying: true,
+      currentTime: 0,
+      pendingSeekSeconds: null,
+    });
     schedulePersist(get);
   },
 
@@ -371,22 +428,65 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   // Shuffle rebuilds play order from the unshuffled source (current track stays put). Toggling
   // off restores that source order so Up Next updates immediately without stopping playback.
   toggleShuffle: () => {
-    const { shuffle, queue, sourceQueue, currentIndex } = get();
+    const { shuffleMode, queue, sourceQueue, currentIndex } = get();
     const source = sourceQueue.length > 0 ? sourceQueue : queue;
     const current = queue[currentIndex] ?? source[currentIndex] ?? null;
     if (!current) {
-      set({ shuffle: !shuffle });
+      set({ shuffleMode: shuffleMode === "random" ? "off" : "random" });
       schedulePersist(get);
       return;
     }
     const sourceIndex = Math.max(0, source.findIndex((t) => t.id === current.id));
-    if (!shuffle) {
+    if (shuffleMode !== "random") {
       const shuffled = shuffledQueueFrom(source, sourceIndex >= 0 ? sourceIndex : 0);
-      set({ queue: shuffled.queue, currentIndex: shuffled.currentIndex, shuffle: true });
+      set({ queue: shuffled.queue, currentIndex: shuffled.currentIndex, shuffleMode: "random" });
     } else {
       const restoredIndex = sourceIndex >= 0 ? sourceIndex : 0;
-      set({ queue: [...source], currentIndex: restoredIndex, shuffle: false });
+      set({ queue: [...source], currentIndex: restoredIndex, shuffleMode: "off" });
     }
+    schedulePersist(get);
+  },
+
+  // Smart Shuffle and random Shuffle are mutually exclusive UX-wise (both answer "what plays
+  // next"), so turning one on always turns the other off. Same source-order-restore shape as
+  // toggleShuffle's off-path -- dropping any smart-suggested track spliced in past the current
+  // one, since it was chosen for a mode we're now leaving.
+  toggleSmartShuffle: () => {
+    const { shuffleMode, queue, sourceQueue, currentIndex } = get();
+    const source = sourceQueue.length > 0 ? sourceQueue : queue;
+    const current = queue[currentIndex] ?? source[currentIndex] ?? null;
+    if (!current) {
+      set({ shuffleMode: shuffleMode === "smart" ? "off" : "smart" });
+      schedulePersist(get);
+      return;
+    }
+    const sourceIndex = Math.max(0, source.findIndex((t) => t.id === current.id));
+    if (shuffleMode === "smart") {
+      const restoredIndex = sourceIndex >= 0 ? sourceIndex : 0;
+      set({ queue: [...source], currentIndex: restoredIndex, shuffleMode: "off" });
+    } else {
+      const restoredIndex = sourceIndex >= 0 ? sourceIndex : 0;
+      set({ queue: [...source], currentIndex: restoredIndex, shuffleMode: "smart" });
+    }
+    schedulePersist(get);
+  },
+
+  setSmartUpcoming: (afterTrackId, track) => {
+    const { currentTrack, shuffleMode, queue, sourceQueue, currentIndex } = get();
+    if (currentTrack?.id !== afterTrackId || shuffleMode !== "smart") return; // stale response
+    const nextQueue = queue.slice();
+    if (currentIndex + 1 < nextQueue.length) {
+      nextQueue[currentIndex + 1] = track;
+    } else {
+      nextQueue.push(track);
+    }
+    const nextSource = sourceQueue.slice();
+    if (currentIndex + 1 < nextSource.length) {
+      nextSource[currentIndex + 1] = track;
+    } else {
+      nextSource.push(track);
+    }
+    set({ queue: nextQueue, sourceQueue: nextSource });
     schedulePersist(get);
   },
 
@@ -404,7 +504,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     else if (fromIndex < currentIndex && toIndex >= currentIndex) newCurrentIndex = currentIndex - 1;
     else if (fromIndex > currentIndex && toIndex <= currentIndex) newCurrentIndex = currentIndex + 1;
 
-    const sourceQueue = get().shuffle ? get().sourceQueue : newQueue;
+    const sourceQueue = get().shuffleMode === "random" ? get().sourceQueue : newQueue;
     set({ queue: newQueue, sourceQueue, currentIndex: newCurrentIndex });
     schedulePersist(get);
   },

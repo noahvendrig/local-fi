@@ -52,3 +52,5 @@ python-backend/__pycache__/
 python-backend/**/__pycache__/
 python-backend/downloads/
 python-backend/fingerprints/
+python-backend/similarity/
+python-backend/weights/

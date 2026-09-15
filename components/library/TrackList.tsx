@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { formatDate, formatDuration, formatRate } from "@/lib/format/track";
 import type { TrackSort, TrackSummary } from "@/lib/api-client";
-import { usePlayerStore } from "@/lib/store/player";
+import { usePlayerStore, type QueueSource } from "@/lib/store/player";
 import { useSettingsStore } from "@/lib/store/settings";
 import { PlayingIcon } from "@/components/shell/PlayerIcons";
 import { TrackRowActions } from "./TrackRowActions";
@@ -12,9 +12,12 @@ interface TrackListProps {
   tracks: TrackSummary[];
   sort?: TrackSort;
   onSortChange?: (sort: TrackSort) => void;
+  /** Where this list is being shown (crate/album/artist/allSongs) — passed through to
+   *  playTrack so Smart Shuffle knows what scope to suggest within. */
+  source?: QueueSource;
 }
 
-export function TrackList({ tracks, sort, onSortChange }: TrackListProps) {
+export function TrackList({ tracks, sort, onSortChange, source }: TrackListProps) {
   const currentTrackId = usePlayerStore((s) => s.currentTrack?.id);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const playTrack = usePlayerStore((s) => s.playTrack);
@@ -31,11 +34,11 @@ export function TrackList({ tracks, sort, onSortChange }: TrackListProps) {
           return (
             <div key={track.id} className="group relative -mx-10 overflow-hidden">
               <div
-                onClick={() => !track.missing && playTrack(track, tracks)}
+                onClick={() => !track.missing && playTrack(track, tracks, source)}
                 onKeyDown={(e) => {
                   if ((e.key === "Enter" || e.key === " ") && !track.missing) {
                     e.preventDefault();
-                    playTrack(track, tracks);
+                    playTrack(track, tracks, source);
                   }
                 }}
                 role="button"
@@ -90,11 +93,11 @@ export function TrackList({ tracks, sort, onSortChange }: TrackListProps) {
         return (
           <div
             key={track.id}
-            onClick={() => !track.missing && playTrack(track, tracks)}
+            onClick={() => !track.missing && playTrack(track, tracks, source)}
             onKeyDown={(e) => {
               if ((e.key === "Enter" || e.key === " ") && !track.missing) {
                 e.preventDefault();
-                playTrack(track, tracks);
+                playTrack(track, tracks, source);
               }
             }}
             role="button"

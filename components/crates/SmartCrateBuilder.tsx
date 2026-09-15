@@ -116,7 +116,7 @@ export function SmartCrateBuilder({ playlist }: { playlist: PlaylistDetail }) {
         {preview.length === 0 && !isPreviewing ? (
           <p className="text-sm text-t3">No tracks match these conditions.</p>
         ) : (
-          <TrackList tracks={preview} />
+          <TrackList tracks={preview} source={{ type: "crate", crateId: playlist.id }} />
         )}
       </div>
     </div>

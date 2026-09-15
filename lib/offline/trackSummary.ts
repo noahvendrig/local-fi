@@ -36,5 +36,6 @@ export function offlineTrackToSummary(track: OfflineTrack): TrackSummary {
     bpm: null,
     key: null,
     analysisStatus: "none",
+    similarityStatus: "none",
   };
 }

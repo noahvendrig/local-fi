@@ -62,7 +62,7 @@ export function ArtistDetailView({ artistId }: { artistId: number }) {
         <div className="mt-5 flex items-center gap-2.5">
           <button
             type="button"
-            onClick={() => playContext(tracks)}
+            onClick={() => playContext(tracks, { type: "artist", artistId })}
             className="lf-top flex items-center gap-2 rounded-lg border border-acc bg-acc px-5 py-2.5 text-[13px] font-semibold text-on-acc hover:border-acc-2 hover:bg-acc-2"
           >
             <PlayIcon /> Play all
@@ -81,7 +81,7 @@ export function ArtistDetailView({ artistId }: { artistId: number }) {
         {tracks.length === 0 && !tracksQuery.isLoading ? (
           <p className="text-sm text-t3">No songs yet.</p>
         ) : (
-          <TrackList tracks={tracks} />
+          <TrackList tracks={tracks} source={{ type: "artist", artistId }} />
         )}
 
         {tracksQuery.hasNextPage && (

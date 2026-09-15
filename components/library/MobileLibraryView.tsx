@@ -211,7 +211,7 @@ function MobileSongsList() {
       suppressClickRef.current = false;
       return;
     }
-    if (!track.missing) playTrack(track, tracks);
+    if (!track.missing) playTrack(track, tracks, { type: "allSongs" });
   }
 
   return (
@@ -248,7 +248,7 @@ function MobileSongsList() {
               onKeyDown={(e) => {
                 if ((e.key === "Enter" || e.key === " ") && !track.missing) {
                   e.preventDefault();
-                  playTrack(track, tracks);
+                  playTrack(track, tracks, { type: "allSongs" });
                 }
               }}
               role="button"
@@ -560,7 +560,7 @@ function MobileCratesList() {
     const tracks = crate.trackIds
       .map((id) => offlineTracksById.get(id))
       .filter((t): t is OfflineTrack => t != null);
-    if (tracks.length > 0) playContext(tracks.map(offlineTrackToSummary));
+    if (tracks.length > 0) playContext(tracks.map(offlineTrackToSummary), { type: "crate", crateId: crate.id });
   }
 
   const detailCrate = detailCrateId != null ? offlineCrateById.get(detailCrateId) ?? null : null;
@@ -847,11 +847,11 @@ function LocalCrateDetailSheet({
               return (
                 <div key={track.id} className="flex items-center justify-between gap-3 border-b border-line py-3.5">
                   <div
-                    onClick={() => playTrack(crateTrackSummaries[i], crateTrackSummaries)}
+                    onClick={() => playTrack(crateTrackSummaries[i], crateTrackSummaries, { type: "crate", crateId: crate.id })}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        playTrack(crateTrackSummaries[i], crateTrackSummaries);
+                        playTrack(crateTrackSummaries[i], crateTrackSummaries, { type: "crate", crateId: crate.id });
                       }
                     }}
                     role="button"

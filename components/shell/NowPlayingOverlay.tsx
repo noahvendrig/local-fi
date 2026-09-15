@@ -15,6 +15,7 @@ import {
   RepeatIcon,
   RepeatOneIcon,
   ShuffleIcon,
+  SmartShuffleIcon,
 } from "./PlayerIcons";
 import { UpNextList } from "./UpNextList";
 
@@ -35,8 +36,12 @@ export function NowPlayingOverlay() {
   const isQueueOpen = usePlayerStore((s) => s.isQueueOpen);
   const repeatMode = usePlayerStore((s) => s.repeatMode);
   const toggleRepeatMode = usePlayerStore((s) => s.toggleRepeatMode);
-  const shuffle = usePlayerStore((s) => s.shuffle);
+  const shuffleMode = usePlayerStore((s) => s.shuffleMode);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
+  const toggleSmartShuffle = usePlayerStore((s) => s.toggleSmartShuffle);
+  const smartShuffleAvailable = usePlayerStore(
+    (s) => (s.sourceQueue.length > 0 ? s.sourceQueue : s.queue).filter((t) => t.similarityStatus === "ready").length >= 2
+  );
   const nowPlayingBackdrop = useSettingsStore((s) => s.nowPlayingBackdrop);
   const vinylSpin = useSettingsStore((s) => s.vinylSpin);
   const showFormatBadges = useSettingsStore((s) => s.showFormatBadges);
@@ -141,8 +146,17 @@ export function NowPlayingOverlay() {
           </div>
 
           <div className="flex items-center gap-5">
-            <IconButton onClick={toggleShuffle} label="Shuffle" active={shuffle} size="xl">
+            <IconButton onClick={toggleShuffle} label="Shuffle" active={shuffleMode === "random"} size="xl">
               <ShuffleIcon size={36} />
+            </IconButton>
+            <IconButton
+              onClick={toggleSmartShuffle}
+              label="Smart Shuffle"
+              active={shuffleMode === "smart"}
+              size="xl"
+              disabled={!smartShuffleAvailable}
+            >
+              <SmartShuffleIcon size={36} />
             </IconButton>
             <IconButton onClick={playPrevious} label="Previous track" size="xl">
               <PreviousIcon size={40} />

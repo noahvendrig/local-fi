@@ -30,6 +30,7 @@ export const trackSummarySelectColumns = {
   bpm: tracks.bpm,
   key: tracks.key,
   analysisStatus: tracks.analysisStatus,
+  similarityStatus: tracks.similarityStatus,
 };
 
 type TrackSummaryRow = {
@@ -57,6 +58,7 @@ type TrackSummaryRow = {
   bpm: number | null;
   key: string | null;
   analysisStatus: string;
+  similarityStatus: string;
 };
 
 function trackCoverUrl(trackId: number, coverArtPath: string | null, albumCoverArtPath: string | null, version: string): string | null {
@@ -88,6 +90,7 @@ export function mapTrackSummaryRow(row: TrackSummaryRow): TrackSummary {
     bpm: row.bpm,
     key: row.key,
     analysisStatus: row.analysisStatus as TrackSummary["analysisStatus"],
+    similarityStatus: row.similarityStatus as TrackSummary["similarityStatus"],
   };
 }
 

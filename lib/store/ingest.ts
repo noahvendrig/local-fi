@@ -155,8 +155,13 @@ export const useIngestStore = create<IngestState>((set, get) => ({
     try {
       const items = await fetchImportJobs(10);
       const detailed = await Promise.all(items.map((job) => fetchImportJob(job.id)));
-      set((state) => ({ jobs: mergeJobs(detailed, state.jobs) }));
-      for (const job of detailed) {
+      // Failed rows have no retry action in this UI, so on a fresh page load there's
+      // nothing to do with them but look like clutter — drop them from the tray list.
+      // The job's processedFiles/failedFiles summary counts are left untouched, so the
+      // "X of Y processed · Z failed" header above the tray still reports them honestly.
+      const cleaned = detailed.map((job) => ({ ...job, files: job.files.filter((f) => f.status !== "failed") }));
+      set((state) => ({ jobs: mergeJobs(cleaned, state.jobs) }));
+      for (const job of cleaned) {
         if (!TERMINAL_STATUSES.has(job.status)) subscribeToJobEvents(job.id, set);
       }
     } catch {
