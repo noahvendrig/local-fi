@@ -19,7 +19,9 @@ const QueueSourceSchema = z
 const BodySchema = z.object({
   trackId: z.number().int(),
   queueSource: QueueSourceSchema,
-  excludeIds: z.array(z.number().int()).max(200).optional(),
+  // recentlyPlayed is now a whole-lap history (see lib/store/player.ts), so this needs to cover
+  // a full personal library, not just a short recent tail.
+  excludeIds: z.array(z.number().int()).max(20000).optional(),
 });
 
 /**

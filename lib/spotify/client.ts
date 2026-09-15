@@ -228,12 +228,20 @@ async function spotifyGet<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** Fetches a public playlist's display name, used to auto-name the crate created for it. */
-export async function fetchPlaylistName(playlistId: string): Promise<string> {
-  const page = await spotifyGet<{ name: string }>(
-    `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}?fields=name`
+export interface SpotifyPlaylistMeta {
+  name: string;
+  /** Largest available playlist cover image, used to seed the crate's cover art. */
+  coverArtUrl: string | null;
+}
+
+/** Fetches a public playlist's display name and cover image, used to seed the crate created for it. */
+export async function fetchPlaylistMeta(playlistId: string): Promise<SpotifyPlaylistMeta> {
+  const page = await spotifyGet<{ name: string; images: SpotifyImage[] | null }>(
+    `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}?fields=name,images`
   );
-  return page.name;
+  const images = page.images ?? [];
+  const coverArtUrl = images.length > 0 ? images.reduce((a, b) => ((a.width ?? 0) >= (b.width ?? 0) ? a : b)).url : null;
+  return { name: page.name, coverArtUrl };
 }
 
 /** Fetches every track in one of the user's own playlists, paginating through Spotify's 100-per-page limit. */

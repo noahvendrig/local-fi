@@ -132,6 +132,10 @@ export function removePlaylistEntry(playlistId: number, entryId: number): Promis
   return request(`/api/v1/playlists/${playlistId}/tracks/${entryId}`, { method: "DELETE" });
 }
 
+export function fetchPlaylistSuggestions(id: number): Promise<{ suggestions: TrackSummary[] }> {
+  return request(`/api/v1/playlists/${id}/suggestions`);
+}
+
 export function previewRules(
   playlistId: number,
   rulesJson: RuleGroup,

@@ -20,7 +20,14 @@ export function useSmartShuffle() {
 
     void (async () => {
       const { queueSource, recentlyPlayed } = usePlayerStore.getState();
-      const track = await fetchSmartSuggestion(currentTrackId, queueSource, recentlyPlayed);
+      let track = await fetchSmartSuggestion(currentTrackId, queueSource, recentlyPlayed);
+      // No candidate left excluding recentlyPlayed: every other eligible track has already
+      // played this lap. Start a new lap (keeping only the current track excluded) instead of
+      // stalling Smart Shuffle or falling through to a stale queue entry.
+      if (!track && recentlyPlayed.length > 1 && !cancelled) {
+        usePlayerStore.getState().resetRecentlyPlayed(currentTrackId);
+        track = await fetchSmartSuggestion(currentTrackId, queueSource, [currentTrackId]);
+      }
       if (cancelled || !track) return;
       usePlayerStore.getState().setSmartUpcoming(currentTrackId, track);
     })();

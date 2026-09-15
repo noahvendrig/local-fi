@@ -125,3 +125,29 @@ export async function fetchSimilarTrack(
     return [];
   }
 }
+
+/** Calls python-backend/api/similarity_routes.py's POST /api/similarity/similar-to-set — averages
+ *  the given tracks' embeddings into one centroid and searches the whole index against it (e.g.
+ *  "what from the library fits this crate"). Returns an empty list (never throws) on any failure,
+ *  same degrade-gracefully convention as fetchSimilarTrack. */
+export async function fetchSimilarToTrackSet(
+  trackIds: number[],
+  opts: { excludeIds?: number[]; topK?: number }
+): Promise<PythonSimilarTrackMatch[]> {
+  try {
+    const res = await fetch(`${getPythonBackendUrl()}/api/similarity/similar-to-set`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        track_ids: trackIds,
+        exclude_ids: opts.excludeIds ?? [],
+        top_k: opts.topK ?? 5,
+      }),
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { matches: PythonSimilarTrackMatch[] };
+    return data.matches;
+  } catch {
+    return [];
+  }
+}

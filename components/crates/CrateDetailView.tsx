@@ -11,6 +11,7 @@ import { offlineTrackToSummary } from "@/lib/offline/trackSummary";
 import { usePlayerStore } from "@/lib/store/player";
 import { DownloadIcon, PlayIcon } from "@/components/shell/PlayerIcons";
 import { CrateCoverEditor } from "./CrateCoverEditor";
+import { CrateSuggestions } from "./CrateSuggestions";
 import { MobileOfflineButton } from "./MobileOfflineButton";
 import { ManualCrateTracklist } from "./ManualCrateTracklist";
 import { SmartCrateBuilder } from "./SmartCrateBuilder";
@@ -254,6 +255,7 @@ export function CrateDetailView({ playlistId }: { playlistId: number }) {
 
       <div className="mt-8">
         {playlist.type === "manual" ? <ManualCrateTracklist playlist={playlist} /> : <SmartCrateBuilder playlist={playlist} />}
+        {playlist.type === "manual" ? <CrateSuggestions playlistId={playlistId} /> : null}
       </div>
     </div>
   );

@@ -42,10 +42,11 @@ export type QueueSource =
   | { type: "album"; albumId: number }
   | { type: "artist"; artistId: number };
 
-const RECENTLY_PLAYED_LIMIT = 20;
-
 function pushRecentlyPlayed(recentlyPlayed: number[], trackId: number): number[] {
-  return [trackId, ...recentlyPlayed.filter((id) => id !== trackId)].slice(0, RECENTLY_PLAYED_LIMIT);
+  // No size cap: Smart Shuffle must not repeat a track until every other eligible track in
+  // scope has played once (see setSmartUpcoming's exhaustion reset), so this has to remember
+  // the whole current lap, not just a short tail -- personal-library scale keeps this cheap.
+  return [trackId, ...recentlyPlayed.filter((id) => id !== trackId)];
 }
 
 interface PlayerState {
@@ -62,9 +63,10 @@ interface PlayerState {
    *  candidate-pool scoping. Set explicitly by playTrack/playContext on every call, never
    *  carried over, so switching context always clears stale scope. */
   queueSource: QueueSource | null;
-  /** Ring buffer of recently-played track ids (most recent first), capped at
-   *  RECENTLY_PLAYED_LIMIT — passed to Smart Shuffle so it doesn't loop between two
-   *  mutually-similar tracks. */
+  /** Every track id played this "lap" (most recent first, uncapped) — passed to Smart Shuffle
+   *  as its exclude list so no track repeats until every other eligible track has played once.
+   *  Cleared by resetRecentlyPlayed once Smart Shuffle exhausts the pool and needs to start a
+   *  new lap. */
   recentlyPlayed: number[];
   /** Requested audio-element position; TransportBar's effect applies it and clears it. */
   pendingSeekSeconds: number | null;
@@ -111,6 +113,10 @@ interface PlayerState {
    *  landing after the user skipped elsewhere or turned smart shuffle off). See
    *  components/shell/useSmartShuffle.ts for the caller. */
   setSmartUpcoming: (afterTrackId: number, track: TrackSummary) => void;
+  /** Starts a new Smart Shuffle lap: called once the candidate pool is exhausted (every
+   *  eligible track has already played), so recommendations can start repeating again. Keeps
+   *  only the currently-playing track excluded. See components/shell/useSmartShuffle.ts. */
+  resetRecentlyPlayed: (currentTrackId: number) => void;
   reorderQueue: (fromIndex: number, toIndex: number) => void;
   removeFromQueue: (index: number) => void;
   /** Drops every occurrence of a library track from the queue (used when removing from the library). */
@@ -474,6 +480,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setSmartUpcoming: (afterTrackId, track) => {
     const { currentTrack, shuffleMode, queue, sourceQueue, currentIndex } = get();
     if (currentTrack?.id !== afterTrackId || shuffleMode !== "smart") return; // stale response
+    if (track.id === currentTrack.id) return; // never queue the currently-playing track as itself
     const nextQueue = queue.slice();
     if (currentIndex + 1 < nextQueue.length) {
       nextQueue[currentIndex + 1] = track;
@@ -488,6 +495,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }
     set({ queue: nextQueue, sourceQueue: nextSource });
     schedulePersist(get);
+  },
+
+  resetRecentlyPlayed: (currentTrackId) => {
+    set({ recentlyPlayed: [currentTrackId] });
   },
 
   reorderQueue: (fromIndex, toIndex) => {

@@ -14,6 +14,7 @@ from models.similarity_schemas import (
     SimilarityJobListResponse,
     SimilarityJobResponse,
     SimilarityJobStatus,
+    SimilarToSetRequest,
     SimilarTrackMatch,
     SimilarTrackRequest,
     SimilarTrackResponse,
@@ -106,4 +107,10 @@ async def similar_tracks(body: SimilarTrackRequest):
     matches = similarity_job_manager.index.similar(
         body.track_id, body.candidate_ids, set(body.exclude_ids), body.top_k
     )
+    return SimilarTrackResponse(matches=[SimilarTrackMatch(track_id=tid, score=score) for tid, score in matches])
+
+
+@router.post("/similar-to-set", response_model=SimilarTrackResponse)
+async def similar_to_set(body: SimilarToSetRequest):
+    matches = similarity_job_manager.index.similar_to_set(body.track_ids, set(body.exclude_ids), body.top_k)
     return SimilarTrackResponse(matches=[SimilarTrackMatch(track_id=tid, score=score) for tid, score in matches])

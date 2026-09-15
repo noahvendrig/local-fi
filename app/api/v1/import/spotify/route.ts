@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { detectCoverImageExt, writePlaylistCoverArt } from "@/lib/crates/coverArt";
 import { getDb } from "@/lib/db/client";
 import { importJobFiles, importJobs, playlists } from "@/lib/db/schema";
 import { loadJobSnapshot } from "@/lib/import/events";
 import { enqueueImportJob } from "@/lib/import/queue";
 import {
-  fetchPlaylistName,
+  fetchPlaylistMeta,
   fetchPlaylistTracks,
   InvalidPlaylistUrlError,
   parsePlaylistId,
@@ -49,9 +51,13 @@ export async function POST(request: Request) {
 
   let tracks;
   let playlistName: string;
+  let playlistCoverArtUrl: string | null;
   try {
     const playlistId = parsePlaylistId(playlistUrl);
-    [playlistName, tracks] = await Promise.all([fetchPlaylistName(playlistId), fetchPlaylistTracks(playlistId)]);
+    const [meta, fetchedTracks] = await Promise.all([fetchPlaylistMeta(playlistId), fetchPlaylistTracks(playlistId)]);
+    playlistName = meta.name;
+    playlistCoverArtUrl = meta.coverArtUrl;
+    tracks = fetchedTracks;
   } catch (err) {
     if (err instanceof InvalidPlaylistUrlError) {
       return NextResponse.json({ error: { code: "invalid_request", message: err.message } }, { status: 400 });
@@ -92,6 +98,22 @@ export async function POST(request: Request) {
         .returning()
         .get()
     : null;
+
+  if (crate && playlistCoverArtUrl) {
+    try {
+      const res = await fetch(playlistCoverArtUrl);
+      if (res.ok) {
+        const bytes = Buffer.from(await res.arrayBuffer());
+        const ext = detectCoverImageExt(bytes);
+        if (ext) {
+          const coverArtPath = writePlaylistCoverArt(crate.uuid, null, bytes, ext);
+          db.update(playlists).set({ coverArtPath }).where(eq(playlists.id, crate.id)).run();
+        }
+      }
+    } catch {
+      // Cover art is a nice-to-have — a failed fetch shouldn't block crate creation.
+    }
+  }
 
   const job = db
     .insert(importJobs)

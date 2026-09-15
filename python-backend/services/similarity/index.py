@@ -145,7 +145,10 @@ class SimilarityIndex:
         """candidate_ids given (crate-scoped case): live brute-force cosine query restricted to
         those ids, minus exclude_ids -- small, dynamic sets, so a fresh search is cheap and
         correct-by-construction. candidate_ids omitted (whole-library case): an O(K) filter of
-        the precomputed neighbor list instead of a fresh search."""
+        the precomputed neighbor list, falling back to a brute-force whole-index search if
+        exclude_ids has eaten the entire precomputed list -- otherwise Smart Shuffle could never
+        reach past a track's nearest NEIGHBORS_K neighbors, and would repeat before every track
+        in the library actually got a turn."""
         with self._lock:
             if track_id not in self._id_to_row:
                 return []
@@ -154,12 +157,14 @@ class SimilarityIndex:
                 query = self._vectors[self._id_to_row[track_id]]
                 rows: list[int] = []
                 ids: list[int] = []
+                seen: set[int] = set()
                 for cid in candidate_ids:
-                    if cid == track_id or cid in exclude_ids:
+                    if cid == track_id or cid in exclude_ids or cid in seen:
                         continue
                     row = self._id_to_row.get(cid)
                     if row is None:
                         continue  # not yet embedded -- not a valid candidate
+                    seen.add(cid)
                     rows.append(row)
                     ids.append(cid)
                 if not rows:
@@ -171,7 +176,59 @@ class SimilarityIndex:
 
             neighbors = self._neighbors.get(track_id, [])
             filtered = [(tid, score) for tid, score in neighbors if tid not in exclude_ids]
-            return filtered[:top_k]
+            if filtered:
+                return filtered[:top_k]
+            if len(self._track_ids) <= len(exclude_ids) + 1:
+                return []  # every other track is excluded -- truly nothing left to suggest
+            query = self._vectors[self._id_to_row[track_id]]
+            matrix = self._matrix()
+            scores = matrix @ query
+            order = np.argsort(-scores)
+            result: list[tuple[int, float]] = []
+            for row in order:
+                tid = self._track_ids[row]
+                if tid == track_id or tid in exclude_ids:
+                    continue
+                result.append((tid, float(scores[row])))
+                if len(result) >= top_k:
+                    break
+            return result
+
+    def similar_to_set(
+        self,
+        track_ids: list[int],
+        exclude_ids: set[int],
+        top_k: int,
+    ) -> list[tuple[int, float]]:
+        """Crate-suggestion query: averages the given tracks' (already L2-normalized) vectors
+        into one centroid, re-normalizes it, and brute-force cosine-scores it against every other
+        indexed track. Unlike similar(), this always searches the whole index rather than a
+        caller-supplied candidate set -- crate suggestions are explicitly "what else in the
+        library fits this crate," so the candidate pool is everything outside exclude_ids (the
+        crate's own members) by construction. Ids in track_ids that aren't indexed yet are
+        skipped; if none are indexed, returns []."""
+        with self._lock:
+            rows = [self._id_to_row[tid] for tid in track_ids if tid in self._id_to_row]
+            if not rows:
+                return []
+            matrix = self._matrix()
+            centroid = matrix[rows].mean(axis=0)
+            norm = np.linalg.norm(centroid)
+            if norm == 0:
+                return []
+            centroid = centroid / norm
+
+            scores = matrix @ centroid
+            order = np.argsort(-scores)
+            result: list[tuple[int, float]] = []
+            for row in order:
+                tid = self._track_ids[row]
+                if tid in exclude_ids:
+                    continue
+                result.append((tid, float(scores[row])))
+                if len(result) >= top_k:
+                    break
+            return result
 
     def checkpoint(self) -> None:
         with self._lock:

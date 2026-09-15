@@ -67,3 +67,12 @@ class SimilarTrackMatch(BaseModel):
 
 class SimilarTrackResponse(BaseModel):
     matches: list[SimilarTrackMatch]
+
+
+class SimilarToSetRequest(BaseModel):
+    # E.g. a crate's member tracks -- averaged into one centroid vector, then searched against
+    # the whole index (minus exclude_ids). Unlike SimilarTrackRequest, there's no candidate_ids
+    # option: this query is always "what fits this set, from anywhere in the library."
+    track_ids: list[int] = Field(..., min_length=1)
+    exclude_ids: list[int] = []
+    top_k: int = Field(default=5, ge=1, le=50)
