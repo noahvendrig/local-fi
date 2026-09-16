@@ -67,6 +67,15 @@ export async function postMixtapeMatchJob(mixtapeId: number, path: string): Prom
   return (await res.json()) as PythonFingerprintJobResponse;
 }
 
+/** Tells python-backend to forget a purged track's fingerprint (its DELETE /api/fingerprint/tracks/:id),
+ *  so mixtape matching stops returning an id that no longer has a `tracks` row. Best-effort: if the
+ *  backend is down the sidecar survives, and lib/mixtapes/segments.ts still drops the ghost match. */
+export async function forgetPythonTrackFingerprint(trackId: number): Promise<void> {
+  await fetch(`${getPythonBackendUrl()}/api/fingerprint/tracks/${trackId}`, { method: "DELETE" }).catch(() => {
+    // ignore — see the note above.
+  });
+}
+
 export async function cancelPythonFingerprintJob(jobId: string): Promise<void> {
   await fetch(`${getPythonBackendUrl()}/api/fingerprint/jobs/${jobId}`, { method: "DELETE" }).catch(() => {
     // Best-effort — if the backend is unreachable there's nothing left to cancel anyway.

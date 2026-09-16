@@ -4,8 +4,7 @@
 import asyncio
 import json
 
-from fastapi import APIRouter, HTTPException
-
+from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import StreamingResponse
 
 from models.fingerprint_schemas import (
@@ -37,6 +36,14 @@ async def fingerprint_tracks(body: CreateTrackFingerprintJobRequest):
 async def match_mixtape(body: CreateMixtapeMatchJobRequest):
     job = fingerprint_job_manager.create_mixtape_match_job(body.path)
     return job.to_response()
+
+
+@router.delete("/tracks/{track_id}", status_code=204)
+async def forget_track(track_id: int):
+    """Drops a purged track's fingerprint so mixtape matching stops returning an id whose
+    library row is gone. Idempotent -- forgetting an unknown track is a no-op, not a 404."""
+    fingerprint_job_manager.index.remove_track(track_id)
+    return Response(status_code=204)
 
 
 @router.get("/jobs", response_model=FingerprintJobListResponse)

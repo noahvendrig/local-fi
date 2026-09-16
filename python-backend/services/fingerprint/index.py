@@ -90,6 +90,22 @@ class FingerprintIndex:
             self._track_ids.add(track_id)
         return len(landmarks)
 
+    def remove_track(self, track_id: int) -> bool:
+        """Forgets a track entirely -- sidecar, postings and id -- and checkpoints.
+
+        Called when the track is purged from local-fi's library (lib/library/trash.ts's
+        purgeTrack). Without this the index keeps matching mixtapes against a track id
+        that no longer has a `tracks` row, which fails the mixtape_segments foreign key.
+        Unlike add_track this checkpoints immediately: deletes are one-at-a-time, not a
+        batch backfill."""
+        self._sidecar_path(track_id).unlink(missing_ok=True)
+        with self._lock:
+            known = track_id in self._track_ids
+            self._remove_track_postings(track_id)
+            self._track_ids.discard(track_id)
+        self.checkpoint()
+        return known
+
     def _remove_track_postings(self, track_id: int) -> None:
         for key in list(self._index.keys()):
             filtered = [p for p in self._index[key] if p.track_id != track_id]

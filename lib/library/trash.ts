@@ -6,6 +6,7 @@ import { tracks } from "@/lib/db/schema";
 import { trackFingerprint } from "@/lib/import/fingerprint";
 import { trashDirFor } from "@/lib/import/paths";
 import { DEFAULT_TRASH_GRACE_DAYS } from "@/lib/library/trashConfig";
+import { forgetPythonTrackFingerprint } from "@/lib/pythonBackend/fingerprintClient";
 import { getDataDir } from "@/lib/storage/dataDir";
 import { resolveTrackAbsPath } from "@/lib/storage/resolveTrackPath";
 
@@ -165,6 +166,9 @@ export function purgeTrack(track: TrackRow): void {
   }
   unlinkQuiet(track.waveformPath);
   unlinkQuiet(track.coverArtPath);
+  // Fire-and-forget: the fingerprint index lives in python-backend, so it can't cascade off the
+  // row deletion below — left behind, it keeps matching mixtapes against this now-missing id.
+  void forgetPythonTrackFingerprint(track.id);
   getDb().delete(tracks).where(eq(tracks.id, track.id)).run();
 }
 

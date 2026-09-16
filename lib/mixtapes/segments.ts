@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { getDb } from "../db/client";
-import { mixtapeSegments } from "../db/schema";
+import { mixtapeSegments, tracks } from "../db/schema";
 import type { PythonMixtapeSegmentResult } from "../pythonBackend/fingerprintClient";
 
 // Sub-second gaps between accepted segments are just alignment-boundary jitter, not a real
@@ -65,6 +65,24 @@ function mergeIntervals(intervals: MatchedInterval[]): MatchedInterval[] {
   return merged;
 }
 
+/** python-backend's fingerprint index is a separate process with its own on-disk sidecars, so it
+ *  can still match a track whose library row has since been purged (and its sidecar left behind).
+ *  Inserting that ghost id would blow up the whole analysis on mixtape_segments' foreign key, so
+ *  drop those matches here — the stretch they covered just falls through as an unrecognized gap. */
+function dropMatchesForMissingTracks(matches: PythonMixtapeSegmentResult[]): PythonMixtapeSegmentResult[] {
+  const trackIds = [...new Set(matches.map((m) => m.track_id))];
+  if (trackIds.length === 0) return matches;
+  const existing = new Set(
+    getDb()
+      .select({ id: tracks.id })
+      .from(tracks)
+      .where(inArray(tracks.id, trackIds))
+      .all()
+      .map((row) => row.id)
+  );
+  return matches.filter((m) => existing.has(m.track_id));
+}
+
 /**
  * Turns python-backend's flat match list into `mixtapeSegments` rows: the matches themselves
  * (matchStatus "auto_matched"), plus a synthetic "unrecognized" row for every stretch of the
@@ -80,7 +98,7 @@ export function writeMixtapeSegments(
   const db = getDb();
   const now = new Date().toISOString();
 
-  const matchedRows: SegmentRow[] = dedupeOverlappingMatches(matches).map((m) => ({
+  const matchedRows: SegmentRow[] = dedupeOverlappingMatches(dropMatchesForMissingTracks(matches)).map((m) => ({
     startSeconds: m.start_ms / 1000,
     endSeconds: m.end_ms / 1000,
     matchedTrackId: m.track_id,
