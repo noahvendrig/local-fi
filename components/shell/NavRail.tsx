@@ -39,7 +39,7 @@ export function NavRail() {
   const paletteName = PALETTES.find((p) => p.id === palette)?.name ?? "Palette";
 
   return (
-    <nav className="hidden w-[240px] shrink-0 flex-col border-r border-line bg-bg px-3 py-5 md:flex">
+    <nav className="hidden w-[240px] shrink-0 flex-col overflow-y-auto border-r border-line bg-bg px-3 py-5 md:flex">
       <div className="mb-5 flex items-center gap-2.5 px-2">
         <span className="grid h-[22px] w-[22px] place-items-center rounded-full border border-acc" aria-hidden>
           <span className="h-[5px] w-[5px] rounded-full bg-acc" />
@@ -84,7 +84,7 @@ export function NavRail() {
       </ul>
 
       <p className="mt-6 mb-3 px-2 text-[11px] font-medium uppercase tracking-[0.04em] text-t3">Crates</p>
-      <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
+      <div className="flex flex-col gap-0.5">
         {cratesQuery.isSuccess && crates.length === 0 ? (
           <Link href="/crates" className="rounded-lg px-3 py-1.5 text-[13px] text-t3 hover:bg-surf-2 hover:text-t1">
             No crates yet
@@ -109,7 +109,7 @@ export function NavRail() {
         )}
       </div>
 
-      <div className="mt-3 lf-card rounded-lg px-3 py-3">
+      <div className="mt-3 lf-card hidden shrink-0 rounded-lg px-3 py-3 [@media(min-height:700px)]:block">
         <div className="mb-1.5 flex items-center justify-between font-mono text-[11px] text-t2">
           <span>Theme</span>
           <span className="truncate pl-2 text-t3">{paletteName}</span>
