@@ -63,10 +63,10 @@ const PHRASE_LENGTH_BARS = 4;
 /** How many bars the outgoing track's loop plays completely by itself — no incoming audio audible
  *  yet — before incoming's vocals start fading in. Establishes the loop as the new "groove" before
  *  anything is layered onto it. One pass of the 4-bar loop phrase. */
-const SOLO_LOOP_BARS = 4;
+const SOLO_LOOP_BARS = 8;
 /** How many bars incoming's vocals take to fade all the way in, over the outgoing instrumental's
  *  still-looping beat. Two more passes of the 4-bar loop phrase. */
-const VOCALS_FADE_BARS = 8;
+const VOCALS_FADE_BARS = 16;
 /** Total bars from the transition's start to the instrumental handover — solo loop + vocals fade
  *  — exactly PHRASE_LENGTH_BARS * 3, so a found loopRegion repeats a whole number of times. */
 const TRANSITION_BARS = SOLO_LOOP_BARS + VOCALS_FADE_BARS;

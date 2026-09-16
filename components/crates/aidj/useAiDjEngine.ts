@@ -145,6 +145,7 @@ export class AiDjEngineController {
   private unsubscribeSuggestion: (() => void) | null = null;
 
   async beginSession(playlistId: number, pool: PlaylistTrackItem[], skipped: AiDjSkippedTrack[], targetBpm: number): Promise<void> {
+    console.info(`[AI DJ] beginSession: playlist ${playlistId}, ${pool.length} usable tracks, ${skipped.length} skipped (no bpm), targetBpm ${targetBpm}`);
     this.endSession();
     const anchor = pool[0] ?? null;
     const store = useAiDjStore.getState();
@@ -327,6 +328,7 @@ export class AiDjEngineController {
       entry.status = "ready";
       useAiDjStore.getState().setPrepStatus(track.id, "ready");
       this.maybeStartOutgoingShadow(track);
+      this.maybeReplanTransitionForOwnStems(track);
     } catch {
       entry.status = "failed";
       useAiDjStore.getState().setPrepStatus(track.id, "failed");
@@ -363,6 +365,28 @@ export class AiDjEngineController {
     void eq.startAiDjStem(selfHandles.vocals, entry.vocalsBuffer, { when: startAt, offsetSec, gain: 0, tempoRatio: runtime.tempoRatio });
     void eq.startAiDjStem(selfHandles.instrumental, entry.instrumentalBuffer, { when: startAt, offsetSec, gain: 0, tempoRatio: runtime.tempoRatio });
     runtime.outgoingShadowStartedAt = startAt;
+  }
+
+  /** Fires alongside maybeStartOutgoingShadow, right as `track`'s own stems finish separating. The
+   *  very first planOwnTransition for this track (run from advanceDecision, immediately once it
+   *  became current) had no choice but to call findSafeLoopSection before these buffers existed —
+   *  so it always missed the loop and fell back to the unlooped tail transition. Now that the
+   *  buffers are here, re-run planOwnTransition against whatever's already been decided as `next`
+   *  (a no-op if nothing has been decided yet — advanceDecision's own call will find these buffers
+   *  ready and pick up the loop on its first try instead). Replanning clears and reschedules the
+   *  transition's timers, so this is safe even if the original (loop-less) trigger was already
+   *  waiting to fire — as long as the transition hasn't actually committed yet (guarded inside
+   *  planOwnTransition itself via the currentRuntime check). */
+  private maybeReplanTransitionForOwnStems(track: PlaylistTrackItem): void {
+    const runtime = this.currentRuntime;
+    if (!runtime || runtime.track.id !== track.id) return;
+    const next = this.order[runtime.index + 1];
+    if (!next) {
+      console.info(`[AI DJ] own stems ready for "${track.title ?? track.id}" but next track not decided yet — advanceDecision will replan once it is`);
+      return;
+    }
+    console.info(`[AI DJ] own stems ready for "${track.title ?? track.id}" — replanning transition`);
+    void this.planOwnTransition(runtime, next);
   }
 
   private publishRuntimeAnchor(runtime: CurrentRuntime): void {
@@ -551,14 +575,26 @@ export class AiDjEngineController {
   // -- transition planning & scheduling --------------------------------------
 
   private async planOwnTransition(runtime: CurrentRuntime, next: PlaylistTrackItem | null): Promise<void> {
-    if (this.currentRuntime !== runtime) return;
+    if (this.currentRuntime !== runtime) {
+      console.info(`[AI DJ] planOwnTransition("${runtime.track.title ?? runtime.track.id}") bailed: runtime already superseded`);
+      return;
+    }
     for (const t of runtime.timers) window.clearTimeout(t);
     runtime.timers = [];
-    if (!next) return; // nothing decided yet, or the crate's out of unplayed tracks — let it play out
+    if (!next) {
+      console.info(`[AI DJ] planOwnTransition("${runtime.track.title ?? runtime.track.id}") bailed: no next track decided yet`);
+      return; // nothing decided yet, or the crate's out of unplayed tracks — let it play out
+    }
 
     const [selfGrid, nextGrid] = await Promise.all([this.getBeatGrid(runtime.track), this.getBeatGrid(next)]);
-    if (this.currentRuntime !== runtime) return; // superseded by a skip/stop while we awaited
-    if (this.order[runtime.index + 1]?.id !== next.id) return; // superseded by applySuggestedNext meanwhile
+    if (this.currentRuntime !== runtime) {
+      console.info(`[AI DJ] planOwnTransition("${runtime.track.title ?? runtime.track.id}") bailed after beat-grid fetch: runtime superseded`);
+      return; // superseded by a skip/stop while we awaited
+    }
+    if (this.order[runtime.index + 1]?.id !== next.id) {
+      console.info(`[AI DJ] planOwnTransition("${runtime.track.title ?? runtime.track.id}") bailed: next track changed to a different suggestion meanwhile`);
+      return; // superseded by applySuggestedNext meanwhile
+    }
 
     const outgoingInfo: TransitionTrackInfo = {
       bpm: selfGrid.bpm,
@@ -573,7 +609,14 @@ export class AiDjEngineController {
       downbeats: nextGrid.downbeats,
     };
     const outgoingEffectiveKey = runtime.track.key ? (transposeCamelotKey(runtime.track.key, runtime.pitchSemitones) ?? runtime.track.key) : null;
+    const stemsEntry = this.prepFor(runtime.track.id);
+    const stemsReady = Boolean(stemsEntry.vocalsBuffer && stemsEntry.instrumentalBuffer);
     const loopSection = this.findSafeLoopSection(runtime.track, outgoingInfo);
+    console.info(
+      `[AI DJ] loop check for "${runtime.track.title ?? runtime.track.id}" (own stems ${stemsReady ? "ready" : "NOT ready yet"}): ${
+        loopSection ? `found [${loopSection.startSec.toFixed(1)}s, ${loopSection.endSec.toFixed(1)}s]` : "no safe loop point"
+      }`
+    );
     const plan = computeTransitionPlan(outgoingInfo, incomingInfo, this.targetBpm, outgoingEffectiveKey, loopSection);
     // Published as soon as it's known — well ahead of the transition itself reaching it — so the
     // waveform bar can mark where the upcoming transition will loop while this track is still
