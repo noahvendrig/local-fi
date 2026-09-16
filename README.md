@@ -1,8 +1,61 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-## Getting Started
+## Setup
 
-First, run the development server:
+Every step below except the first is per-machine — `.env` and `python-backend/.venv`
+are both gitignored, so a fresh clone (or a new device) needs them redone even if
+you've set this project up before elsewhere.
+
+### 1. Install dependencies
+
+```bash
+npm install
+```
+
+### 2. Install ffmpeg
+
+Required on `PATH` for audio import and waveform generation — without it, imports
+fail and `npm run dev` logs a warning at startup. Override the binary location with
+`LOCALFI_FFMPEG_PATH` instead of relying on `PATH`.
+
+### 3. Configure `.env` (optional — only for Spotify playlist import)
+
+Skip this and the next step if you don't need Spotify import; everything else works
+without them. Otherwise, create a `.env` file in the project root:
+
+```
+SPOTIFY_CLIENT_ID=...
+SPOTIFY_CLIENT_SECRET=...
+```
+
+See [Spotify playlist import](#spotify-playlist-import) below for how to get these
+values and finish connecting an account.
+
+### 4. Set up the Python backend (optional — only for Spotify import)
+
+Spotify import resolves each playlist track on YouTube and downloads it through a
+bundled Python backend (`python-backend/`, forked from a standalone yt-dlp
+downloader):
+
+```bash
+cd python-backend
+python -m venv .venv
+.venv/Scripts/pip install -r requirements.txt   # .venv/bin/pip on macOS/Linux
+```
+
+`npm run dev` prefers `python-backend/.venv` automatically if present, otherwise it
+falls back to whatever `python` resolves to on `PATH` — which usually won't have
+these dependencies installed, so skipping this step doesn't fail loudly: the backend
+still starts, then immediately crashes on import (`ModuleNotFoundError`), and every
+Spotify track fetch later fails with a generic `fetch failed` in the Import tab. If
+you hit that, this venv step is almost always why — recreate it and restart the dev
+server.
+
+You'll also need `ffmpeg`, `yt-dlp` and a JS runtime (`deno`) on `PATH` — the same
+prerequisites yt-downloader-ui documents, since this backend uses the same `yt_dlp`
+library under the hood.
+
+### 5. Run the development server
 
 ```bash
 npm run dev
@@ -23,27 +76,12 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 ## Spotify playlist import
 
 Importing a public Spotify playlist (Import page → "Import from Spotify") finds each
-track on YouTube and downloads it via a bundled Python backend (`python-backend/`,
-forked from a standalone yt-dlp downloader). Set up once:
+track on YouTube and downloads it via the bundled Python backend — see step 4 above
+to set that up, and step 3 for the `.env` credentials this section assumes you have.
 
-```bash
-cd python-backend
-python -m venv .venv
-.venv/Scripts/pip install -r requirements.txt   # .venv/bin/pip on macOS/Linux
-```
-
-You'll also need `ffmpeg`, `yt-dlp` and a JS runtime (`deno`) on `PATH` — the same
-prerequisites yt-downloader-ui documents, since this backend uses the same
-`yt_dlp` library under the hood.
-
-Then register a free Spotify app at [developer.spotify.com](https://developer.spotify.com/dashboard),
-add `http://127.0.0.1:3000/api/v1/spotify/callback` under its **Redirect URIs**, and add
-its credentials to `.env`:
-
-```
-SPOTIFY_CLIENT_ID=...
-SPOTIFY_CLIENT_SECRET=...
-```
+Register a free Spotify app at [developer.spotify.com](https://developer.spotify.com/dashboard),
+add `http://127.0.0.1:3000/api/v1/spotify/callback` under its **Redirect URIs**, and put
+its client ID/secret in `.env` as shown above.
 
 Spotify no longer allows reading a playlist's tracks with just those app credentials —
 even for your own public playlists — so there's a one-time login: open **Settings →
