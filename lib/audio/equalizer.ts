@@ -67,6 +67,10 @@ class PlaybackEqualizer {
   // else, so EQ/volume apply uniformly.
   private aiDjStems = new Map<AiDjStemHandle, AiDjStemNode>();
   private aiDjProcessorRegistered: Promise<void> | null = null;
+  // AI DJ metronome (debug/monitoring aid, not part of the mix itself) — short oscillator clicks
+  // scheduled directly into the same mixer, so pausing/resuming and the volume knob affect it
+  // exactly like every other AI DJ source, with no separate plumbing.
+  private metronomeNodes: { osc: OscillatorNode; gain: GainNode }[] = [];
 
   connectDeck(audio: HTMLAudioElement, deck: DeckId): void {
     if (this.sourceNodes[deck] && this.connectedElements[deck] === audio) return;
@@ -251,6 +255,14 @@ class PlaybackEqualizer {
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     const st = new SoundTouchNodeCtor({ context: ctx });
+    // The actual speed change is the source's own native playbackRate (real resampling) — st's
+    // playbackRate is *not* a second, independent tempo control; it just tells the worklet what
+    // ratio the source was resampled by, so it can divide pitch by that ratio to cancel the pitch
+    // shift resampling introduces (see @soundtouchjs/audio-worklet's SoundTouchNode doc comment and
+    // the equivalent audio.playbackRate + setDjTempoPitch pairing in useDjPlaybackEngine.ts). Setting
+    // only st.playbackRate — without also setting the source's — changes no audible tempo at all
+    // and instead applies a stray, uncompensated-for pitch shift.
+    source.playbackRate.setValueAtTime(opts.tempoRatio ?? 1, ctx.currentTime);
     st.playbackRate.setValueAtTime(opts.tempoRatio ?? 1, ctx.currentTime);
     st.pitchSemitones.setValueAtTime(opts.pitchSemitones ?? 0, ctx.currentTime);
     const gain = ctx.createGain();
@@ -273,11 +285,13 @@ class PlaybackEqualizer {
     this.aiDjStems.set(handle, node);
   }
 
-  /** Immediately (no ramp) sets a stem's live tempo ratio / pitch shift. */
+  /** Immediately (no ramp) sets a stem's live tempo ratio / pitch shift. Must move the source's
+   *  own playbackRate together with st's — see the comment in startAiDjStem. */
   setAiDjStemTempoPitch(handle: AiDjStemHandle, tempoRatio: number, pitchSemitones: number): void {
     const node = this.aiDjStems.get(handle);
     const ctx = this.audioContext;
     if (!node || !ctx) return;
+    node.source.playbackRate.setValueAtTime(tempoRatio, ctx.currentTime);
     node.st.playbackRate.setValueAtTime(tempoRatio, ctx.currentTime);
     node.st.pitchSemitones.setValueAtTime(pitchSemitones, ctx.currentTime);
   }
@@ -302,6 +316,21 @@ class PlaybackEqualizer {
     if (!node || !ctx) return;
     node.gain.gain.cancelScheduledValues(ctx.currentTime);
     node.gain.gain.setValueAtTime(gain, ctx.currentTime);
+  }
+
+  /** Schedules an instantaneous (non-ramped) gain change at a future AudioContext time `when` —
+   *  e.g. to un-mute a stem that was started early and muted to let it warm up, right as some
+   *  other source it's replacing goes silent. Unlike setAiDjStemGain (which always acts "now"),
+   *  this can be scheduled ahead of time alongside the rest of a transition's automation. */
+  scheduleAiDjStemGainStep(handle: AiDjStemHandle, gain: number, when: number): void {
+    const node = this.aiDjStems.get(handle);
+    if (!node) return;
+    node.gain.gain.setValueAtTime(gain, when);
+  }
+
+  /** Whether a live (started, not yet ended/disconnected) AI DJ stem exists under `handle`. */
+  hasAiDjStem(handle: AiDjStemHandle): boolean {
+    return this.aiDjStems.has(handle);
   }
 
   /** Schedules an equal-power gain ramp (see crossfade.ts's curves) on a stem, starting at AudioContext time `when`. */
@@ -342,6 +371,57 @@ class PlaybackEqualizer {
   /** Tears down every live AI DJ stem — called when a session ends or the route unmounts. */
   disconnectAllAiDjStems(): void {
     for (const handle of Array.from(this.aiDjStems.keys())) this.disconnectAiDjStem(handle);
+  }
+
+  /**
+   * Schedules a bank of short click sounds (the AI DJ's optional metronome toggle) into the same
+   * mixer/EQ/volume chain as everything else. `clicks[].when` are absolute AudioContext times —
+   * useAiDjEngine works these out from a track's beat grid plus its current runtime anchor. Does
+   * NOT clear whatever's already scheduled; call clearMetronomeClicks() first when replacing the
+   * whole set (e.g. the current track changed).
+   */
+  scheduleMetronomeClicks(clicks: { when: number; freqHz: number; gain: number }[]): void {
+    const ctx = this.ensureContext();
+    if (!ctx || !this.mixerNode) return;
+    const mixer = this.mixerNode;
+    const CLICK_DURATION_SEC = 0.03;
+
+    for (const click of clicks) {
+      const osc = ctx.createOscillator();
+      osc.frequency.setValueAtTime(click.freqHz, click.when);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(click.gain, click.when);
+      gain.gain.exponentialRampToValueAtTime(0.0001, click.when + CLICK_DURATION_SEC);
+      osc.connect(gain);
+      gain.connect(mixer);
+
+      const node = { osc, gain };
+      osc.onended = () => {
+        gain.disconnect();
+        osc.disconnect();
+        this.metronomeNodes = this.metronomeNodes.filter((n) => n !== node);
+      };
+      osc.start(click.when);
+      osc.stop(click.when + CLICK_DURATION_SEC + 0.05);
+      this.metronomeNodes.push(node);
+    }
+  }
+
+  /** Immediately stops and forgets every scheduled-or-playing metronome click — used when the
+   *  toggle is turned off and whenever the AI DJ's current track changes (its beat grid no longer
+   *  applies to what's about to play). */
+  clearMetronomeClicks(): void {
+    for (const { osc, gain } of this.metronomeNodes) {
+      osc.onended = null;
+      try {
+        osc.stop();
+      } catch {
+        // Already stopped/ended.
+      }
+      osc.disconnect();
+      gain.disconnect();
+    }
+    this.metronomeNodes = [];
   }
 
   private ensureContext(): AudioContext | null {

@@ -4,7 +4,7 @@ import { analysisJobTracks, analysisJobs, tracks } from "../db/schema";
 import { resolveTrackAbsPath } from "../storage/resolveTrackPath";
 import { publishAnalysisJobUpdate } from "./events";
 import { detectBeatGrid } from "./bpmDetect";
-import { estimateDownbeats, persistBeatGrid } from "./beatGrid";
+import { estimateBeatGrid, persistBeatGrid } from "./beatGrid";
 import { detectKey } from "./keyDetect";
 import { ANALYSIS_SAMPLE_RATE, decodeMonoPcmF32 } from "./pcmDecode";
 
@@ -52,9 +52,10 @@ export async function analyzeTrack(trackId: number, jobTrackId: number, jobId: n
         }
         if (needsBeatGrid) {
           beatGridStatus = detected != null ? "ready" : "failed";
-          beatGridPath = detected != null
-            ? persistBeatGrid(track.uuid, detected.beats, estimateDownbeats(detected.beats, samples, ANALYSIS_SAMPLE_RATE))
-            : beatGridPath;
+          if (detected != null) {
+            const { beats, downbeats } = estimateBeatGrid(detected.beats, samples, ANALYSIS_SAMPLE_RATE);
+            beatGridPath = persistBeatGrid(track.uuid, beats, downbeats);
+          }
         }
       }
       if (needsKey) {

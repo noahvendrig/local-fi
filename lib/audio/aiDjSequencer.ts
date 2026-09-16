@@ -24,12 +24,33 @@ function pairScore(from: PlaylistTrackItem, to: PlaylistTrackItem): number {
 }
 
 /**
+ * Picks the single best next track for `from` out of `candidates` by the same tempo/key
+ * compatibility scoring sequenceCrateForAiDj uses to build a whole set order — used by the AI DJ
+ * engine as its non-network fallback (or its "not yet a Smart Shuffle candidate" fallback) when
+ * dynamically deciding one track at a time instead of pre-sequencing the whole crate. Returns null
+ * only when `candidates` is empty.
+ */
+export function pickNextByTempoKey(from: PlaylistTrackItem, candidates: PlaylistTrackItem[]): PlaylistTrackItem | null {
+  let best: PlaylistTrackItem | null = null;
+  let bestScore = Infinity;
+  for (const candidate of candidates) {
+    const score = pairScore(from, candidate);
+    if (score < bestScore) {
+      best = candidate;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+/**
  * Orders a crate's tracks for an AI DJ session. Tracks with no BPM can't be beatmatched or
  * beat-grid-aligned at all, so they're excluded rather than forced into the set (missing key only
- * lowers match confidence — it doesn't disqualify a track). The first BPM-known track in the
- * crate's original order anchors the set (preserving the user's sense of "where this starts"); the
- * rest follow via greedy nearest-tempo/key-neighbor selection, reusing the same compatibility math
- * the manual DJ view uses. Pure and synchronous — no I/O.
+ * lowers match confidence — it doesn't disqualify a track). A random BPM-known track anchors the
+ * set (so back-to-back sessions on the same crate don't always open with the same song); the rest
+ * follow via greedy nearest-tempo/key-neighbor selection from there, reusing the same compatibility
+ * math the manual DJ view uses. Pure, but not deterministic (see the anchor pick) — callers that
+ * need a stable order for a given input should memoize the result rather than recompute it.
  */
 export function sequenceCrateForAiDj(tracks: PlaylistTrackItem[]): AiDjSequenceResult {
   const usable: PlaylistTrackItem[] = [];
@@ -46,8 +67,9 @@ export function sequenceCrateForAiDj(tracks: PlaylistTrackItem[]): AiDjSequenceR
   // its "prefer the earlier track on a tie" behavior for free.
   const remaining = new Set(usable.map((t) => t.id));
 
-  const order: PlaylistTrackItem[] = [usable[0]];
-  remaining.delete(usable[0].id);
+  const anchor = usable[Math.floor(Math.random() * usable.length)];
+  const order: PlaylistTrackItem[] = [anchor];
+  remaining.delete(anchor.id);
 
   while (remaining.size > 0) {
     const current = order[order.length - 1];

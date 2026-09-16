@@ -105,6 +105,7 @@ export function TransportBar() {
   const aiDjSessionId = useAiDjStore((s) => s.sessionId);
   const aiDjIsPlaying = useAiDjStore((s) => s.isPlaying);
   const aiDjRuntimeAnchor = useAiDjStore((s) => s.runtimeAnchor);
+  const aiDjActiveLoopRegion = useAiDjStore((s) => s.activeLoopRegion);
   const aiDjTrack = aiDjOrder[aiDjCurrentIndex] ?? null;
   const aiDjCurrentTime = useAiDjLiveCurrentTime(aiDjRuntimeAnchor);
 
@@ -127,6 +128,9 @@ export function TransportBar() {
       : togglePlay;
   const displaySeek = aiDjActive ? () => {} : djActive ? djSeekTo : seekTo;
   const duration = displayTrack?.durationSeconds ?? 0;
+  // Only meaningful while the track it was planned for is still the one displayed — a stale
+  // region for a track that's since been skipped past would otherwise briefly flash.
+  const displayLoopRegion = aiDjActive && aiDjActiveLoopRegion?.trackId === displayTrack?.id ? aiDjActiveLoopRegion : null;
   // Prev/next/shuffle/repeat and scrubbing aren't supported for a live AI DJ session (same
   // treatment as the DJ deck) — its transport is start/skip/pause only, driven from the AI DJ page.
   const transportLocked = djActive || aiDjActive;
@@ -319,6 +323,7 @@ export function TransportBar() {
             duration={duration}
             onSeek={displaySeek}
             disabled={aiDjActive}
+            loopRegion={displayLoopRegion}
           />
 
           <div className="flex shrink-0 items-center gap-1.5">

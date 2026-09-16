@@ -25,8 +25,6 @@ export function AiDjCrateView({ playlistId }: { playlistId: number }) {
 
   const engine = useAiDjEngine();
   const sessionId = useAiDjStore((s) => s.sessionId);
-  const sessionOrder = useAiDjStore((s) => s.order);
-  const sessionSkippedCount = useAiDjStore((s) => s.skippedCount);
   const started = sessionId != null;
 
   const sequenced = useMemo(() => (playlist ? sequenceCrateForAiDj(playlist.tracks) : null), [playlist]);
@@ -107,14 +105,15 @@ export function AiDjCrateView({ playlistId }: { playlistId: number }) {
               <button
                 type="button"
                 disabled={!targetBpmValid}
-                onClick={() => targetBpmValid && void engine.beginSession(playlistId, sequenced.order, sequenced.skipped.length, targetBpm)}
+                onClick={() => targetBpmValid && void engine.beginSession(playlistId, sequenced.order, sequenced.skipped, targetBpm)}
                 className="flex items-center gap-2 rounded-lg bg-acc px-4 py-2.5 text-[13px] font-medium text-on-acc hover:opacity-90 disabled:opacity-50"
               >
                 ▶ Start AI DJ set
               </button>
               <p className="text-[13px] text-t2">
                 Auto-mixes {sequenced.order.length} track{sequenced.order.length === 1 ? "" : "s"}, all locked to{" "}
-                {targetBpmValid ? targetBpm : "—"} BPM, with beatmatched stem-mashup transitions.
+                {targetBpmValid ? targetBpm : "—"} BPM, with beatmatched stem-mashup transitions. Picks the next track via Smart
+                Shuffle unless you suggest one yourself.
                 {sequenced.skipped.length > 0
                   ? ` ${sequenced.skipped.length} track${sequenced.skipped.length === 1 ? "" : "s"} skipped (no BPM).`
                   : ""}
@@ -128,7 +127,7 @@ export function AiDjCrateView({ playlistId }: { playlistId: number }) {
         <>
           <AiDjTransportControls engine={engine} />
           <AiDjNowPlaying />
-          <AiDjTracklist order={sessionOrder} skippedCount={sessionSkippedCount} />
+          <AiDjTracklist pool={sequenced?.order ?? []} skippedCount={sequenced?.skipped.length ?? 0} />
         </>
       )}
     </div>

@@ -46,17 +46,55 @@ function lowFrequencyEnergyAt(samples: Float32Array, sampleIndex: number, sample
   return energy;
 }
 
+/** Average low-frequency (kick-band) energy across a set of timestamps — the same score used for
+ *  both phase-correction and downbeat voting below, so both share one notion of "where's the kick". */
+function averageLowFrequencyEnergy(times: number[], samples: Float32Array, sampleRate: number, window: Float32Array): number {
+  if (times.length === 0) return -Infinity;
+  let sum = 0;
+  for (const t of times) sum += lowFrequencyEnergyAt(samples, Math.round(t * sampleRate), sampleRate, window);
+  return sum / times.length;
+}
+
 /**
- * v1 downbeat heuristic: assumes 4/4 time and picks whichever of the 4 beat-grid phases has the
- * strongest average low-frequency (kick-drum-band) energy, on the theory that "beat 1" of a bar is
- * usually where the kick lands hardest. This is an approximation, not true ML meter-tracking (no
- * such model exists in this repo) — good enough for choosing a bar-aligned transition point, not
- * guaranteed to match a human's sense of "one" for every genre/arrangement.
+ * Onset-based beat tracking can lock onto a track's strongest *off-beat* pulse rather than the
+ * underlying on-beat kick — same tempo and spacing, just shifted by half a beat. This is common in
+ * UK garage/2-step and similar genres, where a shuffled hi-hat/snare pattern is often as regular
+ * (or more so) as the kick itself, and Beatroot has no prior for "the kick is the true beat".
+ * Tests the midpoints between each pair of consecutive detected beats against the same kick-band
+ * energy score used for downbeat voting: if the midpoints average more kick energy than the beats
+ * themselves, the whole detected grid is half a beat off, and swapping to the midpoints corrects
+ * every beat at once (rather than requiring a separate per-bar realignment).
  */
-export function estimateDownbeats(beats: number[], samples: Float32Array, sampleRate: number): number[] {
-  if (beats.length < BAR_LENGTH_BEATS) return beats;
+function correctBeatPhase(beats: number[], samples: Float32Array, sampleRate: number, window: Float32Array): number[] {
+  if (beats.length < 2) return beats;
+  const midpoints: number[] = [];
+  for (let i = 0; i < beats.length - 1; i++) midpoints.push((beats[i] + beats[i + 1]) / 2);
+
+  const beatEnergy = averageLowFrequencyEnergy(beats, samples, sampleRate, window);
+  const midpointEnergy = averageLowFrequencyEnergy(midpoints, samples, sampleRate, window);
+  return midpointEnergy > beatEnergy ? midpoints : beats;
+}
+
+export interface BeatGridEstimate {
+  /** Phase-corrected beat timestamps (see correctBeatPhase) — may differ from detectBeatGrid's raw
+   *  output by a uniform half-beat shift when that scores better against kick-band energy. */
+  beats: number[];
+  downbeats: number[];
+}
+
+/**
+ * v1 beat-grid heuristic: first corrects a systematic half-beat phase error (see correctBeatPhase),
+ * then assumes 4/4 time and picks whichever of the 4 beat-grid phases has the strongest average
+ * low-frequency (kick-drum-band) energy, on the theory that "beat 1" of a bar is usually where the
+ * kick lands hardest. This is an approximation, not true ML meter-tracking (no such model exists in
+ * this repo) — good enough for choosing a bar-aligned transition point, not guaranteed to match a
+ * human's sense of "one" for every genre/arrangement.
+ */
+export function estimateBeatGrid(rawBeats: number[], samples: Float32Array, sampleRate: number): BeatGridEstimate {
+  if (rawBeats.length < BAR_LENGTH_BEATS) return { beats: rawBeats, downbeats: rawBeats };
 
   const window = hannWindow(DOWNBEAT_WINDOW_SIZE);
+  const beats = correctBeatPhase(rawBeats, samples, sampleRate, window);
   const scores = beats.map((beatTime) => lowFrequencyEnergyAt(samples, Math.round(beatTime * sampleRate), sampleRate, window));
 
   let bestPhase = 0;
@@ -77,7 +115,7 @@ export function estimateDownbeats(beats: number[], samples: Float32Array, sample
 
   const downbeats: number[] = [];
   for (let i = bestPhase; i < beats.length; i += BAR_LENGTH_BEATS) downbeats.push(beats[i]);
-  return downbeats;
+  return { beats, downbeats };
 }
 
 export interface BeatGridData {
@@ -131,8 +169,8 @@ export async function ensureBeatGrid(trackId: number): Promise<BeatGridData | nu
     return null;
   }
 
-  const downbeats = estimateDownbeats(detected.beats, samples, ANALYSIS_SAMPLE_RATE);
-  const relativePath = persistBeatGrid(track.uuid, detected.beats, downbeats);
+  const { beats, downbeats } = estimateBeatGrid(detected.beats, samples, ANALYSIS_SAMPLE_RATE);
+  const relativePath = persistBeatGrid(track.uuid, beats, downbeats);
   db.update(tracks).set({ beatGridStatus: "ready", beatGridPath: relativePath }).where(eq(tracks.id, trackId)).run();
-  return { beats: detected.beats, downbeats };
+  return { beats, downbeats };
 }

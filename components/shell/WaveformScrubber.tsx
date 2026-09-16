@@ -13,11 +13,14 @@ interface WaveformScrubberProps {
   duration: number;
   onSeek: (seconds: number) => void;
   disabled: boolean;
+  /** Optional marker band, in the same seconds as currentTime/duration — e.g. the AI DJ's
+   *  verified loop phrase for an upcoming transition (see useAiDjStore's activeLoopRegion). */
+  loopRegion?: { startSec: number; endSec: number } | null;
 }
 
 // Seek scrubber shared by the transport bar and Now Playing overlay. Style (waveform vs
 // thin bar vs live spectrum) and the right-hand time (duration vs remaining) come from settings.
-export function WaveformScrubber({ waveform, currentTime, duration, onSeek, disabled }: WaveformScrubberProps) {
+export function WaveformScrubber({ waveform, currentTime, duration, onSeek, disabled, loopRegion }: WaveformScrubberProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hoverRatio, setHoverRatio] = useState<number | null>(null);
@@ -192,6 +195,16 @@ export function WaveformScrubber({ waveform, currentTime, duration, onSeek, disa
               </div>
             ) : null}
           </>
+        )}
+        {loopRegion && duration > 0 && (
+          <div
+            className="pointer-events-none absolute inset-y-0 rounded-[2px] bg-acc/25 ring-1 ring-inset ring-acc/60"
+            style={{
+              left: `${Math.max(0, Math.min(100, (loopRegion.startSec / duration) * 100))}%`,
+              width: `${Math.max(0, Math.min(100, ((loopRegion.endSec - loopRegion.startSec) / duration) * 100))}%`,
+            }}
+            title="Transition loop point"
+          />
         )}
         {hoverRatio !== null && duration > 0 && (
           <>

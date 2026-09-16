@@ -10,6 +10,7 @@ export function AiDjTransportControls({ engine }: { engine: AiDjEngineController
   const deviceInfo = useAiDjStore((s) => s.deviceInfo);
   const order = useAiDjStore((s) => s.order);
   const currentIndex = useAiDjStore((s) => s.currentIndex);
+  const metronomeEnabled = useAiDjStore((s) => s.metronomeEnabled);
   const volume = usePlayerStore((s) => s.volume);
   const setVolume = usePlayerStore((s) => s.setVolume);
 
@@ -34,6 +35,19 @@ export function AiDjTransportControls({ engine }: { engine: AiDjEngineController
         className="flex h-9 w-9 flex-none items-center justify-center rounded-full border border-line text-t2 hover:border-acc hover:text-t1 disabled:cursor-not-allowed disabled:opacity-40"
       >
         ⏭
+      </button>
+
+      <button
+        type="button"
+        onClick={() => engine.toggleMetronome()}
+        aria-pressed={metronomeEnabled}
+        aria-label={metronomeEnabled ? "Disable metronome" : "Enable metronome"}
+        title="Click on every detected beat (accented on downbeats) — for judging the beat grid by ear"
+        className={`flex h-9 w-9 flex-none items-center justify-center rounded-full border text-[15px] hover:border-acc hover:text-t1 ${
+          metronomeEnabled ? "border-acc bg-acc/10 text-acc-text" : "border-line text-t2"
+        }`}
+      >
+        🥁
       </button>
 
       <div className="h-8 w-px flex-none bg-line" />

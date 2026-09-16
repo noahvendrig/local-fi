@@ -12,6 +12,18 @@ const PHRASE_BARS = 4;
  *  rather than 1.0. */
 const SIMILARITY_THRESHOLD = 0.92;
 const MAX_ENERGY_RATIO_DIFF = 0.25;
+/** Only the latter third of a track is searched for a loop point — late enough that the chorus
+ *  (and its final big vocal hook) is reliably behind us. */
+const SEARCH_FRACTION = 2 / 3;
+/** A window's RMS counts as "vocals present" once it reaches this fraction of the vocal stem's own
+ *  peak RMS for the track — separated vocal stems still carry some bleed/noise even where there's
+ *  no actual singing, so an absolute or near-zero threshold would false-positive on that noise
+ *  floor instead of true silence. */
+const VOCAL_ENERGY_THRESHOLD_RATIO = 0.12;
+/** Extra padding after the last detected vocal energy before a loop point is allowed to start — a
+ *  cheap safety margin against the envelope window (or the source separation itself) clipping the
+ *  vocal's true tail short. */
+const VOCAL_END_MARGIN_SEC = 1;
 
 function monoSamples(buffer: AudioBuffer): Float32Array {
   if (buffer.numberOfChannels === 1) return buffer.getChannelData(0);
@@ -65,29 +77,63 @@ function compareEnvelopes(a: Float32Array, b: Float32Array): { correlation: numb
 }
 
 /**
- * Scans the second half of a track for the earliest 4-bar phrase that repeats itself near-
- * identically right afterward (a stable instrumental loop/outro/breakdown), so the AI DJ can begin
- * a transition there instead of wherever the last N bars happen to land — which can otherwise cut
- * across unrepeated material like a chorus's vocal line. `downbeats` and `durationSeconds` are in
- * the track's own native (unstretched) file-seconds, matching transitionPlan.ts's convention.
- * Returns null if no such phrase is found in the back half of the track, so the caller can fall
- * back to its default (end-of-track) transition point.
+ * Finds the last moment `vocalsBuffer` (a separated vocal stem, in the track's own native seconds)
+ * still has meaningful vocal energy, plus a small safety margin — so a loop point can be required
+ * to start after it. Returns 0 (no restriction) if the stem never has any energy clearly above its
+ * own noise floor, which is normal for a mostly-instrumental track.
  */
-export function findLoopSection(buffer: AudioBuffer, bpm: number, downbeats: number[], durationSeconds: number): LoopSection | null {
+function findVocalEndSec(vocalsBuffer: AudioBuffer, durationSeconds: number): number {
+  const samples = monoSamples(vocalsBuffer);
+  const envelope = rmsEnvelope(samples, vocalsBuffer.sampleRate, 0, durationSeconds);
+  if (envelope.length === 0) return 0;
+
+  let peak = 0;
+  for (const v of envelope) if (v > peak) peak = v;
+  if (peak <= 0) return 0;
+
+  const threshold = peak * VOCAL_ENERGY_THRESHOLD_RATIO;
+  let lastActiveWindow = -1;
+  for (let i = 0; i < envelope.length; i++) {
+    if (envelope[i] >= threshold) lastActiveWindow = i;
+  }
+  if (lastActiveWindow < 0) return 0;
+  return (lastActiveWindow + 1) * ENVELOPE_WINDOW_SEC + VOCAL_END_MARGIN_SEC;
+}
+
+/**
+ * Scans the latter third of a track for the earliest 4-bar phrase that (a) starts after this
+ * track's own vocals have finished (see findVocalEndSec — an abrupt vocal cutoff is exactly what a
+ * loop-based transition must avoid) and (b) repeats itself near-identically right afterward (a
+ * stable instrumental loop/outro/breakdown), so the AI DJ can begin a transition there instead of
+ * wherever the last N bars happen to land — which can otherwise cut across unrepeated material like
+ * a chorus's vocal line. `downbeats` and `durationSeconds` are in the track's own native
+ * (unstretched) file-seconds, matching transitionPlan.ts's convention. Returns null if no such
+ * phrase is found, so the caller can fall back to its default (end-of-track) transition point.
+ */
+export function findLoopSection(
+  mixBuffer: AudioBuffer,
+  vocalsBuffer: AudioBuffer,
+  bpm: number,
+  downbeats: number[],
+  durationSeconds: number
+): LoopSection | null {
   if (bpm <= 0 || downbeats.length === 0) return null;
   const barLengthSec = (60 / bpm) * 4;
   const phraseLengthSec = barLengthSec * PHRASE_BARS;
-  const halfDuration = durationSeconds / 2;
+  const latterThirdStart = durationSeconds * SEARCH_FRACTION;
+  const vocalEndSec = findVocalEndSec(vocalsBuffer, durationSeconds);
+  const searchStart = Math.max(latterThirdStart, vocalEndSec);
+  if (searchStart >= durationSeconds) return null;
 
-  const samples = monoSamples(buffer);
-  const envelope = rmsEnvelope(samples, buffer.sampleRate, halfDuration, durationSeconds);
+  const samples = monoSamples(mixBuffer);
+  const envelope = rmsEnvelope(samples, mixBuffer.sampleRate, searchStart, durationSeconds);
   const windowsPerPhrase = Math.round(phraseLengthSec / ENVELOPE_WINDOW_SEC);
   if (windowsPerPhrase < 8) return null;
 
-  const candidates = downbeats.filter((d) => d >= halfDuration && d + 2 * phraseLengthSec <= durationSeconds);
+  const candidates = downbeats.filter((d) => d >= searchStart && d + 2 * phraseLengthSec <= durationSeconds);
 
   for (const start of candidates) {
-    const aFrom = Math.round((start - halfDuration) / ENVELOPE_WINDOW_SEC);
+    const aFrom = Math.round((start - searchStart) / ENVELOPE_WINDOW_SEC);
     const bFrom = aFrom + windowsPerPhrase;
     if (bFrom + windowsPerPhrase > envelope.length) continue;
     const a = envelope.subarray(aFrom, aFrom + windowsPerPhrase);
