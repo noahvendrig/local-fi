@@ -12,6 +12,7 @@ import { usePlayerStore } from "@/lib/store/player";
 import { formatDuration } from "@/lib/format/track";
 import { MixtapeFingerprintSection } from "./MixtapeFingerprintSection";
 import { MobileDevicesSection } from "./MobileDevicesSection";
+import { SmartShuffleSection } from "./SmartShuffleSection";
 import { SpotifySection } from "./SpotifySection";
 
 // The standalone PWA has no waveform peaks or analyser wired up on the phone, so "Thin bar" is
@@ -305,6 +306,7 @@ export function SettingsView() {
         </div>
         <SpotifySection />
         <MixtapeFingerprintSection />
+        <SmartShuffleSection />
       </section>
     </div>
   );

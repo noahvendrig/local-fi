@@ -39,3 +39,13 @@ export function fetchFingerprintJob(jobId: number): Promise<FingerprintJob> {
 export function fingerprintJobEventsUrl(jobId: number): string {
   return withAuthQuery(`/api/v1/fingerprint/jobs/${jobId}/events`);
 }
+
+export interface FingerprintStatus {
+  ready: number;
+  total: number;
+}
+
+/** GET /api/v1/fingerprint/status — library-wide tally, not tied to any one job. */
+export function fetchFingerprintStatus(): Promise<FingerprintStatus> {
+  return request("/api/v1/fingerprint/status");
+}
