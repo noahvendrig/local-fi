@@ -1,11 +1,15 @@
 "use client";
 
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { withAuthQuery } from "@/lib/api/http";
+import { fetchLyrics } from "@/lib/api/lyricsClient";
 import { usePlayerStore } from "@/lib/store/player";
 import { useSettingsStore } from "@/lib/store/settings";
 import { WaveformScrubber } from "./WaveformScrubber";
 import { IconButton } from "./IconButton";
+import { LyricsPanel } from "./LyricsPanel";
 import {
   AlbumPlaceholderIcon,
   NextIcon,
@@ -46,9 +50,42 @@ export function NowPlayingOverlay() {
   const vinylSpin = useSettingsStore((s) => s.vinylSpin);
   const showFormatBadges = useSettingsStore((s) => s.showFormatBadges);
 
+  const [isLyricsOpen, setIsLyricsOpen] = useState(false);
+  // Only queried while this view is open (not on every track change app-wide) — the panel itself
+  // needn't be open yet, so the Lyrics button can grey out the moment availability is known rather
+  // than only after the user clicks it.
+  const { data: lyricsData, isLoading: lyricsLoading } = useQuery({
+    queryKey: ["lyrics", currentTrack?.id],
+    queryFn: () => fetchLyrics(currentTrack!.id),
+    enabled: isOpen && currentTrack != null,
+    staleTime: Infinity,
+  });
+  // Enabled (not greyed) by default until a definitive "not found" comes back — avoids a flash of
+  // disabled state while the lookup is still in flight.
+  const lyricsUnavailable = lyricsData?.found === false;
+
   if (!isOpen || !currentTrack) return null;
 
   const isGlass = nowPlayingBackdrop === "glass";
+
+  function handleToggleQueue() {
+    setIsLyricsOpen(false);
+    toggleQueue();
+  }
+
+  function handleToggleLyrics() {
+    if (isLyricsOpen) {
+      setIsLyricsOpen(false);
+      return;
+    }
+    closeQueue();
+    setIsLyricsOpen(true);
+  }
+
+  function handleClosePanel() {
+    closeQueue();
+    setIsLyricsOpen(false);
+  }
 
   return (
     <div
@@ -194,7 +231,22 @@ export function NowPlayingOverlay() {
             <div className="flex-1" />
             <button
               type="button"
-              onClick={toggleQueue}
+              onClick={handleToggleLyrics}
+              aria-pressed={isLyricsOpen}
+              disabled={lyricsUnavailable}
+              className={`rounded-lg px-3.5 py-2 text-[11px] font-medium uppercase tracking-[0.04em] ${
+                lyricsUnavailable
+                  ? "cursor-default border border-line bg-surf-2 text-t3 opacity-40"
+                  : isLyricsOpen
+                    ? "border border-acc bg-surf-2 text-acc-text"
+                    : "border border-line bg-surf-2 text-t1 hover:border-acc"
+              }`}
+            >
+              Lyrics
+            </button>
+            <button
+              type="button"
+              onClick={handleToggleQueue}
               aria-pressed={isQueueOpen}
               className={`rounded-lg px-3.5 py-2 text-[11px] font-medium uppercase tracking-[0.04em] ${
                 isQueueOpen
@@ -209,24 +261,24 @@ export function NowPlayingOverlay() {
       </div>
 
       <aside
-        aria-hidden={!isQueueOpen}
+        aria-hidden={!isQueueOpen && !isLyricsOpen}
         className={`absolute inset-y-0 right-0 z-10 flex w-[360px] flex-col border-l border-line bg-surf/90 transition-transform duration-200 ${
-          isQueueOpen ? "translate-x-0" : "pointer-events-none translate-x-full"
+          isQueueOpen || isLyricsOpen ? "translate-x-0" : "pointer-events-none translate-x-full"
         }`}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-4">
-          <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-t1">Queue</span>
+          <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-t1">{isLyricsOpen ? "Lyrics" : "Queue"}</span>
           <button
             type="button"
-            onClick={closeQueue}
-            aria-label="Close queue"
+            onClick={handleClosePanel}
+            aria-label={isLyricsOpen ? "Close lyrics" : "Close queue"}
             className="flex h-6 w-6 items-center justify-center rounded-md text-t3 hover:bg-surf-2 hover:text-t1"
           >
             ×
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <UpNextList />
+          {isLyricsOpen ? <LyricsPanel data={lyricsData} isLoading={lyricsLoading} /> : <UpNextList />}
         </div>
       </aside>
     </div>
