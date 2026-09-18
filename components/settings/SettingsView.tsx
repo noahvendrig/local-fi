@@ -102,26 +102,42 @@ export function SettingsView() {
       </div>
 
       <section className="mt-10">
-        <h2 className="text-sm font-medium uppercase tracking-wide text-t3">Appearance</h2>
-        <p className="mt-1 text-sm text-t2">Each palette keeps one action colour and one playback colour. Light and dark are pairs, not separate themes.</p>
+        <h2 className="text-sm font-medium uppercase tracking-wide text-t3">Library</h2>
 
-        <div className="mt-4">
-          <SegmentedControl
-            ariaLabel="Colour mode"
-            value={theme}
-            onChange={setTheme}
-            options={[
-              { value: "dark", label: "Night" },
-              { value: "light", label: "Daylight" },
-            ]}
-          />
-        </div>
+        <SettingRow
+          title="Compress imports"
+          description="Re-encodes uploaded tracks to Opus (~160 kbps) to save disk space. Cover art and tags are preserved. Only applies to new uploads — synced library folders are never modified."
+        >
+          <Toggle checked={compressImports} onChange={setCompressImports} label={compressImports ? "On" : "Off"} />
+        </SettingRow>
 
-        <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
-          {PALETTES.map((def) => (
-            <PaletteCard key={def.id} def={def} active={palette === def.id} theme={theme} onSelect={() => setPalette(def.id)} />
-          ))}
+        <div className="lf-card mt-4 flex items-center justify-between gap-4 rounded-2xl px-5 py-4">
+          <div>
+            <p className="text-sm font-semibold text-t1">Library health</p>
+            <p className="mt-0.5 text-sm text-t2">Missing files, duplicate groups, and rescan live on their own page.</p>
+          </div>
+          <Link
+            href="/health"
+            className="shrink-0 rounded-lg border border-line px-3 py-2 text-xs font-medium text-t1 hover:border-acc hover:bg-surf-2"
+          >
+            Open health
+          </Link>
         </div>
+        <div className="lf-card mt-3 flex items-center justify-between gap-4 rounded-2xl px-5 py-4">
+          <div>
+            <p className="text-sm font-semibold text-t1">Library folders</p>
+            <p className="mt-0.5 text-sm text-t2">Watch an existing music folder in place. Managed from the Import page, so progress is visible while it indexes.</p>
+          </div>
+          <Link
+            href="/import"
+            className="shrink-0 rounded-lg border border-line px-3 py-2 text-xs font-medium text-t1 hover:border-acc hover:bg-surf-2"
+          >
+            Open import
+          </Link>
+        </div>
+        <SpotifySection />
+        <MixtapeFingerprintSection />
+        <SmartShuffleSection />
       </section>
 
       <section className="mt-12">
@@ -271,42 +287,26 @@ export function SettingsView() {
       </section>
 
       <section className="mt-12 pb-10">
-        <h2 className="text-sm font-medium uppercase tracking-wide text-t3">Library</h2>
+        <h2 className="text-sm font-medium uppercase tracking-wide text-t3">Appearance</h2>
+        <p className="mt-1 text-sm text-t2">Each palette keeps one action colour and one playback colour. Light and dark are pairs, not separate themes.</p>
 
-        <SettingRow
-          title="Compress imports"
-          description="Re-encodes uploaded tracks to Opus (~160 kbps) to save disk space. Cover art and tags are preserved. Only applies to new uploads — synced library folders are never modified."
-        >
-          <Toggle checked={compressImports} onChange={setCompressImports} label={compressImports ? "On" : "Off"} />
-        </SettingRow>
+        <div className="mt-4">
+          <SegmentedControl
+            ariaLabel="Colour mode"
+            value={theme}
+            onChange={setTheme}
+            options={[
+              { value: "dark", label: "Night" },
+              { value: "light", label: "Daylight" },
+            ]}
+          />
+        </div>
 
-        <div className="lf-card mt-4 flex items-center justify-between gap-4 rounded-2xl px-5 py-4">
-          <div>
-            <p className="text-sm font-semibold text-t1">Library health</p>
-            <p className="mt-0.5 text-sm text-t2">Missing files, duplicate groups, and rescan live on their own page.</p>
-          </div>
-          <Link
-            href="/health"
-            className="shrink-0 rounded-lg border border-line px-3 py-2 text-xs font-medium text-t1 hover:border-acc hover:bg-surf-2"
-          >
-            Open health
-          </Link>
+        <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+          {PALETTES.map((def) => (
+            <PaletteCard key={def.id} def={def} active={palette === def.id} theme={theme} onSelect={() => setPalette(def.id)} />
+          ))}
         </div>
-        <div className="lf-card mt-3 flex items-center justify-between gap-4 rounded-2xl px-5 py-4">
-          <div>
-            <p className="text-sm font-semibold text-t1">Library folders</p>
-            <p className="mt-0.5 text-sm text-t2">Watch an existing music folder in place. Managed from the Import page, so progress is visible while it indexes.</p>
-          </div>
-          <Link
-            href="/import"
-            className="shrink-0 rounded-lg border border-line px-3 py-2 text-xs font-medium text-t1 hover:border-acc hover:bg-surf-2"
-          >
-            Open import
-          </Link>
-        </div>
-        <SpotifySection />
-        <MixtapeFingerprintSection />
-        <SmartShuffleSection />
       </section>
     </div>
   );
