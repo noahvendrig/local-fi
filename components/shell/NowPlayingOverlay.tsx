@@ -165,7 +165,7 @@ export function NowPlayingOverlay() {
               type="button"
               onClick={togglePlay}
               aria-label={isPlaying ? "Pause" : "Play"}
-              className="flex h-[60px] w-[60px] items-center justify-center rounded-full border border-acc bg-acc text-on-acc shadow-[0_10px_26px_rgba(20,15,10,.4)] hover:bg-acc-2"
+              className="flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full border border-acc bg-acc text-on-acc shadow-[0_10px_26px_rgba(20,15,10,.4)] hover:bg-acc-2"
             >
               {isPlaying ? <PauseIcon size={26} /> : <PlayIcon size={26} />}
             </button>
