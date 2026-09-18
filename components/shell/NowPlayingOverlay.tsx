@@ -86,38 +86,49 @@ export function NowPlayingOverlay() {
         </span>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-wrap items-center justify-center gap-14 overflow-auto px-16">
+      {/* Column when narrow (art stacks above meta); row when wide. Art flexes into leftover
+          space so meta + controls stay on-screen without scrolling. */}
+      <div className="flex min-h-0 flex-1 flex-col items-center overflow-hidden px-8 py-2 xl:flex-row xl:items-center xl:justify-center xl:gap-14 xl:px-16 xl:py-4">
         <div
-          className={`lf-hatch relative h-[380px] w-[380px] max-w-full shrink-0 overflow-hidden shadow-[var(--lf-art-shadow-lg)] ${
-            vinylSpin ? "rounded-full" : "rounded-3xl"
-          }`}
+          className="flex min-h-0 w-full max-w-[520px] flex-1 items-center justify-center xl:h-[min(380px,70dvh)] xl:w-[min(380px,70dvh)] xl:max-w-none xl:flex-none"
+          style={{ containerType: "size" }}
         >
-          {currentTrack.coverArtUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element -- local-only images
-            <img
-              src={withAuthQuery(currentTrack.coverArtUrl)}
-              alt=""
-              className={`h-full w-full object-cover ${vinylSpin ? "lf-vinyl-spin" : ""} ${vinylSpin && !isPlaying ? "is-paused" : ""}`}
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-t3" aria-hidden>
-              <AlbumPlaceholderIcon />
-            </div>
-          )}
-          {vinylSpin ? (
-            <div
-              className="pointer-events-none absolute left-1/2 top-1/2 h-9 w-9 -translate-x-1/2 -translate-y-1/2 rounded-full border border-line bg-bg shadow-[var(--lf-art-shadow)]"
-              aria-hidden
-            />
-          ) : null}
+          <div
+            className={`lf-hatch relative overflow-hidden shadow-[var(--lf-art-shadow-lg)] ${
+              vinylSpin ? "rounded-full" : "rounded-3xl"
+            }`}
+            style={{ width: "min(380px, 100cqmin)", height: "min(380px, 100cqmin)" }}
+          >
+            {currentTrack.coverArtUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- local-only images
+              <img
+                src={withAuthQuery(currentTrack.coverArtUrl)}
+                alt=""
+                className={`h-full w-full object-cover ${vinylSpin ? "lf-vinyl-spin" : ""} ${vinylSpin && !isPlaying ? "is-paused" : ""}`}
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-t3" aria-hidden>
+                <AlbumPlaceholderIcon />
+              </div>
+            )}
+            {vinylSpin ? (
+              <div
+                className="pointer-events-none absolute left-1/2 top-1/2 h-[12%] w-[12%] min-h-4 min-w-4 max-h-9 max-w-9 -translate-x-1/2 -translate-y-1/2 rounded-full border border-line bg-bg shadow-[var(--lf-art-shadow)]"
+                aria-hidden
+              />
+            ) : null}
+          </div>
         </div>
 
-        <div className="w-full max-w-[520px]">
-          <p className="mb-3.5 text-[11px] font-medium uppercase tracking-[0.04em] text-playing">Now playing</p>
-          <h1 className="mb-3 font-serif text-[40px] font-medium leading-[1.1] text-t1" title={currentTrack.title ?? undefined}>
+        <div className="w-full max-w-[520px] shrink-0 pt-5 xl:pt-0">
+          <p className="mb-2.5 text-[11px] font-medium uppercase tracking-[0.04em] text-playing xl:mb-3.5">Now playing</p>
+          <h1
+            className="mb-2 font-serif text-[clamp(1.75rem,3.5vw,2.5rem)] font-medium leading-[1.1] text-t1 xl:mb-3"
+            title={currentTrack.title ?? undefined}
+          >
             {currentTrack.title ?? "Untitled"}
           </h1>
-          <p className="mb-5 text-sm leading-[1.5] text-t2">
+          <p className="mb-3 text-sm leading-[1.5] text-t2 xl:mb-5">
             {currentTrack.artistId ? (
               <Link href={`/artists/${currentTrack.artistId}`} className="hover:text-acc-text">
                 {currentTrack.artistName ?? "Unknown artist"}
@@ -128,14 +139,14 @@ export function NowPlayingOverlay() {
             {currentTrack.albumTitle ? ` · ${currentTrack.albumTitle}` : ""}
           </p>
           {showFormatBadges ? (
-            <p className="mb-7 flex gap-3.5 font-mono text-xs text-t3">
+            <p className="mb-4 flex gap-3.5 font-mono text-xs text-t3 xl:mb-7">
               <span className="text-ok">{currentTrack.format.toUpperCase()}</span>
             </p>
           ) : (
-            <div className="mb-7" />
+            <div className="mb-4 xl:mb-7" />
           )}
 
-          <div className="mb-7">
+          <div className="mb-4 xl:mb-7">
             <WaveformScrubber
               waveform={waveform}
               currentTime={currentTime}

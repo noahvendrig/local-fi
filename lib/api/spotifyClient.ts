@@ -1,5 +1,6 @@
 import { useAuthStore } from "@/lib/store/auth";
 import { useDeviceStore } from "@/lib/store/device";
+import type { SpotifyTrackMetadata } from "./types";
 import { apiUrl, authHeaders, withAuthQuery } from "./http";
 
 /** Thrown by submitSpotifyImport (importClient.ts) when the server reports no Spotify
@@ -12,6 +13,17 @@ export async function fetchSpotifyStatus(): Promise<boolean> {
   if (!res.ok) return false;
   const body = (await res.json()) as { connected: boolean };
   return body.connected;
+}
+
+/** Catalog search — used by TopSearchBar's "not in your library" fallback. Fails soft
+ *  (empty array) rather than throwing, since it's a live-typing search, not a submit. */
+export async function searchSpotifyTracks(query: string): Promise<SpotifyTrackMetadata[]> {
+  const res = await fetch(apiUrl(`/api/v1/spotify/search?q=${encodeURIComponent(query)}`), {
+    headers: authHeaders(),
+  });
+  if (!res.ok) return [];
+  const body = (await res.json()) as { items: SpotifyTrackMetadata[] };
+  return body.items;
 }
 
 /** Full-navigation URL for the "Connect Spotify" link/button — not a fetch, the browser

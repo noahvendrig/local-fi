@@ -12,6 +12,23 @@ import { PlayingIcon } from "@/components/shell/PlayerIcons";
 import { TrackCoverThumb } from "@/components/library/TrackCoverThumb";
 import { AddTracksModal } from "./AddTracksModal";
 
+// Hide Rate → Format → Album as the list container narrows (container queries, not viewport).
+function crateTrackListColumns(showFormatBadges: boolean) {
+  if (showFormatBadges) {
+    return [
+      "grid-cols-[24px_32px_1fr_100px_64px_32px]",
+      "@3xl:grid-cols-[24px_32px_1fr_200px_100px_64px_32px]",
+      "@4xl:grid-cols-[24px_32px_1fr_200px_100px_120px_64px_32px]",
+      "@5xl:grid-cols-[24px_32px_1fr_200px_100px_120px_84px_64px_32px]",
+    ].join(" ");
+  }
+  return [
+    "grid-cols-[24px_32px_1fr_100px_64px_32px]",
+    "@3xl:grid-cols-[24px_32px_1fr_200px_100px_64px_32px]",
+    "@4xl:grid-cols-[24px_32px_1fr_200px_100px_84px_64px_32px]",
+  ].join(" ");
+}
+
 export function ManualCrateTracklist({ playlist }: { playlist: PlaylistDetail }) {
   const queryClient = useQueryClient();
   const queryKey = ["playlist", playlist.id];
@@ -20,9 +37,8 @@ export function ManualCrateTracklist({ playlist }: { playlist: PlaylistDetail })
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const playTrack = usePlayerStore((s) => s.playTrack);
   const showFormatBadges = useSettingsStore((s) => s.showFormatBadges);
-  const columns = showFormatBadges
-    ? "grid-cols-[24px_32px_1fr_200px_100px_120px_84px_64px_32px]"
-    : "grid-cols-[24px_32px_1fr_200px_100px_84px_64px_32px]";
+  const columns = crateTrackListColumns(showFormatBadges);
+  const rateVisible = showFormatBadges ? "hidden @5xl:block" : "hidden @4xl:block";
 
   const [isAdding, setIsAdding] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -158,17 +174,17 @@ export function ManualCrateTracklist({ playlist }: { playlist: PlaylistDetail })
             })}
           </div>
 
-          <div className="hidden md:block">
+          <div className="@container hidden min-w-0 md:block">
             <div
               className={`mb-2 grid ${columns} gap-3 border-b border-line px-3 pb-2 text-[11px] font-medium uppercase tracking-[0.04em] text-t3`}
             >
               <span aria-hidden />
               <span>#</span>
               <span>Title</span>
-              <span>Album</span>
+              <span className="hidden @3xl:block">Album</span>
               <span>Date Added</span>
-              {showFormatBadges ? <span>Format</span> : null}
-              <span>Rate</span>
+              {showFormatBadges ? <span className="hidden @4xl:block">Format</span> : null}
+              <span className={rateVisible}>Rate</span>
               <span className="flex justify-end">Time</span>
               <span aria-hidden />
             </div>
@@ -208,7 +224,7 @@ export function ManualCrateTracklist({ playlist }: { playlist: PlaylistDetail })
                   role="button"
                   tabIndex={track.missing ? -1 : 0}
                   aria-label={`Play ${track.title ?? "Untitled"}`}
-                  className={`lf-track-row group grid ${columns} items-center gap-3 rounded-lg border border-transparent px-3 ${
+                  className={`lf-track-row group grid min-w-0 ${columns} items-center gap-3 rounded-lg border border-transparent px-3 ${
                     track.missing ? "cursor-not-allowed opacity-40" : "cursor-pointer hover:border-line hover:bg-surf-2"
                   } ${isCurrent || isDragOver ? "bg-[var(--lf-tint)]" : ""}`}
                   title={track.missing ? "File missing on disk" : undefined}
@@ -223,9 +239,9 @@ export function ManualCrateTracklist({ playlist }: { playlist: PlaylistDetail })
                   <span className={`font-mono text-xs ${isCurrent ? "text-playing" : "text-t3"}`}>
                     {isCurrent && isPlaying ? <PlayingIcon /> : String(i + 1).padStart(2, "0")}
                   </span>
-                  <div className="flex min-w-0 items-center gap-3">
-                    <TrackCoverThumb coverArtUrl={track.coverArtUrl} className="lf-track-cover" />
-                    <div className="min-w-0">
+                  <div className="flex min-w-0 items-center gap-3 overflow-hidden">
+                    <TrackCoverThumb coverArtUrl={track.coverArtUrl} className="lf-track-cover shrink-0" />
+                    <div className="min-w-0 flex-1 overflow-hidden">
                       <p className={`truncate text-sm leading-[1.5] ${isCurrent ? "text-playing" : "text-t1"}`}>
                         {track.title ?? "Untitled"}
                       </p>
@@ -242,7 +258,7 @@ export function ManualCrateTracklist({ playlist }: { playlist: PlaylistDetail })
                       )}
                     </div>
                   </div>
-                  <span className="min-w-0 truncate text-sm text-t2">
+                  <span className="hidden min-w-0 truncate text-sm text-t2 @3xl:block">
                     {track.albumId ? (
                       <Link href={`/albums/${track.albumId}`} onClick={(e) => e.stopPropagation()} className="hover:text-acc-text">
                         {track.albumTitle ?? "—"}
@@ -253,11 +269,11 @@ export function ManualCrateTracklist({ playlist }: { playlist: PlaylistDetail })
                   </span>
                   <span className="truncate font-mono text-xs text-t3">{formatDate(track.dateAdded)}</span>
                   {showFormatBadges ? (
-                    <span className={`truncate font-mono text-xs ${track.lossless ? "text-ok" : "text-warn"}`}>
+                    <span className={`hidden truncate font-mono text-xs @4xl:block ${track.lossless ? "text-ok" : "text-warn"}`}>
                       {track.format.toUpperCase()}
                     </span>
                   ) : null}
-                  <span className="font-mono text-xs text-t3">{formatRate(track)}</span>
+                  <span className={`font-mono text-xs text-t3 ${rateVisible}`}>{formatRate(track)}</span>
                   <span className="text-right font-mono text-xs text-t2">{formatDuration(track.durationSeconds)}</span>
                   <button
                     type="button"

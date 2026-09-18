@@ -238,6 +238,7 @@ export function TransportBar() {
             duration={mixtapeNowPlaying.durationSeconds}
             onSeek={mixtapeSeekTo}
             disabled={false}
+            preferBarWhenNarrow
           />
 
           <div className="flex shrink-0 items-center gap-1.5">
@@ -324,6 +325,7 @@ export function TransportBar() {
             onSeek={displaySeek}
             disabled={aiDjActive}
             loopRegion={displayLoopRegion}
+            preferBarWhenNarrow
           />
 
           <div className="flex shrink-0 items-center gap-1.5">

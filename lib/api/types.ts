@@ -52,3 +52,13 @@ export interface ImportJob {
 export interface ImportJobWithFiles extends ImportJob {
   files: ImportJobFile[];
 }
+
+/** Client-safe mirror of lib/spotify/client.ts's server-only SpotifyTrackMetadata. */
+export interface SpotifyTrackMetadata {
+  title: string;
+  artists: string[];
+  album: string | null;
+  durationMs: number;
+  coverArtUrl: string | null;
+  spotifyUrl: string;
+}

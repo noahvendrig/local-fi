@@ -23,6 +23,7 @@ export function ImportView() {
   const loginUrl = useSpotifyLoginUrl();
   const submitFiles = useIngestStore((s) => s.submitFiles);
   const cancelJob = useIngestStore((s) => s.cancelJob);
+  const clearTray = useIngestStore((s) => s.clearTray);
   const importFromSpotify = useIngestStore((s) => s.importFromSpotify);
   const uploadProgress = useIngestStore((s) => s.uploadProgress);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -176,6 +177,11 @@ export function ImportView() {
           <p className="mt-4 text-sm text-err">{error}</p>
         ) : null}
 
+        {/* Watched-folder syncing is a desktop-only feature (server filesystem paths); not part of the mobile design. */}
+        <div className="mt-8 hidden md:block">
+          <LibraryFoldersSection />
+        </div>
+
         {files.length > 0 ? (
           <section className="mt-8">
             <div className="mb-3.5 flex items-center gap-2.5">
@@ -190,6 +196,13 @@ export function ImportView() {
                   Cancel
                 </button>
               ) : null}
+              <button
+                type="button"
+                onClick={clearTray}
+                className="text-xs text-t3 hover:text-err"
+              >
+                Clear
+              </button>
             </div>
             <ul className="flex flex-col gap-2">
               {files.map((file) => (
@@ -198,11 +211,6 @@ export function ImportView() {
             </ul>
           </section>
         ) : null}
-
-        {/* Watched-folder syncing is a desktop-only feature (server filesystem paths); not part of the mobile design. */}
-        <div className="hidden md:block">
-          <LibraryFoldersSection />
-        </div>
 
         <MobileLocalImportSection />
       </div>

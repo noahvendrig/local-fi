@@ -16,23 +16,50 @@ interface WaveformScrubberProps {
   /** Optional marker band, in the same seconds as currentTime/duration — e.g. the AI DJ's
    *  verified loop phrase for an upcoming transition (see useAiDjStore's activeLoopRegion). */
   loopRegion?: { startSec: number; endSec: number } | null;
+  /** When true (transport bar), fall back to the thin bar below xl — waveform needs more width. */
+  preferBarWhenNarrow?: boolean;
 }
+
+// Below xl the transport bar's scrubber slot is too tight for peaks/spectrum to read.
+const NARROW_PROGRESS_MQ = "(max-width: 1279px)";
 
 // Seek scrubber shared by the transport bar and Now Playing overlay. Style (waveform vs
 // thin bar vs live spectrum) and the right-hand time (duration vs remaining) come from settings.
-export function WaveformScrubber({ waveform, currentTime, duration, onSeek, disabled, loopRegion }: WaveformScrubberProps) {
+export function WaveformScrubber({
+  waveform,
+  currentTime,
+  duration,
+  onSeek,
+  disabled,
+  loopRegion,
+  preferBarWhenNarrow = false,
+}: WaveformScrubberProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hoverRatio, setHoverRatio] = useState<number | null>(null);
+  const [isNarrowScreen, setIsNarrowScreen] = useState(() =>
+    preferBarWhenNarrow && typeof window !== "undefined" ? window.matchMedia(NARROW_PROGRESS_MQ).matches : false
+  );
   const draggingRef = useRef(false);
   // The standalone PWA can't render waveform peaks or a live analyser on the phone, so it's
   // always the thin bar there regardless of what's stored in settings.
   const storedProgressStyle = useSettingsStore((s) => s.progressStyle);
   const progressStyle =
-    process.env.NEXT_PUBLIC_STANDALONE === "true" ? "bar" : storedProgressStyle;
+    process.env.NEXT_PUBLIC_STANDALONE === "true" || (preferBarWhenNarrow && isNarrowScreen)
+      ? "bar"
+      : storedProgressStyle;
   const timeDisplay = useSettingsStore((s) => s.timeDisplay);
   const palette = useSettingsStore((s) => s.palette);
   const theme = useSettingsStore((s) => s.theme);
+
+  useEffect(() => {
+    if (!preferBarWhenNarrow) return;
+    const mq = window.matchMedia(NARROW_PROGRESS_MQ);
+    const sync = () => setIsNarrowScreen(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, [preferBarWhenNarrow]);
 
   const playedRatio = duration > 0 ? Math.min(1, currentTime / duration) : 0;
   const remaining = Math.max(0, duration - currentTime);

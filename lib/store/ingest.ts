@@ -39,6 +39,9 @@ interface IngestState {
   resolveFolderImport: (createFolderPlaylists: boolean) => Promise<void>;
   cancelFolderImport: () => void;
   cancelJob: (jobId: number) => void;
+  /** Drops copy/Spotify tray jobs from local UI state. Active ones are cancelled first;
+   *  folder_scan jobs stay so library-folder progress keeps showing on those rows. */
+  clearTray: () => void;
   /** Kicks off a Spotify playlist import and starts tracking its progress in the tray.
    *  `createCrate` is false here (plain Import page) — pass true only from the "new
    *  crate from Spotify" flow (NewCrateModal), which calls submitSpotifyImport directly. */
@@ -190,6 +193,28 @@ export const useIngestStore = create<IngestState>((set, get) => ({
   cancelJob: (jobId) => {
     uploadAbort?.abort();
     void cancelImportJob(jobId);
+  },
+
+  clearTray: () => {
+    uploadAbort?.abort();
+    uploadAbort = null;
+    const trayJobs = get().jobs.filter((job) => job.type !== "folder_scan");
+    for (const job of trayJobs) {
+      const source = eventSources.get(job.id);
+      if (source) {
+        source.close();
+        eventSources.delete(job.id);
+      }
+      if (!TERMINAL_STATUSES.has(job.status)) {
+        void cancelImportJob(job.id);
+      }
+    }
+    set((state) => ({
+      jobs: state.jobs.filter((job) => job.type === "folder_scan"),
+      uploadProgress: null,
+      error: null,
+      spotifyNotConnected: false,
+    }));
   },
 
   importFromSpotify: async (playlistUrl) => {

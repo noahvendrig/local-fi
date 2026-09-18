@@ -135,7 +135,7 @@ export function LibraryFoldersSection() {
   }, [jobs]);
 
   return (
-    <section className="mt-8">
+    <section className="mt-0">
       <div className="mb-3.5 flex items-center gap-2.5">
         <h2 className="text-xl font-semibold leading-[1.3] text-t1">Library folders</h2>
         <span className="font-mono text-xs text-t3">watched in place — files are never copied</span>

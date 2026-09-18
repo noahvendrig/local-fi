@@ -174,6 +174,10 @@ interface SpotifyImage {
   width: number | null;
 }
 
+function pickLargestImage(images: SpotifyImage[]): string | null {
+  return images.length > 0 ? images.reduce((a, b) => ((a.width ?? 0) >= (b.width ?? 0) ? a : b)).url : null;
+}
+
 // Spotify's Feb/Mar 2026 Web API migration replaced GET /playlists/{id}/tracks with
 // GET /playlists/{id}/items and renamed the payload with it: the wrapper's `track` field is
 // now `item`, and an item can be a podcast episode as well as a track (hence the `type`
@@ -239,9 +243,7 @@ export async function fetchPlaylistMeta(playlistId: string): Promise<SpotifyPlay
   const page = await spotifyGet<{ name: string; images: SpotifyImage[] | null }>(
     `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}?fields=name,images`
   );
-  const images = page.images ?? [];
-  const coverArtUrl = images.length > 0 ? images.reduce((a, b) => ((a.width ?? 0) >= (b.width ?? 0) ? a : b)).url : null;
-  return { name: page.name, coverArtUrl };
+  return { name: page.name, coverArtUrl: pickLargestImage(page.images ?? []) };
 }
 
 /** Fetches every track in one of the user's own playlists, paginating through Spotify's 100-per-page limit. */
@@ -259,15 +261,12 @@ export async function fetchPlaylistTracks(playlistId: string): Promise<SpotifyTr
       // Podcast episodes are skipped for the same reason: this pipeline downloads music.
       if (!track || entry.is_local || !track.id || track.type !== "track") continue;
 
-      const images = track.album?.images ?? [];
-      const coverArtUrl = images.length > 0 ? images.reduce((a, b) => ((a.width ?? 0) >= (b.width ?? 0) ? a : b)).url : null;
-
       tracks.push({
         title: track.name,
         artists: track.artists.map((a) => a.name),
         album: track.album?.name ?? null,
         durationMs: track.duration_ms,
-        coverArtUrl,
+        coverArtUrl: pickLargestImage(track.album?.images ?? []),
         spotifyUrl: `https://open.spotify.com/track/${track.id}`,
       });
     }
@@ -275,4 +274,33 @@ export async function fetchPlaylistTracks(playlistId: string): Promise<SpotifyTr
   }
 
   return tracks;
+}
+
+interface SpotifySearchItem {
+  id: string | null;
+  name: string;
+  artists: { name: string }[];
+  album: { name: string; images: SpotifyImage[] } | null;
+  duration_ms: number;
+}
+
+interface SpotifySearchResponse {
+  tracks: { items: SpotifySearchItem[] };
+}
+
+/** Catalog search — unlike playlist reads, this works for any track regardless of ownership. */
+export async function searchTracks(query: string, limit = 8): Promise<SpotifyTrackMetadata[]> {
+  const page = await spotifyGet<SpotifySearchResponse>(
+    `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=${limit}`
+  );
+  return page.tracks.items
+    .filter((track) => track.id)
+    .map((track) => ({
+      title: track.name,
+      artists: track.artists.map((a) => a.name),
+      album: track.album?.name ?? null,
+      durationMs: track.duration_ms,
+      coverArtUrl: pickLargestImage(track.album?.images ?? []),
+      spotifyUrl: `https://open.spotify.com/track/${track.id}`,
+    }));
 }

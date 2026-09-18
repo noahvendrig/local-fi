@@ -1,6 +1,6 @@
 import type { ImportJobFile } from "@/lib/api/types";
 
-const STATUS_LABEL: Record<ImportJobFile["status"], string> = {
+export const STATUS_LABEL: Record<ImportJobFile["status"], string> = {
   queued: "Queued",
   matching: "Finding on YouTube…",
   downloading: "Downloading…",
@@ -12,7 +12,7 @@ const STATUS_LABEL: Record<ImportJobFile["status"], string> = {
   duplicate_skipped: "Duplicate of existing file",
 };
 
-const STATUS_PROGRESS: Record<ImportJobFile["status"], number> = {
+export const STATUS_PROGRESS: Record<ImportJobFile["status"], number> = {
   queued: 0,
   matching: 8,
   downloading: 18,

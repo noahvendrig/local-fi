@@ -1,7 +1,7 @@
 import type { CollectedFile } from "../ingest/collectFiles";
 import { apiUrl, authHeaders, withAuthQuery } from "./http";
 import { SpotifyNotConnectedError } from "./spotifyClient";
-import type { ImportJob, ImportJobWithFiles } from "./types";
+import type { ImportJob, ImportJobWithFiles, SpotifyTrackMetadata } from "./types";
 
 export { withAuthQuery };
 
@@ -53,6 +53,25 @@ export async function submitSpotifyImport(
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     const message = body?.error?.message ?? `Spotify import failed (${res.status})`;
+    if (body?.error?.code === "spotify_not_connected") throw new SpotifyNotConnectedError(message);
+    throw new Error(message);
+  }
+
+  return res.json();
+}
+
+/** Single-track counterpart to submitSpotifyImport — used by TopSearchBar's "not in your
+ *  library" fallback with metadata already fetched via searchSpotifyTracks. */
+export async function submitSingleSpotifyTrack(track: SpotifyTrackMetadata): Promise<ImportJobWithFiles> {
+  const res = await fetch(apiUrl("/api/v1/import/spotify-track"), {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ track }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const message = body?.error?.message ?? `Download failed (${res.status})`;
     if (body?.error?.code === "spotify_not_connected") throw new SpotifyNotConnectedError(message);
     throw new Error(message);
   }

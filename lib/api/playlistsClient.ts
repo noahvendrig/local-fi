@@ -124,6 +124,11 @@ export function addTrackToPlaylist(playlistId: number, trackId: number, afterPos
   return request(`/api/v1/playlists/${playlistId}/tracks`, { method: "POST", body: JSON.stringify({ trackId, afterPosition }) });
 }
 
+/** Manual crate ids that already contain this track, for the library row's "Add to crate" picker. */
+export function fetchTrackCrateIds(trackId: number): Promise<{ playlistIds: number[] }> {
+  return request(`/api/v1/tracks/${trackId}/crates`);
+}
+
 export function reorderPlaylistEntry(playlistId: number, entryId: number, position: string): Promise<PlaylistTrackEntry> {
   return request(`/api/v1/playlists/${playlistId}/tracks/${entryId}`, { method: "PATCH", body: JSON.stringify({ position }) });
 }
