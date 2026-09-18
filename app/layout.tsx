@@ -3,6 +3,7 @@ import Script from "next/script";
 import { inter, jetbrainsMono, fraunces } from "./fonts";
 import { NavRail } from "@/components/shell/NavRail";
 import { RightRail } from "@/components/shell/RightRail";
+import { TopSearchBar } from "@/components/shell/TopSearchBar";
 import { TransportBar } from "@/components/shell/TransportBar";
 import { NowPlayingOverlay } from "@/components/shell/NowPlayingOverlay";
 import { CommandPalette } from "@/components/shell/CommandPalette";
@@ -61,6 +62,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <MediaSessionMount />
           <HotkeysProvider />
           <PlaybackStateProvider />
+          <TopSearchBar />
           <div className="flex flex-1 overflow-hidden pb-[84px] md:pb-[88px]">
             <NavRail />
             <main className="flex-1 overflow-y-auto">{children}</main>

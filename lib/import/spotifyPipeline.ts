@@ -166,21 +166,55 @@ async function finishDownloadedTrack(
     const stat = statSync(destPath);
     const relativePath = toDataDirRelative(destPath);
 
-    const track = insertTrackRow({
-      uuid: trackUuid,
-      relativePath,
-      libraryRootId: null,
-      fileSizeBytes: stat.size,
-      fileMtimeMs: stat.mtimeMs,
-      tags,
-      waveform,
-      waveformAbsPath,
-      coverArtRelativePath,
-      importJobId: jobId,
-      jobFileId,
-      sourceProvider: "spotify",
-      sourceUrl: metadata.spotifyUrl,
-    });
+    let track: ReturnType<typeof insertTrackRow>;
+    try {
+      track = insertTrackRow({
+        uuid: trackUuid,
+        relativePath,
+        libraryRootId: null,
+        fileSizeBytes: stat.size,
+        fileMtimeMs: stat.mtimeMs,
+        tags,
+        waveform,
+        waveformAbsPath,
+        coverArtRelativePath,
+        importJobId: jobId,
+        jobFileId,
+        sourceProvider: "spotify",
+        sourceUrl: metadata.spotifyUrl,
+      });
+    } catch (err) {
+      // idx_tracks_source lost the race it's meant to guard: another worker's insert for this
+      // same Spotify track landed between the up-front duplicate check above and this insert.
+      // Fall back to that winner instead of creating a second `tracks` row for one Spotify track.
+      const existing = isUniqueSourceConstraintError(err)
+        ? getDb()
+            .select({ id: tracks.id })
+            .from(tracks)
+            .where(
+              and(eq(tracks.sourceProvider, "spotify"), eq(tracks.sourceUrl, metadata.spotifyUrl), isNull(tracks.deletedAt))
+            )
+            .get()
+        : undefined;
+      if (!existing) throw err;
+
+      if (existsSync(destPath)) unlinkSync(destPath);
+      if (existsSync(waveformAbsPath)) unlinkSync(waveformAbsPath);
+      movedTo = null;
+      waveformWritten = null;
+
+      setJobFileStatus(jobFileId, "duplicate_skipped", { trackId: existing.id });
+      getDb()
+        .update(importJobs)
+        .set({ processedFiles: sql`${importJobs.processedFiles} + 1` })
+        .where(eq(importJobs.id, jobId))
+        .run();
+      if (targetPlaylistId != null) {
+        appendTrackToCrate(targetPlaylistId, existing.id);
+      }
+      publishJobUpdate(jobId);
+      return;
+    }
 
     if (targetPlaylistId != null) {
       appendTrackToCrate(targetPlaylistId, track.id);
@@ -214,6 +248,13 @@ async function finishDownloadedTrack(
     markJobFileFailed(jobId, jobFileId, message);
     publishJobUpdate(jobId);
   }
+}
+
+/** True if `err` is a SQLite UNIQUE violation on idx_tracks_source (tracks.source_provider + tracks.source_url). */
+function isUniqueSourceConstraintError(err: unknown): boolean {
+  const code = (err as { code?: string } | undefined)?.code;
+  const message = err instanceof Error ? err.message : "";
+  return code === "SQLITE_CONSTRAINT_UNIQUE" && message.includes("tracks.source_provider") && message.includes("tracks.source_url");
 }
 
 /** Appends a track to the end of the crate created for this playlist import (see app/api/v1/import/spotify/route.ts). Mirrors the position-computation in app/api/v1/playlists/[id]/tracks/route.ts. */

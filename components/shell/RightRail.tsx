@@ -8,6 +8,8 @@ import { UpNextList } from "./UpNextList";
 // reflows main content (§9). Hosts the Queue drawer: Now Playing summary + a
 // reorderable Up Next list (ARCHITECTURE.md M5). Hidden while the full-screen
 // Now Playing overlay is open — that view hosts the same list so it stays visible.
+// Starts below TopSearchBar (h-14) rather than the true viewport top, so that bar's
+// higher z-index doesn't paint over the drawer's own header/close button.
 export function RightRail() {
   const isQueueOpen = usePlayerStore((s) => s.isQueueOpen);
   const isNowPlayingOpen = usePlayerStore((s) => s.isNowPlayingOpen);
@@ -20,7 +22,7 @@ export function RightRail() {
   return (
     <aside
       aria-hidden={!isOpen}
-      className={`fixed inset-y-0 right-0 z-20 hidden w-[360px] flex-col border-l border-line bg-surf pb-[88px] transition-transform duration-200 md:flex ${
+      className={`fixed top-14 bottom-0 right-0 z-20 hidden w-[360px] flex-col border-l border-line bg-surf pb-[88px] transition-transform duration-200 md:flex ${
         isOpen ? "translate-x-0" : "pointer-events-none translate-x-full"
       }`}
     >

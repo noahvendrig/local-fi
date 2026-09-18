@@ -134,6 +134,13 @@
       "when": 1789483869670,
       "tag": "0018_fix_import_jobs_target_playlist_fk",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1789746610895,
+      "tag": "0019_tricky_ego",
+      "breakpoints": true
     }
   ]
 }

@@ -240,6 +240,13 @@ export const tracks = sqliteTable(
     // watched root and the managed originals/ tree — can't collide on relative path,
     // while still making a rescan of the same root idempotent (ARCHITECTURE.md §2/§3.6).
     uniqueIndex("idx_tracks_path_root").on(t.path, t.libraryRootId),
+    // Backs up the check-then-insert dedup in spotifyPipeline.ts against concurrent
+    // import workers racing on the same Spotify track (both pass the SELECT check
+    // before either finishes its YouTube match+download, so both insert). Partial
+    // index since sourceUrl is null for ordinary file imports.
+    uniqueIndex("idx_tracks_source")
+      .on(t.sourceProvider, t.sourceUrl)
+      .where(sql`${t.sourceUrl} IS NOT NULL`),
     index("idx_tracks_library_root").on(t.libraryRootId),
     index("idx_tracks_fingerprint").on(t.fingerprint),
     index("idx_tracks_album").on(t.albumId, t.discNumber, t.trackNumber),
