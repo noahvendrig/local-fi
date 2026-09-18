@@ -148,7 +148,7 @@ export function AlbumDetailView({ albumId }: { albumId: number }) {
                   role="button"
                   tabIndex={track.missing ? -1 : 0}
                   aria-label={`Play ${track.title ?? "Untitled"}`}
-                  className={`lf-track-row group grid grid-cols-[32px_1fr_120px_64px_32px] items-center gap-4 rounded-lg border border-transparent px-3 py-3 ${
+                  className={`lf-track-row group grid grid-cols-[32px_1fr_120px_64px_32px] items-center gap-4 rounded-lg border border-transparent px-3 ${
                     track.missing ? "cursor-not-allowed opacity-40" : "cursor-pointer hover:border-line hover:bg-surf-2"
                   } ${isCurrent ? "bg-[var(--lf-tint)]" : ""}`}
                   title={track.missing ? "File missing on disk" : undefined}

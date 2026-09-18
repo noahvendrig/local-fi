@@ -6,6 +6,7 @@ import type { TrackSort, TrackSummary } from "@/lib/api-client";
 import { usePlayerStore, type QueueSource } from "@/lib/store/player";
 import { useSettingsStore } from "@/lib/store/settings";
 import { PlayingIcon } from "@/components/shell/PlayerIcons";
+import { TrackCoverThumb } from "./TrackCoverThumb";
 import { TrackRowActions } from "./TrackRowActions";
 
 interface TrackListProps {
@@ -49,9 +50,12 @@ export function TrackList({ tracks, sort, onSortChange, source }: TrackListProps
                 } ${isCurrent ? "bg-[var(--lf-tint)]" : ""}`}
                 title={track.missing ? "File missing on disk" : undefined}
               >
-                <div className="min-w-0 flex-1">
-                  <p className={`truncate text-sm ${isCurrent ? "text-playing" : "text-t1"}`}>{track.title ?? "Untitled"}</p>
-                  <p className="truncate font-mono text-xs text-t3">{track.artistName}</p>
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <TrackCoverThumb coverArtUrl={track.coverArtUrl} size={40} />
+                  <div className="min-w-0 flex-1">
+                    <p className={`truncate text-sm ${isCurrent ? "text-playing" : "text-t1"}`}>{track.title ?? "Untitled"}</p>
+                    <p className="truncate font-mono text-xs text-t3">{track.artistName}</p>
+                  </div>
                 </div>
                 <TrackRowActions track={track} alwaysVisible />
               </div>
@@ -103,7 +107,7 @@ export function TrackList({ tracks, sort, onSortChange, source }: TrackListProps
             role="button"
             tabIndex={track.missing ? -1 : 0}
             aria-label={`Play ${track.title ?? "Untitled"}`}
-            className={`lf-track-row group grid ${columns} items-center gap-3 rounded-lg border border-transparent px-3 py-3 ${
+            className={`lf-track-row group grid ${columns} items-center gap-3 rounded-lg border border-transparent px-3 ${
               track.missing ? "cursor-not-allowed opacity-40" : "cursor-pointer hover:border-line hover:bg-surf-2"
             } ${isCurrent ? "bg-[var(--lf-tint)]" : ""}`}
             title={track.missing ? "File missing on disk" : undefined}
@@ -111,21 +115,24 @@ export function TrackList({ tracks, sort, onSortChange, source }: TrackListProps
             <span className={`font-mono text-xs ${isCurrent ? "text-playing" : "text-t3"}`}>
               {isCurrent && isPlaying ? <PlayingIcon /> : String(i + 1).padStart(2, "0")}
             </span>
-            <div className="min-w-0">
-              <p className={`truncate text-sm leading-[1.5] ${isCurrent ? "text-playing" : "text-t1"}`}>
-                {track.title ?? "Untitled"}
-              </p>
-              {track.artistId ? (
-                <Link
-                  href={`/artists/${track.artistId}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="inline-block max-w-full truncate font-mono text-xs text-t3 hover:text-acc-text max-md:pointer-events-none"
-                >
-                  {track.artistName}
-                </Link>
-              ) : (
-                <span className="block truncate font-mono text-xs text-t3">{track.artistName}</span>
-              )}
+            <div className="flex min-w-0 items-center gap-3">
+              <TrackCoverThumb coverArtUrl={track.coverArtUrl} className="lf-track-cover" />
+              <div className="min-w-0">
+                <p className={`truncate text-sm leading-[1.5] ${isCurrent ? "text-playing" : "text-t1"}`}>
+                  {track.title ?? "Untitled"}
+                </p>
+                {track.artistId ? (
+                  <Link
+                    href={`/artists/${track.artistId}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-block max-w-full truncate font-mono text-xs text-t3 hover:text-acc-text max-md:pointer-events-none"
+                  >
+                    {track.artistName}
+                  </Link>
+                ) : (
+                  <span className="block truncate font-mono text-xs text-t3">{track.artistName}</span>
+                )}
+              </div>
             </div>
             <span className="min-w-0 truncate text-sm text-t2">
               {track.albumId ? (

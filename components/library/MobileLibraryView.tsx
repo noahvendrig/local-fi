@@ -8,6 +8,7 @@ import { fetchPlaylists } from "@/lib/api/playlistsClient";
 import { useHasCredentials, withAuthQuery } from "@/lib/api/http";
 import { usePlayerStore } from "@/lib/store/player";
 import { NewCrateModal } from "@/components/crates/NewCrateModal";
+import { TrackCoverThumb } from "@/components/library/TrackCoverThumb";
 import { TrackRowActions } from "@/components/library/TrackRowActions";
 import { getAllOfflineCrates, getAllOfflineTracks, type OfflineCrate, type OfflineTrack } from "@/lib/offline/db";
 import { removeCrateOffline } from "@/lib/offline/copyToPhone";
@@ -20,7 +21,7 @@ import {
 import { offlineTrackToSummary } from "@/lib/offline/trackSummary";
 import { removeLocalTrack, uploadLocalTrackToPc } from "@/lib/offline/uploadToPc";
 import { useDeviceStore } from "@/lib/store/device";
-import { AlbumPlaceholderIcon, PlayIcon } from "@/components/shell/PlayerIcons";
+import { PlayIcon } from "@/components/shell/PlayerIcons";
 
 // Swipe-right-to-queue tuning for MobileSongsList rows: how far (px) the row can be
 // dragged before it clamps, and how far it must travel to commit the "add to queue" action.
@@ -269,7 +270,7 @@ function MobileSongsList() {
               title={track.missing ? "File missing on disk" : undefined}
             >
               <div className="flex min-w-0 flex-1 items-center gap-3">
-                <TrackCoverThumb coverArtUrl={track.coverArtUrl} />
+                <TrackCoverThumb coverArtUrl={track.coverArtUrl} size={48} />
                 <div className="min-w-0 flex-1">
                   <p className={`truncate text-base ${isCurrent ? "text-playing" : "text-t1"}`}>{track.title ?? "Untitled"}</p>
                   <p className="truncate font-mono text-xs text-t3">{track.artistName}</p>
@@ -299,24 +300,6 @@ function QueueIcon() {
       <path d="M4 6h10M4 12h10M4 18h6" />
       <path d="M18 10v8M14 14h8" />
     </svg>
-  );
-}
-
-// Cover-art thumbnail sitting at the left of a song row. On-device songs (and any track the
-// server has no art for) fall back to the same hatch fill + placeholder glyph the mini-player
-// and Now Playing sheet use. `coverArtUrl` is a fetchable server URL, so it needs withAuthQuery.
-function TrackCoverThumb({ coverArtUrl }: { coverArtUrl: string | null }) {
-  return (
-    <div className="lf-hatch h-12 w-12 shrink-0 overflow-hidden rounded-[10px]">
-      {coverArtUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element -- local-only images
-        <img src={withAuthQuery(coverArtUrl)} alt="" className="h-full w-full object-cover" />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center text-t3" aria-hidden>
-          <AlbumPlaceholderIcon />
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -825,7 +808,7 @@ function LocalCrateDetailSheet({
                   className="flex w-full items-center justify-between gap-3 border-b border-line py-3.5 text-left disabled:opacity-50"
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <TrackCoverThumb coverArtUrl={null} />
+                    <TrackCoverThumb coverArtUrl={null} size={48} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm text-t1">{track.title ?? "Untitled"}</p>
                       <p className="truncate font-mono text-xs text-t3">{track.artistName ?? "Unknown artist"}</p>
@@ -859,7 +842,7 @@ function LocalCrateDetailSheet({
                     aria-label={`Play ${track.title ?? "Untitled"}`}
                     className="flex min-w-0 flex-1 cursor-pointer items-center gap-3"
                   >
-                    <TrackCoverThumb coverArtUrl={null} />
+                    <TrackCoverThumb coverArtUrl={null} size={48} />
                     <div className="min-w-0 flex-1">
                       <p className={`truncate text-sm ${isCurrent ? "text-playing" : "text-t1"}`}>{track.title ?? "Untitled"}</p>
                       <p className="truncate font-mono text-xs text-t3">{track.artistName ?? "Unknown artist"}</p>

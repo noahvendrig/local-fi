@@ -491,8 +491,21 @@ html[data-density="compact"] .lf-album-card {
   border-radius: 12px;
 }
 
+/* Track list row height — tweak these two values */
+.lf-track-row {
+  --lf-track-row-pad-y: 0.35rem;
+  --lf-track-cover-size: 32px;
+  padding-block: var(--lf-track-row-pad-y);
+}
+
+.lf-track-row .lf-track-cover {
+  width: var(--lf-track-cover-size);
+  height: var(--lf-track-cover-size);
+}
+
 html[data-density="compact"] .lf-track-row {
-  padding-block: 0.4rem;
+  --lf-track-row-pad-y: 0.35rem;
+  --lf-track-cover-size: 28px;
 }
 
 html[data-motion="reduce"] *,
