@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { STATUS_LABEL, STATUS_PROGRESS } from "@/components/ingest/JobFileRow";
-import { fetchTracks, type TrackSummary } from "@/lib/api-client";
+import { fetchArtists, fetchTracks, type TrackSummary } from "@/lib/api-client";
 import { useHasCredentials } from "@/lib/api/http";
 import { submitSingleSpotifyTrack } from "@/lib/api/importClient";
 import { fetchSpotifyStatus, searchSpotifyTracks } from "@/lib/api/spotifyClient";
@@ -11,13 +12,19 @@ import type { ImportJobWithFiles, SpotifyTrackMetadata } from "@/lib/api/types";
 import { formatDuration } from "@/lib/format/track";
 import { getAllOfflineTracks } from "@/lib/offline/db";
 import { offlineTrackToSummary } from "@/lib/offline/trackSummary";
+import { useDeviceStore } from "@/lib/store/device";
 import { useIngestStore } from "@/lib/store/ingest";
 import { usePlayerStore } from "@/lib/store/player";
 import { CloseIcon } from "./PlayerIcons";
 
 const RESULT_LIMIT = 8;
+const ARTIST_RESULT_LIMIT = 3;
 const SPOTIFY_DEBOUNCE_MS = 400;
 const SPOTIFY_MIN_QUERY_LENGTH = 2;
+
+// Mirrors CommandPalette.tsx's STANDALONE handling: the standalone PWA has no /artists/:id page
+// of its own, so an artist result there links out to the paired PC's own page instead.
+const STANDALONE = process.env.NEXT_PUBLIC_STANDALONE === "true";
 
 // Always-mounted search bar pinned to the top of the shell (app/layout.tsx), distinct from
 // CommandPalette's ⌘K modal — visible from every section without needing the shortcut.
@@ -33,10 +40,12 @@ export function TopSearchBar() {
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
   const playTrack = usePlayerStore((s) => s.playTrack);
   const hasCredentials = useHasCredentials();
   const jobs = useIngestStore((s) => s.jobs);
   const queryClient = useQueryClient();
+  const device = useDeviceStore((s) => s.device);
 
   const trimmed = query.trim();
   const enabled = trimmed.length > 0;
@@ -44,6 +53,11 @@ export function TopSearchBar() {
   const tracksQuery = useQuery({
     queryKey: ["search", "tracks", trimmed],
     queryFn: () => fetchTracks({ q: trimmed, limit: RESULT_LIMIT }),
+    enabled: enabled && hasCredentials,
+  });
+  const artistsQuery = useQuery({
+    queryKey: ["search", "artists", trimmed],
+    queryFn: () => fetchArtists({ q: trimmed, limit: ARTIST_RESULT_LIMIT }),
     enabled: enabled && hasCredentials,
   });
   // On-device tracks (phone-only imports) never reach the server search above — matched
@@ -144,6 +158,17 @@ export function TopSearchBar() {
     setIsFocused(false);
   }
 
+  function goToArtist(id: number) {
+    const href = `/artists/${id}`;
+    if (STANDALONE) {
+      if (device) window.open(`${device.serverUrl}${href}`, "_blank", "noopener,noreferrer");
+    } else {
+      router.push(href);
+    }
+    setQuery("");
+    setIsFocused(false);
+  }
+
   async function handleDownload(track: SpotifyTrackMetadata) {
     setDownloadError(null);
     try {
@@ -211,6 +236,24 @@ export function TopSearchBar() {
 
         {showDropdown && (
           <div className="absolute left-0 right-0 top-[calc(100%+6px)] max-h-[70vh] overflow-y-auto rounded-xl border border-line bg-surf shadow-[var(--lf-shadow)]">
+            {(artistsQuery.data?.items.length ?? 0) > 0 && (
+              <div className="border-b border-line py-1">
+                <p className="px-4 py-1 text-xs font-medium uppercase tracking-wide text-t3">Artists</p>
+                {artistsQuery.data!.items.map((artist) => (
+                  <button
+                    key={artist.id}
+                    type="button"
+                    onClick={() => goToArtist(artist.id)}
+                    className="flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-surf-2"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-sm text-t1">{artist.name}</span>
+                    <span className="shrink-0 font-mono text-xs text-t3">
+                      {artist.albumCount} album{artist.albumCount === 1 ? "" : "s"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
             {isLoading && results.length === 0 ? (
               <p className="px-4 py-6 text-center text-sm text-t3">Searching…</p>
             ) : results.length === 0 ? (

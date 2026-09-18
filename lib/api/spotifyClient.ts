@@ -15,10 +15,13 @@ export async function fetchSpotifyStatus(): Promise<boolean> {
   return body.connected;
 }
 
-/** Catalog search — used by TopSearchBar's "not in your library" fallback. Fails soft
- *  (empty array) rather than throwing, since it's a live-typing search, not a submit. */
-export async function searchSpotifyTracks(query: string): Promise<SpotifyTrackMetadata[]> {
-  const res = await fetch(apiUrl(`/api/v1/spotify/search?q=${encodeURIComponent(query)}`), {
+/** Catalog search — used by TopSearchBar's "not in your library" fallback, and by
+ *  ArtistSuggestedSongs (`artist:"..."` queries). Fails soft (empty array) rather than
+ *  throwing, since it's a live-typing/background search, not a submit. */
+export async function searchSpotifyTracks(query: string, limit?: number): Promise<SpotifyTrackMetadata[]> {
+  const params = new URLSearchParams({ q: query });
+  if (limit) params.set("limit", String(limit));
+  const res = await fetch(apiUrl(`/api/v1/spotify/search?${params.toString()}`), {
     headers: authHeaders(),
   });
   if (!res.ok) return [];

@@ -7,6 +7,7 @@ import { fetchArtist, fetchTracks } from "@/lib/api-client";
 import { usePlayerStore } from "@/lib/store/player";
 import { useInfiniteScroll } from "@/lib/hooks/useInfiniteScroll";
 import { PlayIcon } from "@/components/shell/PlayerIcons";
+import { ArtistSuggestedSongs } from "./ArtistSuggestedSongs";
 import { TrackList } from "./TrackList";
 
 export function ArtistDetailView({ artistId }: { artistId: number }) {
@@ -101,6 +102,10 @@ export function ArtistDetailView({ artistId }: { artistId: number }) {
           </div>
         )}
       </div>
+
+      {!tracksQuery.hasNextPage && (
+        <ArtistSuggestedSongs artistId={artistId} artistName={artist.name} existingTracks={tracks} />
+      )}
     </div>
   );
 }

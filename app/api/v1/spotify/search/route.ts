@@ -7,13 +7,19 @@ import { searchTracks, SpotifyConfigError, SpotifyNotConnectedError } from "@/li
  * works regardless of playlist ownership, so this only needs a connected user token.
  */
 export async function GET(request: Request) {
-  const q = new URL(request.url).searchParams.get("q")?.trim() ?? "";
+  const params = new URL(request.url).searchParams;
+  const q = params.get("q")?.trim() ?? "";
   if (!q) {
     return NextResponse.json({ items: [] });
   }
 
+  // Spotify's search endpoint 400s ("Invalid limit") above 10 — verified empirically against
+  // the live API, despite the Web API docs' documented range of 1-50.
+  const rawLimit = Number(params.get("limit"));
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 10) : undefined;
+
   try {
-    const items = await searchTracks(q);
+    const items = await searchTracks(q, limit);
     return NextResponse.json({ items });
   } catch (err) {
     if (err instanceof SpotifyConfigError) {
