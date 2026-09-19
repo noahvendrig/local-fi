@@ -55,6 +55,17 @@ export function SmartShuffleIcon({ size = 14 }: IconSizeProps) {
   );
 }
 
+export function VibeRadioIcon({ size = 14 }: IconSizeProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="14" r="3" />
+      <path d="M12 14v.01" />
+      <path d="M7.5 9.5a6.5 6.5 0 0 1 9 0" />
+      <path d="M4.5 6.5a10.5 10.5 0 0 1 15 0" />
+    </svg>
+  );
+}
+
 export function RepeatIcon({ size = 14 }: IconSizeProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

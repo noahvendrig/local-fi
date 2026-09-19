@@ -30,6 +30,10 @@ export interface PlayerSettings {
   loudnessMatch: boolean;
   crossfadeSeconds: CrossfadeSeconds;
   compressImports: boolean;
+  /** Chosen Ollama model name for the vibe-prompt features (lib/llm/vibeSelector.ts) — a client
+   *  preference, not a server setting, since the model list is fetched live from Ollama and can
+   *  differ machine to machine. Null until the user picks one in Settings' Ollama section. */
+  ollamaModel: string | null;
 }
 
 export const DEFAULT_SETTINGS: PlayerSettings = {
@@ -49,6 +53,7 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   loudnessMatch: true,
   crossfadeSeconds: 0,
   compressImports: false,
+  ollamaModel: null,
 };
 
 interface SettingsState extends PlayerSettings {
@@ -69,6 +74,7 @@ interface SettingsState extends PlayerSettings {
   setLoudnessMatch: (loudnessMatch: boolean) => void;
   setCrossfadeSeconds: (crossfadeSeconds: CrossfadeSeconds) => void;
   setCompressImports: (compressImports: boolean) => void;
+  setOllamaModel: (ollamaModel: string | null) => void;
   resetSettings: () => void;
   hydrateFromDom: () => void;
 }
@@ -126,6 +132,7 @@ function parseStoredSettings(): PlayerSettings {
       next.crossfadeSeconds = 4;
     }
     if (typeof parsed.compressImports === "boolean") next.compressImports = parsed.compressImports;
+    if (typeof parsed.ollamaModel === "string") next.ollamaModel = parsed.ollamaModel;
   } catch {
     return next;
   }
@@ -163,6 +170,7 @@ function snapshot(state: SettingsState): PlayerSettings {
     loudnessMatch: state.loudnessMatch,
     crossfadeSeconds: state.crossfadeSeconds,
     compressImports: state.compressImports,
+    ollamaModel: state.ollamaModel,
   };
 }
 
@@ -193,6 +201,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setLoudnessMatch: (loudnessMatch) => commit(set, get, { loudnessMatch }),
   setCrossfadeSeconds: (crossfadeSeconds) => commit(set, get, { crossfadeSeconds }),
   setCompressImports: (compressImports) => commit(set, get, { compressImports }),
+  setOllamaModel: (ollamaModel) => commit(set, get, { ollamaModel }),
   resetSettings: () => commit(set, get, { ...DEFAULT_SETTINGS }),
   hydrateFromDom: () => {
     const next = parseStoredSettings();

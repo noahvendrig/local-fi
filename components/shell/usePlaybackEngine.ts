@@ -283,7 +283,7 @@ export function usePlaybackEngine() {
         getPlaybackEqualizer().setDeckGain(lead, loud);
         if (usePlayerStore.getState().isPlaying) {
           await getPlaybackEqualizer().resume();
-          await audio.play().catch(() => {});
+          await audio.play().catch((err) => console.log("[Playback] play() rejected", err));
         }
         scheduleCrossfadeRef.current(audio.currentTime);
         void preloadUpcomingRef.current();
@@ -306,7 +306,7 @@ export function usePlaybackEngine() {
     if (!lead) return;
     if (isPlaying) {
       void getPlaybackEqualizer().resume();
-      lead.play().catch(() => {});
+      lead.play().catch((err) => console.log("[Playback] play() rejected", err));
       if (fadingRef.current) other?.play().catch(() => {});
       scheduleCrossfade(lead.currentTime);
       void preloadUpcomingRef.current();

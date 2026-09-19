@@ -141,6 +141,13 @@
       "when": 1789746610895,
       "tag": "0019_tricky_ego",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1789798818445,
+      "tag": "0020_redundant_lionheart",
+      "breakpoints": true
     }
   ]
 }

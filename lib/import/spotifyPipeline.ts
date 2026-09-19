@@ -6,7 +6,7 @@ import { generateKeyBetween } from "fractional-indexing";
 import { getDb } from "../db/client";
 import { importJobs, playlistTracks, tracks } from "../db/schema";
 import { cancelPythonJob, postMatchJob, streamJobUntilDone } from "../pythonBackend/client";
-import type { SpotifyTrackMetadata } from "../spotify/client";
+import { parseReleaseYear, type SpotifyTrackMetadata } from "../spotify/client";
 import { publishJobUpdate } from "./events";
 import { insertTrackRow, markJobFileFailed, readTagsAndWaveform, setJobFileStatus, writeSidecars } from "./indexCommon";
 import { originalsDirFor, sanitizeFilename, stagingDirFor, toDataDirRelative } from "./paths";
@@ -144,6 +144,10 @@ async function finishDownloadedTrack(
       artist,
       albumArtist: artist,
       album: metadata.album ?? extracted.tags.album,
+      // yt-dlp/ffmpeg rarely carries useful genre or year tags for a YouTube-sourced download —
+      // prefer Spotify's catalog data when it has any, same as title/artist/album above.
+      genre: metadata.genres.length > 0 ? metadata.genres.join(", ") : extracted.tags.genre,
+      year: parseReleaseYear(metadata.releaseDate) ?? extracted.tags.year,
       coverArt,
     };
 

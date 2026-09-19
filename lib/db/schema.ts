@@ -430,6 +430,59 @@ export const similarityJobTracks = sqliteTable(
   ]
 );
 
+// On-demand Spotify metadata backfill (Settings → Spotify) — matches library tracks missing
+// genre and/or year against the Spotify catalog by title+artist and fills only those gaps,
+// same "detection never overwrites, only fills" contract as analysisJobs. Pure Node/HTTP work
+// (a couple of Spotify Web API calls per track), no python-backend involved — closer in shape to
+// analysisJobs than to fingerprintJobs/similarityJobs.
+export const spotifyEnrichJobs = sqliteTable(
+  "spotify_enrich_jobs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    uuid: text("uuid").notNull().unique(),
+    status: text("status").notNull().default("pending"),
+    totalTracks: integer("total_tracks").notNull().default(0),
+    processedTracks: integer("processed_tracks").notNull().default(0),
+    /** Tracks that got at least one field filled in. */
+    matchedTracks: integer("matched_tracks").notNull().default(0),
+    failedTracks: integer("failed_tracks").notNull().default(0),
+    startedAt: text("started_at"),
+    finishedAt: text("finished_at"),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [
+    check(
+      "chk_spotify_enrich_jobs_status",
+      sql`${t.status} IN ('pending','running','completed','completed_with_errors','failed','cancelled')`
+    ),
+  ]
+);
+
+export const spotifyEnrichJobTracks = sqliteTable(
+  "spotify_enrich_job_tracks",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => spotifyEnrichJobs.id, { onDelete: "cascade" }),
+    trackId: integer("track_id")
+      .notNull()
+      .references(() => tracks.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("queued"),
+    /** Not a failure — the catalog just has nothing confidently matching this track, so it was skipped. */
+    errorMessage: text("error_message"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [
+    index("idx_spotify_enrich_job_tracks_job").on(t.jobId),
+    check(
+      "chk_spotify_enrich_job_tracks_status",
+      sql`${t.status} IN ('queued','matching','matched','no_match','failed')`
+    ),
+  ]
+);
+
 /**
  * An uploaded DJ mix / mixtape awaiting (or already given) per-song segmentation against the
  * local library. Deliberately not *itself modeled as* a row in `tracks` — a mixtape's identity

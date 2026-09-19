@@ -19,6 +19,8 @@ import { EqualizerPopover } from "./EqualizerPopover";
 import { HoverTip, IconButton } from "./IconButton";
 import { usePlaybackEngine } from "./usePlaybackEngine";
 import { useSmartShuffle } from "./useSmartShuffle";
+import { useVibeRadio } from "./useVibeRadio";
+import { VibeRadioPopover } from "./VibeRadioPopover";
 import {
   AlbumPlaceholderIcon,
   NextIcon,
@@ -111,6 +113,7 @@ export function TransportBar() {
 
   const { audioARef, audioBRef, handleTimeUpdate, handleEnded, handlePlay, handlePause } = usePlaybackEngine();
   useSmartShuffle();
+  useVibeRadio();
 
   // Which deck the bar shows/controls is tracked explicitly (useTransportSourceStore), set by
   // whichever store's track-selection actions last ran — NOT derived from isPlaying, so pausing
@@ -341,6 +344,7 @@ export function TransportBar() {
             >
               <SmartShuffleIcon size={24} />
             </IconButton>
+            <VibeRadioPopover />
             <IconButton
               onClick={toggleRepeatMode}
               label={repeatMode === "one" ? "Repeat one" : repeatMode === "all" ? "Repeat all" : "Repeat"}

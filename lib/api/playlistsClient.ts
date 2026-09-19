@@ -124,6 +124,12 @@ export function addTrackToPlaylist(playlistId: number, trackId: number, afterPos
   return request(`/api/v1/playlists/${playlistId}/tracks`, { method: "POST", body: JSON.stringify({ trackId, afterPosition }) });
 }
 
+/** Appends many tracks to a manual crate in one request (e.g. a vibe-prompt crate's picks) —
+ *  looping addTrackToPlaylist per track would be slow and non-atomic for ~30 inserts. */
+export function bulkAddTracksToPlaylist(playlistId: number, trackIds: number[]): Promise<{ items: PlaylistTrackEntry[] }> {
+  return request(`/api/v1/playlists/${playlistId}/tracks/bulk`, { method: "POST", body: JSON.stringify({ trackIds }) });
+}
+
 /** Manual crate ids that already contain this track, for the library row's "Add to crate" picker. */
 export function fetchTrackCrateIds(trackId: number): Promise<{ playlistIds: number[] }> {
   return request(`/api/v1/tracks/${trackId}/crates`);

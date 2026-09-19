@@ -20,12 +20,23 @@ export interface SpotifyTrackMetadata {
   coverArtUrl: string | null;
   /** open.spotify.com track link — stored as tracks.sourceUrl provenance once imported. */
   spotifyUrl: string;
+  /** Album's release_date as Spotify returns it (YYYY, YYYY-MM, or YYYY-MM-DD depending on release_date_precision). */
+  releaseDate: string | null;
+  /** The primary (first-listed) artist's genres, from Spotify's artist catalog — tracks and albums carry no genre of their own. Empty when genres weren't fetched (see includeGenres) or Spotify has none on file. */
+  genres: string[];
 }
 
 export class SpotifyConfigError extends Error {}
 export class InvalidPlaylistUrlError extends Error {}
 /** No refresh token on disk yet — the user needs to complete GET /api/v1/spotify/login once. */
 export class SpotifyNotConnectedError extends Error {}
+/** A 429 with a long Retry-After (see LONG_WAIT_THRESHOLD_MS below) — this is Spotify's daily/rolling
+ *  call quota, not the ordinary short burst limit, and observed Retry-After values run into the tens
+ *  of thousands of seconds. Worth its own type so callers (the enrich job queue) can stop dead instead
+ *  of grinding through every remaining item, each waiting out the same multi-hour window. */
+export class SpotifyQuotaExceededError extends Error {}
+/** Generic 404 from a non-playlist Spotify endpoint (e.g. an artist id Spotify doesn't recognize). */
+export class SpotifyNotFoundError extends Error {}
 
 const SCOPES = "playlist-read-private playlist-read-collaborative";
 
@@ -174,6 +185,15 @@ interface SpotifyImage {
   width: number | null;
 }
 
+/** Parses the leading year out of Spotify's release_date (YYYY, YYYY-MM, or YYYY-MM-DD). Spotify
+ *  uses "0000" as a placeholder when an album's release date genuinely isn't known, so that (and
+ *  anything else outside a sane range) comes back null rather than getting written to the DB. */
+export function parseReleaseYear(releaseDate: string | null): number | null {
+  if (!releaseDate) return null;
+  const year = parseInt(releaseDate.slice(0, 4), 10);
+  return Number.isFinite(year) && year > 1900 && year <= new Date().getFullYear() + 1 ? year : null;
+}
+
 function pickLargestImage(images: SpotifyImage[]): string | null {
   return images.length > 0 ? images.reduce((a, b) => ((a.width ?? 0) >= (b.width ?? 0) ? a : b)).url : null;
 }
@@ -189,8 +209,8 @@ interface SpotifyPlaylistItem {
     id: string | null;
     name: string;
     type: string;
-    artists: { name: string }[];
-    album: { name: string; images: SpotifyImage[] } | null;
+    artists: { id: string; name: string }[];
+    album: { name: string; images: SpotifyImage[]; release_date: string | null } | null;
     duration_ms: number;
   } | null;
 }
@@ -200,11 +220,91 @@ interface SpotifyPlaylistItemsPage {
   next: string | null;
 }
 
-async function spotifyGet<T>(url: string): Promise<T> {
+/** Fetches genres for a set of artist ids — tracks and albums carry no genre of their own, only
+ *  artists do. One request per artist: GET /v1/artists?ids=... (the batch form, up to 50 ids/call
+ *  per Spotify's docs) returns a bare 403 on this app — confirmed by probing it directly, no
+ *  Retry-After/quota reason, just "Forbidden", while GET /v1/artists/{id} for the same id works
+ *  fine. Whatever changed on Spotify's side restricted the multi-get and left the single-get
+ *  alone, so this falls back to the latter. Costlier in request count for a track with many
+ *  distinct primary artists, but there's no working batch alternative right now. A missing/
+ *  unrecognized id just 404s and is skipped rather than failing the whole lookup. */
+async function fetchArtistGenres(artistIds: (string | null | undefined)[]): Promise<Map<string, string[]>> {
+  const uniqueIds = [...new Set(artistIds.filter((id): id is string => !!id))];
+  const map = new Map<string, string[]>();
+  for (const id of uniqueIds) {
+    const artist = await spotifyGet<{ id: string; genres: string[] }>(`https://api.spotify.com/v1/artists/${encodeURIComponent(id)}`).catch(
+      (err) => {
+        if (err instanceof SpotifyNotFoundError) return null;
+        throw err;
+      }
+    );
+    if (artist) map.set(artist.id, artist.genres ?? []);
+  }
+  return map;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Process-wide, not per-request: Spotify's rate limit is per-app (all our calls share one client
+// id), so a 429 on one request means every other in-flight/queued call needs to back off too, not
+// just the one that got the 429. Without this shared gate, a burst that trips the limit turns into
+// a "429 storm" — every concurrent caller gets its own 429, each stretching the window further.
+let rateLimitedUntil = 0;
+// A small floor between requests even outside a 429 — cheap insurance against tripping the limit
+// in the first place during a bulk operation (playlist import, metadata backfill).
+let nextRequestNotBefore = 0;
+const MIN_REQUEST_SPACING_MS = 100;
+
+// Observed empirically: Spotify's ordinary short-burst 429 carries a Retry-After of a few
+// seconds, but once a client trips whatever call-volume quota sits behind that (a bulk metadata
+// backfill hammering /search is exactly the kind of thing that does it), Retry-After comes back
+// in the tens of thousands of seconds — a multi-hour ban, not a burst to wait out. Anything past
+// this threshold gets treated as the latter: fail fast with a clear message instead of sleeping
+// (or, worse, retrying into another multi-hour wait) inside a background job.
+const LONG_WAIT_THRESHOLD_MS = 15_000;
+
+function describeWaitUntil(untilMs: number): string {
+  const mins = Math.round((untilMs - Date.now()) / 60_000);
+  const when = new Date(untilMs).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return mins >= 60 ? `around ${when}` : `in about ${Math.max(1, mins)} min`;
+}
+
+async function spotifyGet<T>(url: string, attempt = 0): Promise<T> {
+  if (rateLimitedUntil - Date.now() > LONG_WAIT_THRESHOLD_MS) {
+    throw new SpotifyQuotaExceededError(`Spotify's API quota is exhausted — try again ${describeWaitUntil(rateLimitedUntil)}.`);
+  }
+  const waitMs = Math.max(rateLimitedUntil, nextRequestNotBefore) - Date.now();
+  if (waitMs > 0) await sleep(waitMs);
+  nextRequestNotBefore = Date.now() + MIN_REQUEST_SPACING_MS;
+
   const token = await getAccessToken();
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (res.status === 404) {
+
+  if (res.status === 429) {
+    // Retry-After is in seconds per Spotify's docs; pad it slightly since the window boundary
+    // isn't exact.
+    const retryAfterSec = parseInt(res.headers.get("retry-after") ?? "", 10);
+    const delayMs = (Number.isFinite(retryAfterSec) && retryAfterSec > 0 ? retryAfterSec : 2) * 1000 + 250;
+    rateLimitedUntil = Math.max(rateLimitedUntil, Date.now() + delayMs);
+
+    if (delayMs > LONG_WAIT_THRESHOLD_MS) {
+      throw new SpotifyQuotaExceededError(`Spotify's API quota is exhausted — try again ${describeWaitUntil(rateLimitedUntil)}.`);
+    }
+    // A short, ordinary burst limit — worth a few local retries rather than failing the caller.
+    if (attempt >= 5) {
+      throw new Error("Spotify API rate limit exceeded — try again in a few minutes.");
+    }
+    await sleep(delayMs);
+    return spotifyGet<T>(url, attempt + 1);
+  }
+
+  if (res.status === 404 && url.includes("/playlists/")) {
     throw new InvalidPlaylistUrlError("That playlist wasn't found — it may be private or the link may be wrong.");
+  }
+  if (res.status === 404) {
+    throw new SpotifyNotFoundError(url);
   }
   if (!res.ok) {
     // Surface Spotify's own error body server-side — a bare status code doesn't distinguish
@@ -248,9 +348,18 @@ export async function fetchPlaylistMeta(playlistId: string): Promise<SpotifyPlay
 
 /** Fetches every track in one of the user's own playlists, paginating through Spotify's 100-per-page limit. */
 export async function fetchPlaylistTracks(playlistId: string): Promise<SpotifyTrackMetadata[]> {
-  const tracks: SpotifyTrackMetadata[] = [];
+  const entries: {
+    title: string;
+    artists: string[];
+    primaryArtistId: string | null;
+    album: string | null;
+    releaseDate: string | null;
+    durationMs: number;
+    coverArtUrl: string | null;
+    spotifyUrl: string;
+  }[] = [];
   let url: string | null =
-    `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/items?limit=100&fields=next,items(is_local,item(id,name,type,artists(name),album(name,images),duration_ms))`;
+    `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/items?limit=100&fields=next,items(is_local,item(id,name,type,artists(id,name),album(name,images,release_date),duration_ms))`;
 
   while (url) {
     const page: SpotifyPlaylistItemsPage = await spotifyGet<SpotifyPlaylistItemsPage>(url);
@@ -261,10 +370,12 @@ export async function fetchPlaylistTracks(playlistId: string): Promise<SpotifyTr
       // Podcast episodes are skipped for the same reason: this pipeline downloads music.
       if (!track || entry.is_local || !track.id || track.type !== "track") continue;
 
-      tracks.push({
+      entries.push({
         title: track.name,
         artists: track.artists.map((a) => a.name),
+        primaryArtistId: track.artists[0]?.id ?? null,
         album: track.album?.name ?? null,
+        releaseDate: track.album?.release_date ?? null,
         durationMs: track.duration_ms,
         coverArtUrl: pickLargestImage(track.album?.images ?? []),
         spotifyUrl: `https://open.spotify.com/track/${track.id}`,
@@ -273,14 +384,25 @@ export async function fetchPlaylistTracks(playlistId: string): Promise<SpotifyTr
     url = page.next;
   }
 
-  return tracks;
+  const genresByArtistId = await fetchArtistGenres(entries.map((e) => e.primaryArtistId));
+
+  return entries.map((e) => ({
+    title: e.title,
+    artists: e.artists,
+    album: e.album,
+    durationMs: e.durationMs,
+    coverArtUrl: e.coverArtUrl,
+    spotifyUrl: e.spotifyUrl,
+    releaseDate: e.releaseDate,
+    genres: e.primaryArtistId ? (genresByArtistId.get(e.primaryArtistId) ?? []) : [],
+  }));
 }
 
 interface SpotifySearchItem {
   id: string | null;
   name: string;
-  artists: { name: string }[];
-  album: { name: string; images: SpotifyImage[] } | null;
+  artists: { id: string; name: string }[];
+  album: { name: string; images: SpotifyImage[]; release_date: string | null } | null;
   duration_ms: number;
 }
 
@@ -288,19 +410,32 @@ interface SpotifySearchResponse {
   tracks: { items: SpotifySearchItem[] };
 }
 
-/** Catalog search — unlike playlist reads, this works for any track regardless of ownership. */
-export async function searchTracks(query: string, limit = 8): Promise<SpotifyTrackMetadata[]> {
+/** Catalog search — unlike playlist reads, this works for any track regardless of ownership.
+ *  `includeGenres` costs one extra /artists request (batched across all results), so it defaults
+ *  off for the live-typing search bar and is only turned on by callers that actually need genre
+ *  (playlist imports fetch it unconditionally via fetchPlaylistTracks; the metadata backfill job
+ *  in lib/spotify/enrichMatch.ts passes it explicitly). */
+export async function searchTracks(query: string, limit = 8, options?: { includeGenres?: boolean }): Promise<SpotifyTrackMetadata[]> {
   const page = await spotifyGet<SpotifySearchResponse>(
     `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=${limit}`
   );
-  return page.tracks.items
-    .filter((track) => track.id)
-    .map((track) => ({
+  const items = page.tracks.items.filter((track) => track.id);
+
+  const genresByArtistId = options?.includeGenres
+    ? await fetchArtistGenres(items.map((track) => track.artists[0]?.id))
+    : null;
+
+  return items.map((track) => {
+    const primaryArtistId = track.artists[0]?.id ?? null;
+    return {
       title: track.name,
       artists: track.artists.map((a) => a.name),
       album: track.album?.name ?? null,
       durationMs: track.duration_ms,
       coverArtUrl: pickLargestImage(track.album?.images ?? []),
       spotifyUrl: `https://open.spotify.com/track/${track.id}`,
-    }));
+      releaseDate: track.album?.release_date ?? null,
+      genres: primaryArtistId ? (genresByArtistId?.get(primaryArtistId) ?? []) : [],
+    };
+  });
 }

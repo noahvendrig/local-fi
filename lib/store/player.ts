@@ -12,6 +12,7 @@ import {
 import { useDjStore } from "./dj";
 import { useMixtapePlayerStore } from "./mixtapePlayer";
 import { useTransportSourceStore } from "./transportSource";
+import { useVibeRadioStore } from "./vibeRadio";
 import type { WaveformData } from "@/lib/waveform/parse";
 
 const PERSIST_DEBOUNCE_MS = 400;
@@ -117,6 +118,9 @@ interface PlayerState {
    *  eligible track has already played), so recommendations can start repeating again. Keeps
    *  only the currently-playing track excluded. See components/shell/useSmartShuffle.ts. */
   resetRecentlyPlayed: (currentTrackId: number) => void;
+  /** Vibe Radio's start-up splice: truncates queue/sourceQueue to the currently-playing track and
+   *  appends the first vibe-selected batch. See components/shell/useVibeRadio.ts. */
+  replaceUpcoming: (tracks: TrackSummary[]) => void;
   reorderQueue: (fromIndex: number, toIndex: number) => void;
   removeFromQueue: (index: number) => void;
   /** Drops every occurrence of a library track from the queue (used when removing from the library). */
@@ -434,6 +438,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   // Shuffle rebuilds play order from the unshuffled source (current track stays put). Toggling
   // off restores that source order so Up Next updates immediately without stopping playback.
   toggleShuffle: () => {
+    useVibeRadioStore.getState().stop(); // shuffle/Smart Shuffle/Vibe Radio all answer "what plays next" -- mutually exclusive
     const { shuffleMode, queue, sourceQueue, currentIndex } = get();
     const source = sourceQueue.length > 0 ? sourceQueue : queue;
     const current = queue[currentIndex] ?? source[currentIndex] ?? null;
@@ -458,6 +463,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   // toggleShuffle's off-path -- dropping any smart-suggested track spliced in past the current
   // one, since it was chosen for a mode we're now leaving.
   toggleSmartShuffle: () => {
+    useVibeRadioStore.getState().stop(); // shuffle/Smart Shuffle/Vibe Radio all answer "what plays next" -- mutually exclusive
     const { shuffleMode, queue, sourceQueue, currentIndex } = get();
     const source = sourceQueue.length > 0 ? sourceQueue : queue;
     const current = queue[currentIndex] ?? source[currentIndex] ?? null;
@@ -499,6 +505,39 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   resetRecentlyPlayed: (currentTrackId) => {
     set({ recentlyPlayed: [currentTrackId] });
+  },
+
+  // Vibe Radio's start-up splice: drop whatever was queued past the current track and replace it
+  // with the first vibe-selected batch, without touching what's currently playing. Later
+  // replenishment batches just use enqueue() -- this is only for the initial swap-in.
+  replaceUpcoming: (tracksToQueue) => {
+    if (tracksToQueue.length === 0) return;
+    const { queue, sourceQueue, currentTrack, currentIndex, isPlaying } = get();
+    if (!currentTrack || !isPlaying) {
+      // Nothing audibly playing yet -- either a cold start, or a track sitting loaded-but-paused
+      // from a hydrated session (hydrate() deliberately never autoplays). Either way, splicing
+      // vibe picks in after a track nothing is playing leaves them just as silent, so start fresh
+      // with the vibe's own picks instead, same "queuing starts playback" rule as enqueue().
+      useTransportSourceStore.getState().setActiveSource("regular");
+      useDjStore.getState().setDjPlaying(false);
+      useMixtapePlayerStore.getState().setMixtapePlaying(false);
+      set({
+        currentTrack: tracksToQueue[0],
+        queue: tracksToQueue,
+        sourceQueue: tracksToQueue,
+        currentIndex: 0,
+        recentlyPlayed: pushRecentlyPlayed(get().recentlyPlayed, tracksToQueue[0].id),
+        isPlaying: true,
+        currentTime: 0,
+        pendingSeekSeconds: null,
+      });
+      schedulePersist(get);
+      return;
+    }
+    const nextQueue = [...queue.slice(0, currentIndex + 1), ...tracksToQueue];
+    const nextSource = [...sourceQueue.slice(0, currentIndex + 1), ...tracksToQueue];
+    set({ queue: nextQueue, sourceQueue: nextSource });
+    schedulePersist(get);
   },
 
   reorderQueue: (fromIndex, toIndex) => {

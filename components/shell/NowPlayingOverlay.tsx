@@ -22,6 +22,7 @@ import {
   SmartShuffleIcon,
 } from "./PlayerIcons";
 import { UpNextList } from "./UpNextList";
+import { VibeRadioPopover } from "./VibeRadioPopover";
 
 // Full-screen Now Playing overlay — the one and only use of backdrop-filter in the app.
 export function NowPlayingOverlay() {
@@ -206,6 +207,7 @@ export function NowPlayingOverlay() {
             >
               <SmartShuffleIcon size={36} />
             </IconButton>
+            <VibeRadioPopover size="xl" />
             <IconButton onClick={playPrevious} label="Previous track" size="xl">
               <PreviousIcon size={40} />
             </IconButton>

@@ -9,6 +9,7 @@ import { useHasCredentials } from "@/lib/api/http";
 import { useSpotifyLoginUrl, SpotifyNotConnectedError } from "@/lib/api/spotifyClient";
 import { createLocalCrate } from "@/lib/offline/localCrates";
 import { useIngestStore } from "@/lib/store/ingest";
+import { PromptCratePanel } from "./PromptCratePanel";
 
 // The standalone PWA ships no /crates/[id] route — there's no crate-detail screen at all, so it
 // can neither host the smart-rules builder nor navigate to a crate after creating it. There, a
@@ -24,7 +25,7 @@ export function NewCrateModal({ onClose }: { onClose: () => void }) {
   const trackJob = useIngestStore((s) => s.trackJob);
   const [name, setName] = useState("");
   const [type, setType] = useState<PlaylistType>("manual");
-  const [source, setSource] = useState<"blank" | "spotify">("blank");
+  const [source, setSource] = useState<"blank" | "spotify" | "prompt">("blank");
   const [spotifyUrl, setSpotifyUrl] = useState("");
 
   // With no PC to POST to, the standalone build makes the crate in IndexedDB instead — a
@@ -68,6 +69,9 @@ export function NewCrateModal({ onClose }: { onClose: () => void }) {
       style={{ backgroundColor: "var(--lf-glass, rgba(18,16,22,.6))" }}
       onClick={onClose}
     >
+      {source === "prompt" ? (
+        <PromptCratePanel onClose={onClose} />
+      ) : (
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -89,13 +93,23 @@ export function NewCrateModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {!localMode && (
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex flex-wrap gap-2">
             <SourceOption label="Blank" description="Name it and add tracks yourself." value="blank" selected={source === "blank"} onSelect={setSource} />
             <SourceOption
               label="From Spotify"
               description="Paste one of your playlist links to download and fill it."
               value="spotify"
               selected={source === "spotify"}
+              onSelect={setSource}
+            />
+            <SourceOption
+              label="From a prompt"
+              description="Describe a vibe and a local LLM fills it from your library."
+              value="prompt"
+              // Never actually true here -- picking "prompt" swaps this whole <form> out for
+              // PromptCratePanel (see the outer ternary below), so this card is only ever shown
+              // unselected as an entry point into that flow.
+              selected={false}
               onSelect={setSource}
             />
           </div>
@@ -183,6 +197,7 @@ export function NewCrateModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       </form>
+      )}
     </div>
   );
 }
@@ -196,9 +211,9 @@ function SourceOption({
 }: {
   label: string;
   description: string;
-  value: "blank" | "spotify";
+  value: "blank" | "spotify" | "prompt";
   selected: boolean;
-  onSelect: (v: "blank" | "spotify") => void;
+  onSelect: (v: "blank" | "spotify" | "prompt") => void;
 }) {
   return (
     <button
