@@ -8,6 +8,9 @@ const BodySchema = z.object({
   model: z.string().trim().min(1),
   excludeIds: z.array(z.number().int()).max(20000).optional(),
   limit: z.number().int().min(1).max(50).optional(),
+  // Vibe Radio wants personal-taste re-ranking; prompt->crate opts out (false) to stay
+  // purely theme-driven — see lib/llm/vibeSelector.ts's selectVibeTracks doc comment.
+  applyTaste: z.boolean().optional(),
 });
 
 /** POST /api/v1/vibe/select — the one endpoint behind both vibe features (prompt->crate preview
@@ -28,6 +31,7 @@ export async function POST(request: Request) {
       excludeIds: parsed.data.excludeIds,
       limit: parsed.data.limit,
       model: parsed.data.model,
+      applyTaste: parsed.data.applyTaste,
     });
     return NextResponse.json(result);
   } catch (err) {

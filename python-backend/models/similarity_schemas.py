@@ -76,3 +76,27 @@ class SimilarToSetRequest(BaseModel):
     track_ids: list[int] = Field(..., min_length=1)
     exclude_ids: list[int] = []
     top_k: int = Field(default=5, ge=1, le=50)
+
+
+class WeightedHistoryTrack(BaseModel):
+    # weight is an implicit-feedback strength (derived from play_count + recency decay on the
+    # caller's side, e.g. local-fi's lib/db/tasteProfile.ts) -- this backend has no opinion on how
+    # it was computed, it just uses it to weight this track's vote in score_weighted().
+    track_id: int
+    weight: float = Field(..., gt=0)
+
+
+class TasteScoreRequest(BaseModel):
+    # Personal-taste re-ranking (Vibe Radio): "of these candidate_ids, which best match a taste
+    # profile built from the user's weighted play history" -- see SimilarityIndex.score_weighted.
+    history: list[WeightedHistoryTrack] = Field(..., min_length=1)
+    candidate_ids: list[int] = Field(..., min_length=1)
+
+
+class TasteScore(BaseModel):
+    track_id: int
+    score: float  # weighted-nearest-neighbor affinity to the history set, in [-1, 1]
+
+
+class TasteScoreResponse(BaseModel):
+    scores: list[TasteScore]

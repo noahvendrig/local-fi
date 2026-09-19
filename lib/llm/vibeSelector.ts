@@ -5,6 +5,7 @@ import type { TrackSummary } from "@/lib/api-client";
 import { getDb } from "@/lib/db/client";
 import { albums, artists, tracks } from "@/lib/db/schema";
 import { getTrackSummariesByIds } from "@/lib/db/trackSummary";
+import { rankByTaste } from "@/lib/taste/tasteModel";
 import {
   VIBE_FILTER_SCHEMA,
   VIBE_FILTER_SYSTEM_PROMPT,
@@ -117,11 +118,13 @@ export interface SelectVibeTracksResult {
  * interpret the prompt into a structured filter, then pick/order ids from a real SQL-fetched
  * candidate pool built from that filter. The LLM is never allowed to invent a track: every
  * returned id is validated against the candidate set before use, and any JSON/shape failure
- * degrades to a non-LLM fallback rather than erroring outright.
+ * degrades to a non-LLM fallback rather than erroring outright. `opts.applyTaste` (default true)
+ * re-ranks the candidate pool by the user's personal taste model (lib/taste/tasteModel.ts) before
+ * Stage B sees it — Vibe Radio wants this, prompt->crate opts out to stay purely theme-driven.
  */
 export async function selectVibeTracks(
   prompt: string,
-  opts: { excludeIds?: number[]; limit?: number; model: string }
+  opts: { excludeIds?: number[]; limit?: number; model: string; applyTaste?: boolean }
 ): Promise<SelectVibeTracksResult> {
   const excludeIds = opts.excludeIds ?? [];
   const limit = opts.limit ?? 30;
@@ -153,7 +156,11 @@ export async function selectVibeTracks(
   const pool = buildCandidatePool(filter, excludeIds);
   if (pool.length === 0) return { tracks: [], usedFallback };
 
-  const trimmed = pool.slice(0, STAGE_B_MAX_CANDIDATES);
+  // Theme relevance (the SQL filter/broadening ladder above) is always the primary gate; taste
+  // only decides which theme-matching candidates make the cut into Stage B (and the fallback
+  // order below), never which broadening stage wins.
+  const ranked = opts.applyTaste === false ? pool : await rankByTaste(pool);
+  const trimmed = ranked.slice(0, STAGE_B_MAX_CANDIDATES);
   const candidateIds = new Set(trimmed.map((c) => c.id));
 
   let orderedIds: number[];

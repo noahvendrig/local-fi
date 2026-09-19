@@ -230,6 +230,45 @@ class SimilarityIndex:
                     break
             return result
 
+    def score_weighted(
+        self,
+        history: list[tuple[int, float]],
+        candidate_ids: list[int],
+    ) -> list[tuple[int, float]]:
+        """Personal-taste re-ranking (Vibe Radio): weighted-nearest-neighbor score for each
+        candidate against a set of play-history tracks, score(c) = sum_i weight_i * cosine(c, h_i).
+        Reduced to one matmul rather than a per-pair loop: weights are renormalized to sum to 1
+        then aggregated into a single history vector (weights @ hist_matrix), so the whole thing
+        costs O((|history| + |candidates|) * EMBED_DIM) instead of O(|history| * |candidates| *
+        EMBED_DIM) -- see cand_matrix @ history_vector below, same "pre-normalized vectors so a
+        plain matmul is already cosine similarity" trick as _compute_neighbors_locked/rebuild_graph.
+        History/candidate ids not yet embedded are silently dropped (not zero-scored) -- this is a
+        re-ranking signal, not a completeness guarantee. Returns [] if no history or no candidate
+        rows are indexed."""
+        with self._lock:
+            hist_rows = [(self._id_to_row[tid], w) for tid, w in history if tid in self._id_to_row]
+            if not hist_rows:
+                return []
+            cand_pairs = [(tid, self._id_to_row[tid]) for tid in candidate_ids if tid in self._id_to_row]
+            if not cand_pairs:
+                return []
+
+            weights = np.array([w for _, w in hist_rows], dtype=np.float32)
+            total = weights.sum()
+            if total <= 0:
+                return []
+            weights = weights / total
+
+            matrix = self._matrix()
+            hist_matrix = matrix[[row for row, _ in hist_rows]]
+            history_vector = weights @ hist_matrix  # (EMBED_DIM,)
+
+            cand_ids = [tid for tid, _ in cand_pairs]
+            cand_matrix = matrix[[row for _, row in cand_pairs]]
+            scores = cand_matrix @ history_vector
+
+            return [(cand_ids[i], float(scores[i])) for i in range(len(cand_ids))]
+
     def checkpoint(self) -> None:
         with self._lock:
             with open(self._checkpoint_path, "wb") as f:

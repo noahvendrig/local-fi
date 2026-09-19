@@ -18,6 +18,9 @@ from models.similarity_schemas import (
     SimilarTrackMatch,
     SimilarTrackRequest,
     SimilarTrackResponse,
+    TasteScore,
+    TasteScoreRequest,
+    TasteScoreResponse,
 )
 from services.similarity.job_manager import similarity_job_manager
 
@@ -114,3 +117,11 @@ async def similar_tracks(body: SimilarTrackRequest):
 async def similar_to_set(body: SimilarToSetRequest):
     matches = similarity_job_manager.index.similar_to_set(body.track_ids, set(body.exclude_ids), body.top_k)
     return SimilarTrackResponse(matches=[SimilarTrackMatch(track_id=tid, score=score) for tid, score in matches])
+
+
+@router.post("/taste-score", response_model=TasteScoreResponse)
+async def taste_score(body: TasteScoreRequest):
+    scores = similarity_job_manager.index.score_weighted(
+        [(h.track_id, h.weight) for h in body.history], body.candidate_ids
+    )
+    return TasteScoreResponse(scores=[TasteScore(track_id=tid, score=score) for tid, score in scores])

@@ -151,3 +151,38 @@ export async function fetchSimilarToTrackSet(
     return [];
   }
 }
+
+export interface PythonTasteScore {
+  track_id: number;
+  score: number;
+}
+
+/** Calls python-backend/api/similarity_routes.py's POST /api/similarity/taste-score — weighted-
+ *  nearest-neighbor personal-taste score for each candidate against a play-history set (see
+ *  lib/taste/tasteModel.ts). Returns an empty Map (never throws) on any failure *or timeout* --
+ *  unlike fetchSimilarTrack/fetchSimilarToTrackSet above, this one sets an explicit
+ *  AbortSignal.timeout: it's called from within useVibeRadio.ts's replenish loop, gated by an
+ *  isFetching flag, so a hang here (e.g. lock contention with a similarity-index rebuild job)
+ *  would silently stall all future replenishment rather than just degrading one call. */
+export async function fetchTasteScores(
+  history: { trackId: number; weight: number }[],
+  candidateIds: number[]
+): Promise<Map<number, number>> {
+  if (history.length === 0 || candidateIds.length === 0) return new Map();
+  try {
+    const res = await fetch(`${getPythonBackendUrl()}/api/similarity/taste-score`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        history: history.map((h) => ({ track_id: h.trackId, weight: h.weight })),
+        candidate_ids: candidateIds,
+      }),
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) return new Map();
+    const data = (await res.json()) as { scores: PythonTasteScore[] };
+    return new Map(data.scores.map((s) => [s.track_id, s.score]));
+  } catch {
+    return new Map();
+  }
+}

@@ -34,7 +34,9 @@ export function PromptCratePanel({ onClose }: { onClose: () => void }) {
   const [usedFallback, setUsedFallback] = useState(false);
 
   const previewMutation = useMutation({
-    mutationFn: () => selectVibeTracks(prompt.trim(), { model: activeModel!, limit: PREVIEW_LIMIT }),
+    // applyTaste: false -- prompt->crate stays purely theme-driven, unlike Vibe Radio, which
+    // wants results biased by the user's personal taste model (see vibeSelector.ts).
+    mutationFn: () => selectVibeTracks(prompt.trim(), { model: activeModel!, limit: PREVIEW_LIMIT, applyTaste: false }),
     onSuccess: (result) => {
       setTracks(result.tracks);
       setCheckedIds(new Set(result.tracks.map((t) => t.id)));

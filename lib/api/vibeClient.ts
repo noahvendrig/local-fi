@@ -29,12 +29,18 @@ export class VibeSelectError extends Error {
  *  opt-in action the caller should surface failures for. */
 export async function selectVibeTracks(
   prompt: string,
-  opts: { model: string; excludeIds?: number[]; limit?: number }
+  opts: { model: string; excludeIds?: number[]; limit?: number; applyTaste?: boolean }
 ): Promise<{ tracks: TrackSummary[]; usedFallback: boolean }> {
   const res = await fetch(apiUrl("/api/v1/vibe/select"), {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, model: opts.model, excludeIds: opts.excludeIds, limit: opts.limit }),
+    body: JSON.stringify({
+      prompt,
+      model: opts.model,
+      excludeIds: opts.excludeIds,
+      limit: opts.limit,
+      applyTaste: opts.applyTaste,
+    }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
