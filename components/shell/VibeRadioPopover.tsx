@@ -23,7 +23,6 @@ export function VibeRadioPopover({ size = "lg" }: { size?: "lg" | "xl" }) {
   const isFetching = useVibeRadioStore((s) => s.isFetching);
   const error = useVibeRadioStore((s) => s.error);
   const startVibeRadio = useVibeRadioStore((s) => s.start);
-  const stopVibeRadio = useVibeRadioStore((s) => s.stop);
   const ollamaModel = useSettingsStore((s) => s.ollamaModel);
   const setOllamaModel = useSettingsStore((s) => s.setOllamaModel);
   const statusQuery = useQuery({ queryKey: ["ollama-status"], queryFn: fetchOllamaStatus, enabled: isOpen });
@@ -110,15 +109,9 @@ export function VibeRadioPopover({ size = "lg" }: { size?: "lg" | "xl" }) {
           ) : active ? (
             <>
               <p className="mt-2 text-xs text-t2">Now playing for: “{prompt}”</p>
+              <p className="mt-1 text-[11px] text-t3">Play a track from your library or crate to leave Vibe Radio.</p>
               {isFetching ? <p className="mt-1 text-[11px] text-t3">Finding more tracks…</p> : null}
               {error ? <p className="mt-1 text-[11px] text-err">{error}</p> : null}
-              <button
-                type="button"
-                onClick={() => stopVibeRadio()}
-                className="mt-3 w-full rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-t1 hover:border-err hover:text-err"
-              >
-                Stop Vibe Radio
-              </button>
             </>
           ) : (
             <>

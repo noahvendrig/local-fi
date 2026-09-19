@@ -407,6 +407,9 @@ export function TransportBar() {
             <PlayIcon size={18} />
           </div>
           <span className="flex-1 font-mono text-xs text-t3">—:—</span>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <VibeRadioPopover />
+          </div>
         </>
       )}
     </footer>

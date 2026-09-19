@@ -238,6 +238,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       schedulePersist(get);
       return;
     }
+    // Picking a track from library/crate/search overrides Vibe Radio. Skip (playNext) and
+    // seeking do not — those stay inside the radio session.
+    useVibeRadioStore.getState().stop();
     useDjStore.getState().setDjPlaying(false);
     useMixtapePlayerStore.getState().setMixtapePlaying(false);
     const sourceQueue = queueContext && queueContext.length > 0 ? [...queueContext] : [track];
