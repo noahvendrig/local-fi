@@ -19,6 +19,10 @@ export interface HomeBackInRotationTrack {
   track: TrackSummary;
 }
 
+export interface HomePickedForYouTrack {
+  track: TrackSummary;
+}
+
 export interface HomeTopArtist {
   artistId: number;
   name: string;
@@ -44,6 +48,7 @@ export interface HomeStatsDTO {
   stats: HomeStat[];
   top5: HomeTopTrack[];
   backInRotation: HomeBackInRotationTrack[];
+  pickedForYou: HomePickedForYouTrack[];
   topArtists: HomeTopArtist[];
   days: HomeDay[];
   formats: HomeFormat[];

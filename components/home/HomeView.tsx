@@ -1,7 +1,13 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { fetchHomeStats, type HomeBackInRotationTrack, type HomeStatsDTO, type HomeTopTrack } from "@/lib/api/homeClient";
+import {
+  fetchHomeStats,
+  type HomeBackInRotationTrack,
+  type HomePickedForYouTrack,
+  type HomeStatsDTO,
+  type HomeTopTrack,
+} from "@/lib/api/homeClient";
 import { withAuthQuery } from "@/lib/api/http";
 import { useCommandPaletteStore } from "@/lib/store/commandPalette";
 import { usePlayerStore } from "@/lib/store/player";
@@ -76,9 +82,23 @@ export function HomeView() {
                         <h2 className="text-xl font-semibold leading-[1.3] text-t1">Back in rotation</h2>
                         <span className="font-mono text-xs text-t3">played again after a long gap</span>
                       </div>
-                      <div className="flex flex-col gap-2 pb-[72px]">
+                      <div className="flex flex-col gap-2">
                         {data.backInRotation.map((b) => (
                           <BackInRotationRow key={b.track.id} item={b} />
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {data.pickedForYou.length > 0 && (
+                    <>
+                      <div className="mb-3.5 mt-7 flex items-baseline gap-2.5">
+                        <h2 className="text-xl font-semibold leading-[1.3] text-t1">Picked for you</h2>
+                        <span className="font-mono text-xs text-t3">from your library</span>
+                      </div>
+                      <div className="flex flex-col gap-2 pb-[72px]">
+                        {data.pickedForYou.map((p) => (
+                          <PickedForYouRow key={p.track.id} item={p} />
                         ))}
                       </div>
                     </>
@@ -310,6 +330,29 @@ function BackInRotationRow({ item }: { item: HomeBackInRotationTrack }) {
         <p className="truncate font-mono text-xs text-t2">{item.track.artistName ?? "Unknown artist"}</p>
       </div>
       <span className="whitespace-nowrap font-mono text-[11px] text-t3">{item.meta}</span>
+    </div>
+  );
+}
+
+function PickedForYouRow({ item }: { item: HomePickedForYouTrack }) {
+  const playTrack = usePlayerStore((s) => s.playTrack);
+  return (
+    <div
+      onClick={() => playTrack(item.track)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          playTrack(item.track);
+        }
+      }}
+      className="lf-card grid cursor-pointer grid-cols-[minmax(0,1fr)] items-center gap-3.5 rounded-2xl px-3.5 py-[13px] transition-[background,border-color] duration-150 hover:border-acc hover:bg-surf-2"
+    >
+      <div className="min-w-0">
+        <p className="truncate text-[15px] font-semibold leading-[1.4] text-t1">{item.track.title ?? "Untitled"}</p>
+        <p className="truncate font-mono text-xs text-t2">{item.track.artistName ?? "Unknown artist"}</p>
+      </div>
     </div>
   );
 }

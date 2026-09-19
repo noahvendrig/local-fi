@@ -3,12 +3,14 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/client";
 import { albums, artists, playEvents, tracks } from "@/lib/db/schema";
 import { mapTrackSummaryRow, trackSummarySelectColumns } from "@/lib/db/trackSummary";
+import { getTasteRecommendations } from "@/lib/taste/tasteRecommendations";
 
 const WINDOW_DAYS = 7;
 const BACK_IN_ROTATION_GAP_DAYS = 21;
 const BACK_IN_ROTATION_LIMIT = 3;
 const TOP_LIMIT = 5;
 const FORMAT_LIMIT = 4;
+const PICKED_FOR_YOU_LIMIT = 5;
 
 function daysAgoIso(days: number): string {
   return new Date(Date.now() - days * 86400_000).toISOString();
@@ -196,11 +198,31 @@ export async function GET() {
       };
     });
 
+  // "Picked for you": unplayed library tracks ranked by the personal taste model (see
+  // lib/taste/tasteRecommendations.ts) -- returns [] on cold start or if the Python backend is
+  // unreachable, and the client hides the section entirely in that case.
+  const tasteRecs = await getTasteRecommendations(PICKED_FOR_YOU_LIMIT);
+  const pickedForYouIds = tasteRecs.map((r) => r.trackId);
+  const pickedForYouTrackRows = pickedForYouIds.length
+    ? db
+        .select(trackSummarySelectColumns)
+        .from(tracks)
+        .leftJoin(artists, eq(tracks.artistId, artists.id))
+        .leftJoin(albums, eq(tracks.albumId, albums.id))
+        .where(and(inArray(tracks.id, pickedForYouIds), isNull(tracks.deletedAt)))
+        .all()
+    : [];
+  const pickedForYouTrackById = new Map(pickedForYouTrackRows.map((r) => [r.id, mapTrackSummaryRow(r)]));
+  const pickedForYou = tasteRecs
+    .filter((r) => pickedForYouTrackById.has(r.trackId))
+    .map((r) => ({ track: pickedForYouTrackById.get(r.trackId)! }));
+
   return NextResponse.json({
     rangeLabel: "last 7 days",
     stats,
     top5,
     backInRotation,
+    pickedForYou,
     topArtists,
     days: daysOut,
     formats,
