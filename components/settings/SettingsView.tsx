@@ -6,6 +6,7 @@ import { PALETTES, type PaletteDef } from "@/lib/theme/palettes";
 import {
   useSettingsStore,
   type CrossfadeSeconds,
+  type LyricsLines,
   type ProgressStyle,
 } from "@/lib/store/settings";
 import { usePlayerStore } from "@/lib/store/player";
@@ -70,6 +71,8 @@ export function SettingsView() {
   const setCrossfadeSeconds = useSettingsStore((s) => s.setCrossfadeSeconds);
   const compressImports = useSettingsStore((s) => s.compressImports);
   const setCompressImports = useSettingsStore((s) => s.setCompressImports);
+  const lyricsLines = useSettingsStore((s) => s.lyricsLines);
+  const setLyricsLines = useSettingsStore((s) => s.setLyricsLines);
   const resetSettings = useSettingsStore((s) => s.resetSettings);
 
   async function handleNotifications(enabled: boolean) {
@@ -253,6 +256,24 @@ export function SettingsView() {
 
         <SettingRow title="Format badges" description="Show FLAC / MP3 chips on album cards, lists, and the transport bar.">
           <Toggle checked={showFormatBadges} onChange={setShowFormatBadges} label={showFormatBadges ? "On" : "Off"} />
+        </SettingRow>
+
+        <SettingRow
+          title="Lyrics size"
+          description="How many lines the Now Playing lyrics panel shows at once. Fewer lines means larger text."
+        >
+          <SegmentedControl
+            ariaLabel="Lyrics size"
+            value={lyricsLines}
+            onChange={(value) => setLyricsLines(value as LyricsLines)}
+            options={[
+              { value: 3, label: "3" },
+              { value: 4, label: "4" },
+              { value: 5, label: "5" },
+              { value: 6, label: "6" },
+              { value: 7, label: "7" },
+            ]}
+          />
         </SettingRow>
 
         <SettingRow title="Reduce motion" description="Cuts rise animations, vinyl spin, and hover transforms.">

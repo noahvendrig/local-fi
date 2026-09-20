@@ -9,6 +9,8 @@ export type NowPlayingBackdrop = "glass" | "solid";
 export const CROSSFADE_SECONDS_OPTIONS = [0, 2, 3, 4] as const;
 export type CrossfadeSeconds = (typeof CROSSFADE_SECONDS_OPTIONS)[number];
 export type SeekStep = 5 | 10 | 15;
+export const LYRICS_LINES_OPTIONS = [3, 4, 5, 6, 7] as const;
+export type LyricsLines = (typeof LYRICS_LINES_OPTIONS)[number];
 
 const STORAGE_KEY = "lf-settings";
 const LEGACY_THEME_KEY = "lf-theme";
@@ -30,6 +32,9 @@ export interface PlayerSettings {
   loudnessMatch: boolean;
   crossfadeSeconds: CrossfadeSeconds;
   compressImports: boolean;
+  /** How many lines the Now Playing lyrics dock shows at once — fewer lines means larger text,
+   *  since the dock's height is fixed (see NowPlayingOverlay's lyrics panel). */
+  lyricsLines: LyricsLines;
   /** Chosen Ollama model name for the vibe-prompt features (lib/llm/vibeSelector.ts) — a client
    *  preference, not a server setting, since the model list is fetched live from Ollama and can
    *  differ machine to machine. Null until the user picks one in Settings' Ollama section. */
@@ -53,6 +58,7 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   loudnessMatch: true,
   crossfadeSeconds: 0,
   compressImports: false,
+  lyricsLines: 3,
   ollamaModel: null,
 };
 
@@ -74,6 +80,7 @@ interface SettingsState extends PlayerSettings {
   setLoudnessMatch: (loudnessMatch: boolean) => void;
   setCrossfadeSeconds: (crossfadeSeconds: CrossfadeSeconds) => void;
   setCompressImports: (compressImports: boolean) => void;
+  setLyricsLines: (lyricsLines: LyricsLines) => void;
   setOllamaModel: (ollamaModel: string | null) => void;
   resetSettings: () => void;
   hydrateFromDom: () => void;
@@ -85,6 +92,10 @@ function isTheme(value: unknown): value is Theme {
 
 function isCrossfadeSeconds(value: unknown): value is CrossfadeSeconds {
   return value === 0 || value === 2 || value === 3 || value === 4;
+}
+
+function isLyricsLines(value: unknown): value is LyricsLines {
+  return (LYRICS_LINES_OPTIONS as readonly unknown[]).includes(value);
 }
 
 function parseStoredSettings(): PlayerSettings {
@@ -132,6 +143,7 @@ function parseStoredSettings(): PlayerSettings {
       next.crossfadeSeconds = 4;
     }
     if (typeof parsed.compressImports === "boolean") next.compressImports = parsed.compressImports;
+    if (isLyricsLines(parsed.lyricsLines)) next.lyricsLines = parsed.lyricsLines;
     if (typeof parsed.ollamaModel === "string") next.ollamaModel = parsed.ollamaModel;
   } catch {
     return next;
@@ -170,6 +182,7 @@ function snapshot(state: SettingsState): PlayerSettings {
     loudnessMatch: state.loudnessMatch,
     crossfadeSeconds: state.crossfadeSeconds,
     compressImports: state.compressImports,
+    lyricsLines: state.lyricsLines,
     ollamaModel: state.ollamaModel,
   };
 }
@@ -201,6 +214,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setLoudnessMatch: (loudnessMatch) => commit(set, get, { loudnessMatch }),
   setCrossfadeSeconds: (crossfadeSeconds) => commit(set, get, { crossfadeSeconds }),
   setCompressImports: (compressImports) => commit(set, get, { compressImports }),
+  setLyricsLines: (lyricsLines) => commit(set, get, { lyricsLines }),
   setOllamaModel: (ollamaModel) => commit(set, get, { ollamaModel }),
   resetSettings: () => commit(set, get, { ...DEFAULT_SETTINGS }),
   hydrateFromDom: () => {

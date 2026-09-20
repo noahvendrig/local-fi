@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { withAuthQuery } from "@/lib/api/http";
@@ -23,6 +23,11 @@ import {
 } from "./PlayerIcons";
 import { UpNextList } from "./UpNextList";
 import { VibeRadioPopover } from "./VibeRadioPopover";
+
+// Must match the lyrics dock's h-56 below — used to check whether it would overlap the controls.
+const LYRICS_DOCK_HEIGHT_PX = 224;
+// Breathing room between the controls row and the dock's top edge before we call it a collision.
+const LYRICS_DOCK_COLLISION_BUFFER_PX = 24;
 
 // Full-screen Now Playing overlay — the one and only use of backdrop-filter in the app.
 export function NowPlayingOverlay() {
@@ -50,8 +55,35 @@ export function NowPlayingOverlay() {
   const nowPlayingBackdrop = useSettingsStore((s) => s.nowPlayingBackdrop);
   const vinylSpin = useSettingsStore((s) => s.vinylSpin);
   const showFormatBadges = useSettingsStore((s) => s.showFormatBadges);
+  const lyricsLines = useSettingsStore((s) => s.lyricsLines);
 
   const [isLyricsOpen, setIsLyricsOpen] = useState(false);
+  // Where the lyrics panel docks: "bottom" is the default; falls back to "right" (like the Queue
+  // drawer) when the controls row sits too close to the screen's bottom edge for the dock to fit
+  // without covering them — short/laptop viewports, mostly, since the xl row layout's art shrinks
+  // with viewport height but the stacked (sub-xl) layout doesn't.
+  const [lyricsDockSide, setLyricsDockSide] = useState<"bottom" | "right">("bottom");
+  const controlsRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    function measure() {
+      const el = controlsRef.current;
+      if (!el) return;
+      const controlsBottom = el.getBoundingClientRect().bottom;
+      const dockTop = window.innerHeight - LYRICS_DOCK_HEIGHT_PX;
+      setLyricsDockSide(controlsBottom + LYRICS_DOCK_COLLISION_BUFFER_PX > dockTop ? "right" : "bottom");
+    }
+    measure();
+    window.addEventListener("resize", measure);
+    const observer = new ResizeObserver(measure);
+    if (controlsRef.current) observer.observe(controlsRef.current);
+    return () => {
+      window.removeEventListener("resize", measure);
+      observer.disconnect();
+    };
+  }, [isOpen]);
+
   // Only queried while this view is open (not on every track change app-wide) — the panel itself
   // needn't be open yet, so the Lyrics button can grey out the moment availability is known rather
   // than only after the user clicks it.
@@ -83,10 +115,12 @@ export function NowPlayingOverlay() {
     setIsLyricsOpen(true);
   }
 
-  function handleClosePanel() {
-    closeQueue();
+  function handleCloseLyrics() {
     setIsLyricsOpen(false);
   }
+
+  const lyricsInSidePanel = isLyricsOpen && lyricsDockSide === "right";
+  const lyricsInBottomDock = isLyricsOpen && lyricsDockSide === "bottom";
 
   return (
     <div
@@ -132,7 +166,7 @@ export function NowPlayingOverlay() {
           style={{ containerType: "size" }}
         >
           <div
-            className={`lf-hatch relative overflow-hidden shadow-[var(--lf-art-shadow-lg)] ${
+            className={`lf-hatch relative z-20 overflow-hidden shadow-[var(--lf-art-shadow-lg)] ${
               vinylSpin ? "rounded-full" : "rounded-3xl"
             }`}
             style={{ width: "min(380px, 100cqmin)", height: "min(380px, 100cqmin)" }}
@@ -158,7 +192,7 @@ export function NowPlayingOverlay() {
           </div>
         </div>
 
-        <div className="w-full max-w-[520px] shrink-0 pt-5 xl:pt-0">
+        <div ref={controlsRef} className="relative z-20 w-full max-w-[520px] shrink-0 pt-5 xl:pt-0">
           <p className="mb-2.5 text-[11px] font-medium uppercase tracking-[0.04em] text-playing xl:mb-3.5">Now playing</p>
           <h1
             className="mb-2 font-serif text-[clamp(1.75rem,3.5vw,2.5rem)] font-medium leading-[1.1] text-t1 xl:mb-3"
@@ -263,26 +297,61 @@ export function NowPlayingOverlay() {
       </div>
 
       <aside
-        aria-hidden={!isQueueOpen && !isLyricsOpen}
-        className={`absolute inset-y-0 right-0 z-10 flex w-[360px] flex-col border-l border-line bg-surf/90 transition-transform duration-200 ${
-          isQueueOpen || isLyricsOpen ? "translate-x-0" : "pointer-events-none translate-x-full"
+        aria-hidden={!isQueueOpen && !lyricsInSidePanel}
+        className={`absolute inset-y-0 right-0 z-30 flex w-[360px] flex-col border-l border-line bg-surf/90 transition-transform duration-200 ${
+          isQueueOpen || lyricsInSidePanel ? "translate-x-0" : "pointer-events-none translate-x-full"
         }`}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-4">
-          <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-t1">{isLyricsOpen ? "Lyrics" : "Queue"}</span>
+          <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-t1">{lyricsInSidePanel ? "Lyrics" : "Queue"}</span>
           <button
             type="button"
-            onClick={handleClosePanel}
-            aria-label={isLyricsOpen ? "Close lyrics" : "Close queue"}
+            onClick={lyricsInSidePanel ? handleCloseLyrics : closeQueue}
+            aria-label={lyricsInSidePanel ? "Close lyrics" : "Close queue"}
             className="flex h-6 w-6 items-center justify-center rounded-md text-t3 hover:bg-surf-2 hover:text-t1"
           >
             ×
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {isLyricsOpen ? <LyricsPanel data={lyricsData} isLoading={lyricsLoading} /> : <UpNextList />}
+          {lyricsInSidePanel ? (
+            <LyricsPanel data={lyricsData} isLoading={lyricsLoading} linesVisible={lyricsLines} active={lyricsInSidePanel} />
+          ) : (
+            <UpNextList />
+          )}
         </div>
       </aside>
+
+      {/* Slides up from the screen edge, z-indexed under the header/controls above (z-20) so it
+          reads as tucked behind the player rather than covering it. Sized for ~4-5 lyric lines.
+          Falls back to the right-side panel above (lyricsInSidePanel) on viewports too short to
+          fit it without covering the controls row.
+          No backdrop-blur here (unlike the header's glass backdrop) — nesting backdrop-filter
+          inside a transformed, overflow-hidden ancestor is a known compositor trap where the
+          closed (translated-away) panel can flash back into view on the next repaint (e.g. from
+          scrolling elsewhere on the page). Matches the Queue aside, which is plain for the same
+          reason. */}
+      <div
+        aria-hidden={!lyricsInBottomDock}
+        className={`absolute inset-x-0 bottom-0 z-10 flex h-56 flex-col border-t border-line bg-surf/95 transition-transform duration-200 ${
+          lyricsInBottomDock ? "translate-y-0" : "pointer-events-none translate-y-full"
+        }`}
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-2">
+          <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-t1">Lyrics</span>
+          <button
+            type="button"
+            onClick={handleCloseLyrics}
+            aria-label="Close lyrics"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-t3 hover:bg-surf-2 hover:text-t1"
+          >
+            ×
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <LyricsPanel data={lyricsData} isLoading={lyricsLoading} linesVisible={lyricsLines} active={lyricsInBottomDock} />
+        </div>
+      </div>
     </div>
   );
 }
