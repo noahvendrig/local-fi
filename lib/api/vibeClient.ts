@@ -1,5 +1,18 @@
 import type { TrackSummary } from "@/lib/api-client";
+import type { ResolvedVibeFilter } from "@/lib/llm/vibeResolve";
+import type { VibeTier } from "@/lib/llm/vibeScore";
 import { apiUrl, authHeaders } from "./http";
+
+export interface VibeSelectResult {
+  tracks: TrackSummary[];
+  usedFallback: boolean;
+  /** Cache this and pass it back on later batches of the same session. */
+  resolved: ResolvedVibeFilter;
+  /** How loosely this batch had to match: "exact" -> on-prompt, "similar" -> audio-alike
+   *  expansion once the on-prompt tracks ran out, "broader" -> score-tail filler. */
+  tier: VibeTier;
+  tierCounts: Record<VibeTier, number>;
+}
 
 export interface OllamaStatus {
   available: boolean;
@@ -29,8 +42,17 @@ export class VibeSelectError extends Error {
  *  opt-in action the caller should surface failures for. */
 export async function selectVibeTracks(
   prompt: string,
-  opts: { model: string; excludeIds?: number[]; limit?: number; applyTaste?: boolean }
-): Promise<{ tracks: TrackSummary[]; usedFallback: boolean }> {
+  opts: {
+    model: string;
+    excludeIds?: number[];
+    limit?: number;
+    applyTaste?: boolean;
+    /** Echoed back from an earlier batch so the server skips re-interpreting the prompt. */
+    resolved?: ResolvedVibeFilter;
+    useStageB?: boolean;
+    sessionId?: string;
+  }
+): Promise<VibeSelectResult> {
   const res = await fetch(apiUrl("/api/v1/vibe/select"), {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
@@ -40,6 +62,9 @@ export async function selectVibeTracks(
       excludeIds: opts.excludeIds,
       limit: opts.limit,
       applyTaste: opts.applyTaste,
+      resolved: opts.resolved,
+      useStageB: opts.useStageB,
+      sessionId: opts.sessionId,
     }),
   });
   if (!res.ok) {

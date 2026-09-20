@@ -23,3 +23,18 @@ export async function rankByTaste<T extends { id: number }>(candidates: T[]): Pr
   scored.sort((a, b) => (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0));
   return [...scored, ...unscored];
 }
+
+/** The same taste signal as rankByTaste, exposed as a score map so a caller can BLEND it with other
+ *  relevance signals rather than sorting by it outright.
+ *
+ *  Vibe matching needs this shape: the old code called rankByTaste on the whole candidate pool and
+ *  then trimmed, which meant taste decided the ORDER and theme relevance only decided membership --
+ *  so a strong play history could push every on-prompt track out of the trim. As one band among
+ *  several in vibeScore.ts, taste can only break ties, never cross a hard constraint.
+ *
+ *  Returns an empty Map on cold start or any backend failure, exactly like rankByTaste. */
+export async function getTasteScoreMap(candidateIds: number[]): Promise<Map<number, number>> {
+  const history = getPlayHistoryWeights();
+  if (history.length === 0 || candidateIds.length === 0) return new Map();
+  return fetchTasteScores(history, candidateIds);
+}

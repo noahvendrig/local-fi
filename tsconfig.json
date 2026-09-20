@@ -9,6 +9,10 @@
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
+    // scripts/*.mts are run directly by Node (type-stripping), which resolves imports by ESM rules
+    // and so needs explicit file extensions. Safe here because noEmit is set -- nothing is compiled,
+    // and the app's own source keeps using extensionless bundler-style imports.
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",

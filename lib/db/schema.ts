@@ -174,6 +174,19 @@ export const tracks = sqliteTable(
     discTotal: integer("disc_total"),
     year: integer("year"),
     genre: text("genre"),
+    /** Where `genre` came from, so enrichment knows what it may overwrite. Mirrors bpmSource/keySource.
+     *  Precedence is manual > tag > musicbrainz/lastfm > detected: `detected` is CNN14's AudioSet
+     *  guess (python-backend/services/similarity/genre.py), which a real catalog tag should replace,
+     *  while a tag the user's own file carried must never be. NULL on rows predating this column. */
+    genreSource: text("genre_source"),
+    /** First release year of the RECORDING, where a catalog knows it — as opposed to `year`, which
+     *  is whatever the file's tag said and on a reissue describes the reissue. This library stores
+     *  Notorious B.I.G.'s "Big Poppa - 2007 Remaster" as year 2007 and The Police's "Roxanne" as
+     *  2007; both are decades older, and both were unreachable by an era query until this existed.
+     *  Kept separate rather than overwriting `year` so enrichment stays non-destructive — era
+     *  matching reads originalYear ?? year (see lib/llm/vibeScore.ts's effectiveYear). */
+    originalYear: integer("original_year"),
+    originalYearSource: text("original_year_source"),
 
     durationSeconds: real("duration_seconds").notNull(),
     format: text("format").notNull(),
@@ -264,6 +277,14 @@ export const tracks = sqliteTable(
       sql`${t.waveformStatus} IN ('pending','processing','ready','failed')`
     ),
     check("chk_tracks_bpm_source", sql`${t.bpmSource} IS NULL OR ${t.bpmSource} IN ('tag','detected','manual')`),
+    check(
+      "chk_tracks_genre_source",
+      sql`${t.genreSource} IS NULL OR ${t.genreSource} IN ('tag','detected','musicbrainz','lastfm','manual')`
+    ),
+    check(
+      "chk_tracks_original_year_source",
+      sql`${t.originalYearSource} IS NULL OR ${t.originalYearSource} IN ('musicbrainz','manual')`
+    ),
     check("chk_tracks_key_source", sql`${t.keySource} IS NULL OR ${t.keySource} IN ('tag','detected','manual')`),
     check(
       "chk_tracks_analysis_status",
@@ -496,6 +517,60 @@ export const spotifyEnrichJobTracks = sqliteTable(
  * deleting either one must delete both (see the DELETE handlers on this route and on
  * app/api/v1/tracks/[id]/route.ts).
  */
+/**
+ * A MusicBrainz metadata-enrichment run. Same job/job-tracks shape as the Spotify enrich pair above,
+ * and deliberately a separate pair rather than a mode on that one: MusicBrainz needs no OAuth, is
+ * rate-limited to one request a second, and fills different columns (genre + original release year
+ * rather than a release year gap).
+ */
+export const musicbrainzEnrichJobs = sqliteTable(
+  "musicbrainz_enrich_jobs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    uuid: text("uuid").notNull().unique(),
+    status: text("status").notNull().default("pending"),
+    totalTracks: integer("total_tracks").notNull().default(0),
+    processedTracks: integer("processed_tracks").notNull().default(0),
+    /** Tracks that got at least one field filled in. */
+    matchedTracks: integer("matched_tracks").notNull().default(0),
+    failedTracks: integer("failed_tracks").notNull().default(0),
+    startedAt: text("started_at"),
+    finishedAt: text("finished_at"),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [
+    check(
+      "chk_musicbrainz_enrich_jobs_status",
+      sql`${t.status} IN ('pending','running','completed','completed_with_errors','failed','cancelled')`
+    ),
+  ]
+);
+
+export const musicbrainzEnrichJobTracks = sqliteTable(
+  "musicbrainz_enrich_job_tracks",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => musicbrainzEnrichJobs.id, { onDelete: "cascade" }),
+    trackId: integer("track_id")
+      .notNull()
+      .references(() => tracks.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("queued"),
+    /** Not a failure — MusicBrainz just has nothing confidently matching this track. */
+    errorMessage: text("error_message"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [
+    index("idx_musicbrainz_enrich_job_tracks_job").on(t.jobId),
+    check(
+      "chk_musicbrainz_enrich_job_tracks_status",
+      sql`${t.status} IN ('queued','matching','matched','no_match','failed')`
+    ),
+  ]
+);
+
 export const mixtapes = sqliteTable(
   "mixtapes",
   {

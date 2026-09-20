@@ -135,7 +135,7 @@ export async function fetchSimilarTrack(
  *  same degrade-gracefully convention as fetchSimilarTrack. */
 export async function fetchSimilarToTrackSet(
   trackIds: number[],
-  opts: { excludeIds?: number[]; topK?: number }
+  opts: { excludeIds?: number[]; topK?: number; timeoutMs?: number }
 ): Promise<PythonSimilarTrackMatch[]> {
   try {
     const res = await fetch(`${getPythonBackendUrl()}/api/similarity/similar-to-set`, {
@@ -146,6 +146,11 @@ export async function fetchSimilarToTrackSet(
         exclude_ids: opts.excludeIds ?? [],
         top_k: opts.topK ?? 5,
       }),
+      // Opt-in, and left off by default so existing callers are unchanged. lib/llm/vibeSelector.ts
+      // passes one because it runs inside useVibeRadio.ts's replenish loop, where -- exactly as
+      // fetchTasteScores' comment below warns -- a hang would be gated behind isFetching and stall
+      // every future replenishment rather than degrading a single call.
+      signal: opts.timeoutMs != null ? AbortSignal.timeout(opts.timeoutMs) : undefined,
     });
     if (!res.ok) return [];
     const data = (await res.json()) as { matches: PythonSimilarTrackMatch[] };

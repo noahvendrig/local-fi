@@ -17,6 +17,7 @@ import { MobileDevicesSection } from "./MobileDevicesSection";
 import { SmartShuffleSection } from "./SmartShuffleSection";
 import { SpotifySection } from "./SpotifySection";
 import { SpotifyMetadataSection } from "./SpotifyMetadataSection";
+import { MusicbrainzMetadataSection } from "./MusicbrainzMetadataSection";
 
 // The standalone PWA has no waveform peaks or analyser wired up on the phone, so "Thin bar" is
 // the only progress style it can render — the picker is hidden there and the scrubber is forced
@@ -142,6 +143,7 @@ export function SettingsView() {
         </div>
         <SpotifySection />
         <SpotifyMetadataSection />
+        <MusicbrainzMetadataSection />
         <OllamaSection />
         <MixtapeFingerprintSection />
         <SmartShuffleSection />

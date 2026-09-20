@@ -21,7 +21,9 @@ export function VibeRadioPopover({ size = "lg" }: { size?: "lg" | "xl" }) {
   const active = useVibeRadioStore((s) => s.active);
   const prompt = useVibeRadioStore((s) => s.prompt);
   const isFetching = useVibeRadioStore((s) => s.isFetching);
+  const tier = useVibeRadioStore((s) => s.tier);
   const error = useVibeRadioStore((s) => s.error);
+  const resolved = useVibeRadioStore((s) => s.resolved);
   const startVibeRadio = useVibeRadioStore((s) => s.start);
   const ollamaModel = useSettingsStore((s) => s.ollamaModel);
   const setOllamaModel = useSettingsStore((s) => s.setOllamaModel);
@@ -44,25 +46,42 @@ export function VibeRadioPopover({ size = "lg" }: { size?: "lg" | "xl" }) {
     };
   }, [isOpen]);
 
-  const start = () => {
-    if (!draft.trim() || !ollamaModel) return;
-    const { queue, recentlyPlayed } = usePlayerStore.getState();
-    const initialSeenIds = [...new Set([...queue.map((t) => t.id), ...recentlyPlayed])];
-    // Vibe Radio, random Shuffle, and Smart Shuffle all answer "what plays next" -- starting one
-    // turns the others off (toggleShuffle/toggleSmartShuffle return the favor via
-    // useVibeRadioStore.getState().stop(), see lib/store/player.ts).
-    const { shuffleMode, toggleShuffle, toggleSmartShuffle } = usePlayerStore.getState();
-    if (shuffleMode === "random") toggleShuffle();
-    else if (shuffleMode === "smart") toggleSmartShuffle();
-    startVibeRadio(draft.trim(), initialSeenIds);
-    setIsOpen(false);
+  const submitPrompt = () => {
+    const nextPrompt = draft.trim();
+    if (!nextPrompt || !ollamaModel) return;
+    const wasActive = active;
+    if (wasActive && nextPrompt === prompt) {
+      setIsOpen(false);
+      return;
+    }
+    const { queue, recentlyPlayed, currentTrack } = usePlayerStore.getState();
+    // A prompt change while running should not treat the soon-to-be-discarded upcoming queue as
+    // permanently seen -- those tracks never played, and they belong to the old vibe.
+    const initialSeenIds = wasActive
+      ? [...new Set([...(currentTrack ? [currentTrack.id] : []), ...recentlyPlayed])]
+      : [...new Set([...queue.map((t) => t.id), ...recentlyPlayed])];
+    if (!wasActive) {
+      // Vibe Radio, random Shuffle, and Smart Shuffle all answer "what plays next" -- starting one
+      // turns the others off (toggleShuffle/toggleSmartShuffle return the favor via
+      // useVibeRadioStore.getState().stop(), see lib/store/player.ts).
+      const { shuffleMode, toggleShuffle, toggleSmartShuffle } = usePlayerStore.getState();
+      if (shuffleMode === "random") toggleShuffle();
+      else if (shuffleMode === "smart") toggleSmartShuffle();
+    }
+    startVibeRadio(nextPrompt, initialSeenIds);
+    if (!wasActive) setIsOpen(false);
   };
 
   return (
     <div ref={rootRef} className="relative">
       <button
         type="button"
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={() =>
+          setIsOpen((open) => {
+            if (!open && active) setDraft("");
+            return !open;
+          })
+        }
         aria-label="Vibe Radio"
         aria-expanded={isOpen}
         aria-pressed={active}
@@ -106,30 +125,52 @@ export function VibeRadioPopover({ size = "lg" }: { size?: "lg" | "xl" }) {
               </Link>{" "}
               first.
             </p>
-          ) : active ? (
-            <>
-              <p className="mt-2 text-xs text-t2">Now playing for: “{prompt}”</p>
-              <p className="mt-1 text-[11px] text-t3">Play a track from your library or crate to leave Vibe Radio.</p>
-              {isFetching ? <p className="mt-1 text-[11px] text-t3">Finding more tracks…</p> : null}
-              {error ? <p className="mt-1 text-[11px] text-err">{error}</p> : null}
-            </>
           ) : (
             <>
+              {active ? (
+                <>
+                  <p className="mt-2 text-xs text-t2">Now playing for: “{prompt}”</p>
+                  <p className="mt-1 text-[11px] text-t3">
+                    Submit a new prompt to change the vibe from the next song. Play a track from your library or crate to leave Vibe Radio.
+                  </p>
+                  {/* Says when the radio has run past what actually matches the prompt, so a narrow
+                      request ("justin bieber", one track in the library) doesn't look like it quietly
+                      started playing the wrong thing. "exact" needs no explanation. */}
+                  {tier === "similar" ? (
+                    <p className="mt-1 text-[11px] text-t3">Out of exact matches — playing tracks that sound like them.</p>
+                  ) : tier === "broader" ? (
+                    <p className="mt-1 text-[11px] text-t3">Widening out to tracks that loosely fit.</p>
+                  ) : null}
+                  {isFetching ? (
+                    <p className="mt-1 text-[11px] text-t3">
+                      {resolved == null ? "Finding tracks for the next song…" : "Finding more tracks…"}
+                    </p>
+                  ) : null}
+                  {error ? <p className="mt-1 text-[11px] text-err">{error}</p> : null}
+                </>
+              ) : null}
               <textarea
                 autoFocus
                 rows={2}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    submitPrompt();
+                  }
+                }}
                 placeholder="upbeat 90s hip hop"
+                aria-label={active ? "New Vibe Radio prompt" : "Vibe Radio prompt"}
                 className="mt-2 w-full resize-none rounded-md border border-line bg-surf-2 px-2 py-1.5 text-sm text-t1 placeholder:text-t3"
               />
               <button
                 type="button"
-                onClick={start}
+                onClick={submitPrompt}
                 disabled={!draft.trim()}
                 className="mt-2 w-full rounded-lg bg-acc px-3 py-1.5 text-xs font-medium text-on-acc hover:bg-acc-2 disabled:opacity-50"
               >
-                Start Vibe Radio
+                {active ? "Use for next song" : "Start Vibe Radio"}
               </button>
             </>
           )}

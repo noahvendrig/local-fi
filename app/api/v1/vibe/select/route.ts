@@ -3,6 +3,31 @@ import { z } from "zod";
 import { selectVibeTracks } from "@/lib/llm/vibeSelector";
 import { OllamaMalformedResponseError, OllamaUnavailableError } from "@/lib/ollama/errors";
 
+const EraSchema = z.object({
+  min: z.number().int().min(1000).max(2999),
+  max: z.number().int().min(1000).max(2999),
+});
+
+/**
+ * The filter a previous batch resolved, echoed back by the client so Stage A runs once per session
+ * rather than once per batch (see lib/store/vibeRadio.ts).
+ *
+ * Validated strictly even though this app is local and single-user: it arrives over the wire and
+ * feeds straight into the scorer, so a malformed one must be a 400 rather than an exception in the
+ * middle of a replenishment.
+ */
+const ResolvedFilterSchema = z.object({
+  artistIds: z.array(z.number().int()).max(5),
+  artistNames: z.array(z.string().max(200)).max(5),
+  era: EraSchema.nullable(),
+  softEra: EraSchema.nullable(),
+  genres: z.array(z.string().max(60)).max(8),
+  hardGenres: z.array(z.string().max(60)).max(8),
+  keywords: z.array(z.string().max(60)).max(8),
+  hasHardConstraint: z.boolean(),
+  source: z.enum(["llm", "deterministic"]),
+});
+
 const BodySchema = z.object({
   prompt: z.string().trim().min(1).max(500),
   model: z.string().trim().min(1),
@@ -11,6 +36,11 @@ const BodySchema = z.object({
   // Vibe Radio wants personal-taste re-ranking; prompt->crate opts out (false) to stay
   // purely theme-driven — see lib/llm/vibeSelector.ts's selectVibeTracks doc comment.
   applyTaste: z.boolean().optional(),
+  resolved: ResolvedFilterSchema.optional(),
+  // Vibe Radio replenishment passes false: the interpretation is already settled, and a second
+  // Ollama round trip per batch only adds drift and latency inside the crossfade window.
+  useStageB: z.boolean().optional(),
+  sessionId: z.string().max(64).optional(),
 });
 
 /** POST /api/v1/vibe/select — the one endpoint behind both vibe features (prompt->crate preview
@@ -32,6 +62,9 @@ export async function POST(request: Request) {
       limit: parsed.data.limit,
       model: parsed.data.model,
       applyTaste: parsed.data.applyTaste,
+      resolved: parsed.data.resolved,
+      useStageB: parsed.data.useStageB,
+      sessionId: parsed.data.sessionId,
     });
     return NextResponse.json(result);
   } catch (err) {

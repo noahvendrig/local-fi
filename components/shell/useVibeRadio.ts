@@ -34,58 +34,57 @@ export function useVibeRadio() {
     // tracks already lined up, silently leaving the old queue in place.
     const isFirstBatch = sessionId != null && initializedSessionRef.current !== sessionId;
     const remaining = queueLength - currentIndex - 1;
-    console.log("[VibeRadio] effect check", { active, prompt, ollamaModel, isFirstBatch, remaining, threshold: REPLENISH_THRESHOLD });
     if (!isFirstBatch && remaining >= REPLENISH_THRESHOLD) return;
-    if (useVibeRadioStore.getState().isFetching) return;
+    // First-batch (new session or a new prompt while running) must not wait out an in-flight
+    // replenishment: that request is for the previous prompt and gets cancelled on this effect's
+    // cleanup. Gating it here would skip the replaceUpcoming swap until some later dep change.
+    if (!isFirstBatch && useVibeRadioStore.getState().isFetching) return;
 
     let cancelled = false;
 
     void (async () => {
       useVibeRadioStore.getState().setFetching(true);
       try {
-        const { seenIds } = useVibeRadioStore.getState();
-        console.log("[VibeRadio] requesting", { model: ollamaModel, prompt, excludeIds: seenIds, limit: BATCH_SIZE });
-        let result = await selectVibeTracks(prompt, { model: ollamaModel, excludeIds: seenIds, limit: BATCH_SIZE });
-        console.log(
-          "[VibeRadio] response",
-          result.tracks.map((t) => `${t.id}: ${t.title ?? "Untitled"} — ${t.artistName ?? "Unknown"}`),
-          { usedFallback: result.usedFallback },
-        );
+        // Read through getState() rather than a selector hook, the same way seenIds is read: this
+        // effect's dep array would otherwise re-fire the instant the first batch stores `resolved`.
+        const { seenIds, resolved } = useVibeRadioStore.getState();
+        // useStageB: false on every batch -- the interpretation is settled by the time we get here,
+        // and a second Ollama round trip per batch only adds drift and latency inside the crossfade
+        // window this effect is racing.
+        const request = { model: ollamaModel, limit: BATCH_SIZE, useStageB: false, sessionId: sessionId ?? undefined, resolved: resolved ?? undefined };
+        let result = await selectVibeTracks(prompt, { ...request, excludeIds: seenIds });
 
         // No candidates left excluding everything already seen: start a new lap, same "reset and
-        // retry once" shape as useSmartShuffle's pool-exhaustion handling.
+        // retry once" shape as useSmartShuffle's pool-exhaustion handling. The resolved filter is
+        // deliberately kept -- a new lap is the same request, not a new interpretation of it.
         if (result.tracks.length === 0 && seenIds.length > 1 && currentTrackId != null && !cancelled) {
           useVibeRadioStore.getState().resetSeen(currentTrackId);
-          console.log("[VibeRadio] pool exhausted, retrying with a fresh lap", { keepId: currentTrackId });
-          result = await selectVibeTracks(prompt, { model: ollamaModel, excludeIds: [currentTrackId], limit: BATCH_SIZE });
-          console.log(
-            "[VibeRadio] retry response",
-            result.tracks.map((t) => `${t.id}: ${t.title ?? "Untitled"} — ${t.artistName ?? "Unknown"}`),
-            { usedFallback: result.usedFallback },
-          );
+          result = await selectVibeTracks(prompt, {
+            ...request,
+            excludeIds: [currentTrackId],
+            resolved: resolved ?? result.resolved,
+          });
         }
 
         if (cancelled) return;
         if (result.tracks.length === 0) {
-          console.log("[VibeRadio] no candidates at all — nothing will play");
           useVibeRadioStore.getState().setError("Running out of matches for this vibe.");
           return;
         }
 
         useVibeRadioStore.getState().setError(null);
+        if (resolved == null) useVibeRadioStore.getState().setResolved(result.resolved);
+        useVibeRadioStore.getState().setTier(result.tier);
         useVibeRadioStore.getState().markSeen(result.tracks.map((t) => t.id));
-        const { sessionId } = useVibeRadioStore.getState();
-        if (sessionId != null && initializedSessionRef.current !== sessionId) {
+        const { sessionId: currentSessionId } = useVibeRadioStore.getState();
+        if (currentSessionId != null && initializedSessionRef.current !== currentSessionId) {
           // First batch of this session: discard whatever was queued next and swap in the vibe picks.
-          initializedSessionRef.current = sessionId;
-          console.log("[VibeRadio] action: replaceUpcoming (first batch) — will play next:", result.tracks[0]?.title, "—", result.tracks[0]?.artistName);
+          initializedSessionRef.current = currentSessionId;
           usePlayerStore.getState().replaceUpcoming(result.tracks);
         } else {
-          console.log("[VibeRadio] action: enqueue (replenishment) — appended", result.tracks.length, "tracks");
           usePlayerStore.getState().enqueue(result.tracks);
         }
       } catch (err) {
-        console.log("[VibeRadio] error", err);
         if (!cancelled) {
           useVibeRadioStore.getState().setError(err instanceof VibeSelectError ? err.message : "Couldn't reach Ollama.");
         }
