@@ -13,6 +13,7 @@ import os
 import time
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional
 
 from models.similarity_schemas import (
@@ -26,6 +27,7 @@ from config import SIMILARITY_DATA_DIR
 
 from ..fingerprint.decode import decode_mono_pcm
 from .embedding import SAMPLE_RATE, extract_embedding_and_genre
+from .genre import GENRE_DEBUG_LOG_PATH, format_genre_debug_line
 from .index import SimilarityIndex
 
 MAX_CONCURRENT_JOBS = int(os.getenv("SIMILARITY_MAX_CONCURRENT_JOBS", "1"))
@@ -166,21 +168,36 @@ class SimilarityJobManager:
     # -- blocking work, run in a thread via run_in_executor -----------------
 
     def _run_track_batch(self, job: Job, notify_threadsafe) -> None:
-        for t in job.tracks:
-            if job.cancelled:
-                job.status = SimilarityJobStatus.CANCELLED
-                return
-            try:
-                pcm = decode_mono_pcm(t.path, sample_rate=SAMPLE_RATE)
-                vector, genre = extract_embedding_and_genre(pcm)
-                self.index.add_track(t.track_id, vector)
-                job.track_results.append(TrackSimilarityResult(track_id=t.track_id, status="done", genre=genre))
-            except Exception as e:
-                job.failed_tracks += 1
-                job.track_results.append(TrackSimilarityResult(track_id=t.track_id, status="failed", error=str(e)))
-            job.processed_tracks += 1
-            job.progress_pct = round(job.processed_tracks / max(1, job.total_tracks) * 100, 1)
-            notify_threadsafe()
+        # Overwritten (not appended) per *batch* job -- see GENRE_DEBUG_LOG_PATH's docstring for
+        # why. Gated on len > 1 for the same reason rebuild_graph() below is: a single-track job
+        # is a fire-and-forget per-import auto-analysis, not something a user is sitting in
+        # Settings watching -- writing it there too would silently clobber the log from someone's
+        # last intentional backfill run the moment any new track gets imported.
+        debug_log = open(GENRE_DEBUG_LOG_PATH, "w", encoding="utf-8") if len(job.tracks) > 1 else None
+        try:
+            for t in job.tracks:
+                if job.cancelled:
+                    job.status = SimilarityJobStatus.CANCELLED
+                    return
+                try:
+                    pcm = decode_mono_pcm(t.path, sample_rate=SAMPLE_RATE)
+                    vector, genre, candidates = extract_embedding_and_genre(pcm)
+                    self.index.add_track(t.track_id, vector)
+                    job.track_results.append(TrackSimilarityResult(track_id=t.track_id, status="done", genre=genre))
+                    if debug_log is not None:
+                        debug_log.write(
+                            format_genre_debug_line(track_id=t.track_id, filename=Path(t.path).name, chosen=genre, candidates=candidates)
+                        )
+                        debug_log.flush()  # so `tail -f` during a long backfill shows results land, not only at the end
+                except Exception as e:
+                    job.failed_tracks += 1
+                    job.track_results.append(TrackSimilarityResult(track_id=t.track_id, status="failed", error=str(e)))
+                job.processed_tracks += 1
+                job.progress_pct = round(job.processed_tracks / max(1, job.total_tracks) * 100, 1)
+                notify_threadsafe()
+        finally:
+            if debug_log is not None:
+                debug_log.close()
 
         # A multi-track batch (initial scan / manual backfill) refreshes older tracks' neighbor
         # lists too, since a bunch of new vectors just landed; a single fire-and-forget

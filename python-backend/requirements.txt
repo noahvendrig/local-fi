@@ -6,3 +6,7 @@ python-dotenv
 numpy
 scipy
 onnxruntime
+# ^ CPU-only, works on every platform this app supports (onnxruntime-gpu has no macOS wheel at
+# all). If you have an NVIDIA GPU + working CUDA/cuDNN, `pip uninstall onnxruntime && pip install
+# onnxruntime-gpu` instead -- services/similarity/embedding.py detects and uses it automatically,
+# no other setup needed.

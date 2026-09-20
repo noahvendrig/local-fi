@@ -10,6 +10,9 @@ results -- standard practice for clip-level embeddings from a frame-level audio 
 sidesteps ONNX dynamic-batch export risk entirely. The graph has two outputs per window
 (embedding, genre_probs); both are free from the same forward pass, so extracting genre alongside
 the embedding costs no extra inference.
+
+Runs on GPU automatically when one's usable, CPU otherwise -- see _get_session()'s provider
+selection. Nothing here needs to know or care which it ends up on.
 """
 from __future__ import annotations
 
@@ -17,7 +20,7 @@ import numpy as np
 
 from config import SIMILARITY_MODEL_PATH
 
-from .genre import NUM_GENRE_CLASSES, genre_probs_to_label
+from .genre import NUM_GENRE_CLASSES, genre_probs_to_label, scored_genre_candidates
 
 SAMPLE_RATE = 32000  # decode.py must be called with this rate for extract_embedding's input to be valid
 WINDOW_SECONDS = 10
@@ -47,7 +50,39 @@ def _get_session():
             )
         import onnxruntime as ort
 
-        _session = ort.InferenceSession(str(SIMILARITY_MODEL_PATH), providers=["CPUExecutionProvider"])
+        # requirements.txt installs plain `onnxruntime` (CPU-only, works on every platform this
+        # app supports) so a fresh install always works regardless of what hardware it's on --
+        # `onnxruntime-gpu` has no macOS wheel at all and would break `pip install -r
+        # requirements.txt` there. GPU use is opt-in instead: a user with an NVIDIA GPU can
+        # separately `pip uninstall onnxruntime && pip install onnxruntime-gpu` (plus a working
+        # CUDA/cuDNN setup) themselves, and this picks it up automatically with no further config
+        # -- CUDAExecutionProvider only ever appears in get_available_providers() when that GPU
+        # package (not the plain CPU one) is what's actually installed.
+        available = ort.get_available_providers()
+        if "CUDAExecutionProvider" in available:
+            candidate = ort.InferenceSession(str(SIMILARITY_MODEL_PATH), providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
+            # Session construction alone does NOT prove CUDA actually works -- confirmed on real
+            # hardware (an RTX 3090 with onnxruntime-gpu installed but no system cuDNN 9): the
+            # session above constructs fine and candidate.get_providers() happily reports
+            # CUDAExecutionProvider as active, but the first real Conv op then throws
+            # NOT_IMPLEMENTED ("cuDNN is unavailable ... LoadLibrary failed for cudnn64_9.dll") --
+            # ORT does not fall back to CPU for that node on its own. So this runs one real
+            # (cheap, zeros-input) inference here, up front, to actually prove the GPU path works
+            # before trusting it for every track after -- not just construct-and-hope.
+            try:
+                candidate.run(None, {"waveform": np.zeros((1, WINDOW_SAMPLES), dtype=np.float32)})
+                _session = candidate
+                print(f"[similarity] ONNX Runtime using GPU: {_session.get_providers()}")
+            except Exception as e:
+                print(
+                    f"[similarity] CUDAExecutionProvider is installed but failed on a real inference "
+                    f"({e.__class__.__name__}: {e}) -- falling back to CPU. This usually means CUDA is "
+                    f"present but cuDNN isn't (or is the wrong version) -- see requirements.txt."
+                )
+                _session = ort.InferenceSession(str(SIMILARITY_MODEL_PATH), providers=["CPUExecutionProvider"])
+        else:
+            _session = ort.InferenceSession(str(SIMILARITY_MODEL_PATH), providers=["CPUExecutionProvider"])
+            print(f"[similarity] ONNX Runtime using CPU: {_session.get_providers()}")
     return _session
 
 
@@ -115,14 +150,20 @@ def extract_embedding(pcm: np.ndarray, sample_rate: int = SAMPLE_RATE) -> np.nda
     return _pool_embedding(window_embeddings)
 
 
-def extract_embedding_and_genre(pcm: np.ndarray, sample_rate: int = SAMPLE_RATE) -> tuple[np.ndarray, str | None]:
+def extract_embedding_and_genre(
+    pcm: np.ndarray, sample_rate: int = SAMPLE_RATE
+) -> tuple[np.ndarray, str | None, list[tuple[str, float]]]:
     """Same embedding as extract_embedding, plus a genre label string (comma-joined, highest
     confidence first -- e.g. "House, Electronic, Dance") derived from the model's AudioSet
-    classifier head, pooled the same way (mean across windows) before thresholding. None when no
-    genre cleared genre.py's confidence threshold -- not every track resembles one of AudioSet's
-    genre classes closely enough to guess, and this errs toward leaving genre unset over guessing
-    wrong (see genre.py)."""
+    classifier head, pooled the same way (mean across windows) before thresholding, and the full
+    ranked (name, score) list every candidate scored -- not just the ones that cleared the
+    threshold -- for job_manager.py's genre_debug log (see genre.py's scored_genre_candidates).
+    The label is None when nothing cleared genre.py's confidence threshold -- not every track
+    resembles one of AudioSet's genre classes closely enough to guess, and this errs toward
+    leaving genre unset over guessing wrong (see genre.py)."""
     window_embeddings, window_genre_probs = _run_windows(pcm, sample_rate)
     embedding = _pool_embedding(window_embeddings)
-    genre = genre_probs_to_label(window_genre_probs.mean(axis=0))
-    return embedding, genre
+    pooled_genre_probs = window_genre_probs.mean(axis=0)
+    genre = genre_probs_to_label(pooled_genre_probs)
+    candidates = scored_genre_candidates(pooled_genre_probs)
+    return embedding, genre, candidates
