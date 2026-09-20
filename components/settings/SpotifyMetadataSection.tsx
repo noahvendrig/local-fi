@@ -12,10 +12,13 @@ import { fetchSpotifyStatus } from "@/lib/api/spotifyClient";
 
 const TERMINAL = new Set<SpotifyEnrichJob["status"]>(["completed", "completed_with_errors", "failed", "cancelled"]);
 
-/** Fills in genre/release-year for library tracks missing either, by matching them against the
- *  Spotify catalog on title+artist — never overwrites a value that's already set, and tracks with
- *  no confident Spotify match are just skipped (not every local track is on Spotify's catalog).
- *  Modeled on MixtapeFingerprintSection's backfill-job/SSE-progress pattern. */
+/** Fills in release year for library tracks missing it, by matching them against the Spotify
+ *  catalog on title+artist — never overwrites a value that's already set, and tracks with no
+ *  confident Spotify match are just skipped (not every local track is on Spotify's catalog).
+ *  Genre isn't handled here: Spotify deprecated the artist genres field, so there's nothing left
+ *  to look up (see lib/spotify/enrichMatch.ts) — genre is backfilled separately, from on-device
+ *  audio analysis, via SmartShuffleSection's backfill. Modeled on MixtapeFingerprintSection's
+ *  backfill-job/SSE-progress pattern. */
 export function SpotifyMetadataSection() {
   const queryClient = useQueryClient();
   const [jobProgress, setJobProgress] = useState<SpotifyEnrichJob | null>(null);
@@ -65,10 +68,11 @@ export function SpotifyMetadataSection() {
     <div className="lf-card mt-3 rounded-2xl px-5 py-4">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-t1">Fill missing metadata from Spotify</p>
+          <p className="text-sm font-semibold text-t1">Fill missing release years from Spotify</p>
           <p className="mt-0.5 text-sm text-t2">
-            Looks up tracks missing genre or release year on Spotify and fills in whatever it finds. Existing values are never
-            replaced, and tracks with no match on Spotify are left alone.
+            Looks up tracks missing a release year on Spotify and fills it in when found. Existing values are never replaced,
+            and tracks with no match on Spotify are left alone. Genre isn&apos;t sourced from here — Spotify no longer provides
+            it; see Smart Shuffle below for genre detection from the audio itself.
           </p>
         </div>
         <button
@@ -91,8 +95,8 @@ export function SpotifyMetadataSection() {
                 ? `${jobProgress.processedTracks} / ${jobProgress.totalTracks} checked — ${jobProgress.matchedTracks} filled in` +
                   (jobProgress.failedTracks > 0 ? `, ${jobProgress.failedTracks} failed` : "")
                 : status.missing > 0
-                  ? `${status.missing} / ${status.total} tracks missing genre or release year`
-                  : `All ${status.total} tracks have genre and release year`}
+                  ? `${status.missing} / ${status.total} tracks missing release year`
+                  : `All ${status.total} tracks have a release year`}
             </span>
           </div>
           {isRunning && jobProgress ? (

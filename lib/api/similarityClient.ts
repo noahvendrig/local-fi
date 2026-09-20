@@ -43,6 +43,8 @@ export function similarityJobEventsUrl(jobId: number): string {
 export interface SimilarityStatus {
   ready: number;
   total: number;
+  /** Tracks still missing genre (separate from ready/total — see the route's docstring). */
+  missingGenre: number;
 }
 
 /** GET /api/v1/similarity/status — library-wide tally, not tied to any one job. */

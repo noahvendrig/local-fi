@@ -144,9 +144,12 @@ async function finishDownloadedTrack(
       artist,
       albumArtist: artist,
       album: metadata.album ?? extracted.tags.album,
-      // yt-dlp/ffmpeg rarely carries useful genre or year tags for a YouTube-sourced download —
-      // prefer Spotify's catalog data when it has any, same as title/artist/album above.
-      genre: metadata.genres.length > 0 ? metadata.genres.join(", ") : extracted.tags.genre,
+      // yt-dlp/ffmpeg rarely carries a useful year tag for a YouTube-sourced download — prefer
+      // Spotify's catalog release date when it has one, same as title/artist/album above. Genre
+      // isn't available here: Spotify deprecated the artist genres field, so this keeps whatever
+      // the source file had embedded (backfilled later by Smart Shuffle's audio-based genre
+      // detection, see lib/similarity/queue.ts).
+      genre: extracted.tags.genre,
       year: parseReleaseYear(metadata.releaseDate) ?? extracted.tags.year,
       coverArt,
     };

@@ -12,10 +12,14 @@ const BodySchema = z.object({
 });
 
 /**
- * POST /api/v1/similarity/jobs — starts an audio-similarity embedding pass for Smart Shuffle.
- * `trackIds` covers "analyze this one track again" / a caller-filtered subset; omitted means
- * "every track not already analyzed" (similarityStatus none/failed) — the common backfill case
- * for an existing library. Mirrors app/api/v1/fingerprint/jobs/route.ts.
+ * POST /api/v1/similarity/jobs — starts an audio-similarity embedding pass for Smart Shuffle
+ * (and, riding along on the same pass, genre detection — see lib/similarity/queue.ts). `trackIds`
+ * covers "analyze this one track again" / a caller-filtered subset; omitted means "every track
+ * that needs it" — either never successfully analyzed (similarityStatus none/failed), or already
+ * analyzed but still missing genre (similarityStatus ready + genre still null, e.g. analyzed
+ * before genre detection existed). Re-decodes+re-embeds an already-`ready` track in that second
+ * case purely to get its genre guess — wasteful in isolation, but this is a one-off library
+ * backfill, not a hot path. Mirrors app/api/v1/fingerprint/jobs/route.ts.
  */
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
@@ -38,12 +42,21 @@ export async function POST(request: Request) {
     : db
         .select({ id: tracks.id })
         .from(tracks)
-        .where(and(isNull(tracks.deletedAt), or(eq(tracks.similarityStatus, "none"), eq(tracks.similarityStatus, "failed"))))
+        .where(
+          and(
+            isNull(tracks.deletedAt),
+            or(
+              eq(tracks.similarityStatus, "none"),
+              eq(tracks.similarityStatus, "failed"),
+              and(eq(tracks.similarityStatus, "ready"), isNull(tracks.genre))
+            )
+          )
+        )
         .all()
         .map((t) => t.id);
 
   if (validIds.length === 0) {
-    return NextResponse.json({ error: { code: "invalid_request", message: "No tracks need similarity analysis." } }, { status: 400 });
+    return NextResponse.json({ error: { code: "invalid_request", message: "No tracks need similarity analysis or genre detection." } }, { status: 400 });
   }
 
   const now = new Date().toISOString();

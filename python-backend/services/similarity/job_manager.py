@@ -1,6 +1,7 @@
-"""In-memory job store + worker queue for audio-similarity embedding extraction, mirroring
-services/fingerprint/job_manager.py's Job dataclass + asyncio.Queue subscriber/SSE pattern
-(same notify/subscribe/unsubscribe shape). Kept as a separate class for the same reason
+"""In-memory job store + worker queue for audio-similarity embedding extraction (and, riding
+along on the same model pass, genre detection -- see embedding.py's extract_embedding_and_genre),
+mirroring services/fingerprint/job_manager.py's Job dataclass + asyncio.Queue subscriber/SSE
+pattern (same notify/subscribe/unsubscribe shape). Kept as a separate class for the same reason
 FingerprintJobManager is separate from services/job_manager.py's generic one: this module owns
 its own index (SimilarityIndex) and its own per-track processing step, not because the
 concurrency machinery itself needs to differ.
@@ -24,7 +25,7 @@ from models.similarity_schemas import (
 from config import SIMILARITY_DATA_DIR
 
 from ..fingerprint.decode import decode_mono_pcm
-from .embedding import SAMPLE_RATE, extract_embedding
+from .embedding import SAMPLE_RATE, extract_embedding_and_genre
 from .index import SimilarityIndex
 
 MAX_CONCURRENT_JOBS = int(os.getenv("SIMILARITY_MAX_CONCURRENT_JOBS", "1"))
@@ -171,9 +172,9 @@ class SimilarityJobManager:
                 return
             try:
                 pcm = decode_mono_pcm(t.path, sample_rate=SAMPLE_RATE)
-                vector = extract_embedding(pcm)
+                vector, genre = extract_embedding_and_genre(pcm)
                 self.index.add_track(t.track_id, vector)
-                job.track_results.append(TrackSimilarityResult(track_id=t.track_id, status="done"))
+                job.track_results.append(TrackSimilarityResult(track_id=t.track_id, status="done", genre=genre))
             except Exception as e:
                 job.failed_tracks += 1
                 job.track_results.append(TrackSimilarityResult(track_id=t.track_id, status="failed", error=str(e)))

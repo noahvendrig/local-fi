@@ -42,21 +42,51 @@ function bestMatch(localTitle: string, localArtist: string, candidates: SpotifyT
   );
 }
 
-/** Strips the trailing "[videoId]" yt-dlp leaves on the filename fallback (lib/import/tags.ts's
- *  filenameFallback) when a downloaded file had no embedded tags to read a real title from —
- *  meaningless noise for a catalog search. Also drops stray quotes so they can't break the
- *  track:"..."/artist:"..." field-search syntax below. */
+// Trailing bracket/paren groups worth stripping before a catalog search — download-site/player
+// decoration that a YouTube-sourced local file accumulates but the real Spotify title never has.
+// Deliberately NOT stripping things like "(Wilkinson Remix)" or "(Radio Edit)" here: those are
+// often literally part of the Spotify title too, so keeping them can help a match as easily as
+// hurt one, and bestMatch's fuzzy contains-check tolerates them being present either way.
+const SEARCH_NOISE_PATTERN =
+  /\b(official|lyrics?|audio|video|visualizer|acapella|instrumental|drumless|vocals?|clean|explicit|hq|hd|4k|karaoke|kbps)\b/i;
+// A bracket/paren group that's just a bare domain-ish token, e.g. "[ ezmp3.cc ]", "(ytmp3s.net)".
+const DOWNLOAD_SITE_PATTERN = /^[\w.-]+\.[a-z]{2,6}$/i;
+// The yt-dlp "[videoId]" filename-fallback tag (lib/import/tags.ts's filenameFallback) -- a bare
+// no-space alphanumeric token, never a real title fragment (which would have spaces).
+const VIDEO_ID_PATTERN = /^[\w-]{6,15}$/;
+
+/** Iteratively strips trailing "[...]"/"(...)" groups that are download-site noise (yt-dlp/
+ *  browser-extension tags like "[ ezmp3.cc ]", "(320 kbps)") or common non-title descriptors
+ *  ("(Official Video)", "(Lyrics)", "(Acapella)", "[vocals]") -- meaningless to a catalog search,
+ *  and left untouched by earlier code this only ever removed the trailing "[videoId]" yt-dlp
+ *  fallback pattern, which left titles like "Silver Soul [OFFICIAL VIDEO]" or "Sex on Fire
+ *  (Lyrics)" un-searchable. Stops at the first trailing group that doesn't look like noise (e.g.
+ *  "(Wilkinson Remix)"), so genuine remix/edit info in the title is left alone. Also drops stray
+ *  quotes so they can't break a quoted search term. */
 function cleanForSearch(value: string): string {
-  return value
-    .replace(/\s*\[[\w-]{6,15}\]\s*$/, "")
-    .replace(/"/g, "")
-    .trim();
+  let result = value.trim();
+  while (true) {
+    const match = result.match(/\s*[[(]([^[\]()]*)[\])]\s*$/);
+    if (!match) break;
+    const inner = match[1].trim();
+    const isNoise =
+      SEARCH_NOISE_PATTERN.test(inner) ||
+      DOWNLOAD_SITE_PATTERN.test(inner) ||
+      /^\d+\s*kbps$/i.test(inner) ||
+      VIDEO_ID_PATTERN.test(inner);
+    if (!isNoise) break;
+    result = result.slice(0, match.index).trim();
+  }
+  return result.replace(/"/g, "").trim();
 }
 
 /**
- * Looks up one track against the Spotify catalog by title+artist and fills in whichever of
- * genre/year is still missing — tag and manually-set values always win, this only fills gaps
- * (same contract as lib/analysis/detect.ts's analyzeTrack). Tracks with no confident Spotify
+ * Looks up one track against the Spotify catalog by title+artist and fills in its release year if
+ * still missing — tag and manually-set values always win, this only fills gaps (same contract as
+ * lib/analysis/detect.ts's analyzeTrack). Genre is NOT sourced from here: Spotify deprecated the
+ * artist `genres` field (confirmed against their own API reference — every artist object omits
+ * it now, popular or obscure), so there's nothing left to look up; genre is instead backfilled
+ * from on-device audio analysis (see lib/similarity/queue.ts). Tracks with no confident Spotify
  * match, or a match with nothing useful to add, are recorded as `no_match` rather than `failed` —
  * not every song in a local library is on Spotify's catalog, and that's expected, not an error.
  */
@@ -75,7 +105,7 @@ export async function enrichTrackFromSpotify(trackId: number, jobTrackId: number
 
   try {
     const row = db
-      .select({ title: tracks.title, genre: tracks.genre, year: tracks.year, artistName: artists.name })
+      .select({ title: tracks.title, year: tracks.year, artistName: artists.name })
       .from(tracks)
       .innerJoin(artists, eq(tracks.artistId, artists.id))
       .where(eq(tracks.id, trackId))
@@ -86,9 +116,9 @@ export async function enrichTrackFromSpotify(trackId: number, jobTrackId: number
       return;
     }
 
-    const needsGenre = row.genre == null;
-    const needsYear = row.year == null;
-    if (!needsGenre && !needsYear) {
+    // Genre is deliberately not checked here — Spotify has nothing to offer for it (see the
+    // docstring above), so a track missing only genre would always end in a wasted search.
+    if (row.year != null) {
       finishNoMatch();
       return;
     }
@@ -105,26 +135,26 @@ export async function enrichTrackFromSpotify(trackId: number, jobTrackId: number
 
     const cleanTitle = cleanForSearch(row.title);
     const cleanArtist = cleanForSearch(row.artistName);
-    const results = await searchTracks(`track:"${cleanTitle}" artist:"${cleanArtist}"`, 5, { includeGenres: true });
+    // A plain query, not Spotify's track:"..."/artist:"..." field-filter syntax — confirmed live
+    // that the field-filtered form is too brittle for real-world local titles: e.g.
+    // track:"Rock It (Wilkinson Remix)" artist:"Sub Focus" returned zero results while the exact
+    // same terms as a plain query found "Rock It - Wilkinson Remix" by Sub Focus & Wilkinson
+    // immediately. bestMatch below independently re-verifies both title and artist on every
+    // candidate, so the precision the field filter was meant to add isn't lost by dropping it.
+    const results = await searchTracks(`${cleanTitle} ${cleanArtist}`, 5);
     const match = bestMatch(cleanTitle, cleanArtist, results);
     if (!match) {
       finishNoMatch();
       return;
     }
 
-    const patch: { genre?: string; year?: number } = {};
-    if (needsGenre && match.genres.length > 0) patch.genre = match.genres.join(", ");
-    if (needsYear) {
-      const year = parseReleaseYear(match.releaseDate);
-      if (year != null) patch.year = year;
-    }
-
-    if (Object.keys(patch).length === 0) {
+    const year = parseReleaseYear(match.releaseDate);
+    if (year == null) {
       finishNoMatch();
       return;
     }
 
-    db.update(tracks).set(patch).where(eq(tracks.id, trackId)).run();
+    db.update(tracks).set({ year }).where(eq(tracks.id, trackId)).run();
     db.update(spotifyEnrichJobTracks).set({ status: "matched", updatedAt: now() }).where(eq(spotifyEnrichJobTracks.id, jobTrackId)).run();
     db.update(spotifyEnrichJobs)
       .set({ processedTracks: sql`${spotifyEnrichJobs.processedTracks} + 1`, matchedTracks: sql`${spotifyEnrichJobs.matchedTracks} + 1` })

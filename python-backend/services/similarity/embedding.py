@@ -1,18 +1,23 @@
-"""ONNX Runtime inference for track-level audio embeddings (Smart Shuffle similarity).
+"""ONNX Runtime inference for track-level audio embeddings (Smart Shuffle similarity) and, from
+the same model pass, genre labels (see genre.py).
 
-Uses a fixed-shape ONNX export of PANNs Cnn14's embedding head (see
-scripts/export_similarity_model.py for how weights/cnn14.onnx was produced) -- a pretrained
-AudioSet-trained CNN, not anything trained in this repo. The exported graph takes a fixed
-(1, WINDOW_SAMPLES) input (confirmed: onnxruntime rejects any other batch size), so a whole track
-is embedded by splitting it into WINDOW_SAMPLES-sized windows, running each through the model one
-at a time, and mean-pooling the results -- standard practice for clip-level embeddings from a
-frame-level audio model, and it sidesteps ONNX dynamic-batch export risk entirely.
+Uses a fixed-shape ONNX export of PANNs Cnn14 (see scripts/export_similarity_model.py for how
+weights/cnn14.onnx was produced) -- a pretrained AudioSet-trained CNN, not anything trained in
+this repo. The exported graph takes a fixed (1, WINDOW_SAMPLES) input (confirmed: onnxruntime
+rejects any other batch size), so a whole track is processed by splitting it into
+WINDOW_SAMPLES-sized windows, running each through the model one at a time, and mean-pooling the
+results -- standard practice for clip-level embeddings from a frame-level audio model, and it
+sidesteps ONNX dynamic-batch export risk entirely. The graph has two outputs per window
+(embedding, genre_probs); both are free from the same forward pass, so extracting genre alongside
+the embedding costs no extra inference.
 """
 from __future__ import annotations
 
 import numpy as np
 
 from config import SIMILARITY_MODEL_PATH
+
+from .genre import NUM_GENRE_CLASSES, genre_probs_to_label
 
 SAMPLE_RATE = 32000  # decode.py must be called with this rate for extract_embedding's input to be valid
 WINDOW_SECONDS = 10
@@ -57,12 +62,11 @@ def _window_starts(total_samples: int) -> list[int]:
     return [round(i * last_start / (n_windows - 1)) for i in range(n_windows)]
 
 
-def extract_embedding(pcm: np.ndarray, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """pcm: mono float32 samples at `sample_rate` (must be SAMPLE_RATE). Returns an L2-normalized
-    float32[EMBED_DIM] vector. Pooling happens before normalization (mean of raw per-window
-    embeddings, normalized once at the end) so a track's overall direction in embedding space is
-    what's compared -- normalizing each window first and then averaging would generally yield a
-    vector with norm < 1, understating windows that disagree with each other."""
+def _run_windows(pcm: np.ndarray, sample_rate: int) -> tuple[np.ndarray, np.ndarray]:
+    """Runs every window of `pcm` through the model once, returning the raw (unpooled) per-window
+    (embedding, genre_probs) arrays -- shape (n_windows, EMBED_DIM) and (n_windows,
+    NUM_GENRE_CLASSES) respectively. Shared by extract_embedding and
+    extract_embedding_and_genre so a caller that wants both never pays for two separate passes."""
     if sample_rate != SAMPLE_RATE:
         raise ValueError(f"expected {SAMPLE_RATE}Hz input, got {sample_rate}Hz")
 
@@ -81,12 +85,44 @@ def extract_embedding(pcm: np.ndarray, sample_rate: int = SAMPLE_RATE) -> np.nda
     # export -- onnxruntime rejects any other batch size), so windows are run one at a time
     # rather than stacked into a single batched call.
     window_embeddings = np.empty((len(starts), EMBED_DIM), dtype=np.float32)
+    window_genre_probs = np.empty((len(starts), NUM_GENRE_CLASSES), dtype=np.float32)
     for i, start in enumerate(starts):
         window = pcm[start : start + WINDOW_SAMPLES][None, :]  # (1, WINDOW_SAMPLES)
-        window_embeddings[i] = session.run(None, {"waveform": window})[0][0]
+        embedding, genre_probs = session.run(None, {"waveform": window})
+        window_embeddings[i] = embedding[0]
+        window_genre_probs[i] = genre_probs[0]
 
+    return window_embeddings, window_genre_probs
+
+
+def _pool_embedding(window_embeddings: np.ndarray) -> np.ndarray:
+    """Pooling happens before normalization (mean of raw per-window embeddings, normalized once
+    at the end) so a track's overall direction in embedding space is what's compared --
+    normalizing each window first and then averaging would generally yield a vector with norm < 1,
+    understating windows that disagree with each other."""
     pooled = window_embeddings.mean(axis=0)
     norm = np.linalg.norm(pooled)
     if norm < 1e-8:
         return pooled.astype(np.float32)  # near-silent audio -- return as-is rather than divide by ~0
     return (pooled / norm).astype(np.float32)
+
+
+def extract_embedding(pcm: np.ndarray, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+    """pcm: mono float32 samples at `sample_rate` (must be SAMPLE_RATE). Returns an L2-normalized
+    float32[EMBED_DIM] vector. See extract_embedding_and_genre if the caller also wants genre --
+    that costs nothing extra over this, since both come from the same model pass."""
+    window_embeddings, _ = _run_windows(pcm, sample_rate)
+    return _pool_embedding(window_embeddings)
+
+
+def extract_embedding_and_genre(pcm: np.ndarray, sample_rate: int = SAMPLE_RATE) -> tuple[np.ndarray, str | None]:
+    """Same embedding as extract_embedding, plus a genre label string (comma-joined, highest
+    confidence first -- e.g. "House, Electronic, Dance") derived from the model's AudioSet
+    classifier head, pooled the same way (mean across windows) before thresholding. None when no
+    genre cleared genre.py's confidence threshold -- not every track resembles one of AudioSet's
+    genre classes closely enough to guess, and this errs toward leaving genre unset over guessing
+    wrong (see genre.py)."""
+    window_embeddings, window_genre_probs = _run_windows(pcm, sample_rate)
+    embedding = _pool_embedding(window_embeddings)
+    genre = genre_probs_to_label(window_genre_probs.mean(axis=0))
+    return embedding, genre

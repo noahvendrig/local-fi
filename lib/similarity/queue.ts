@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "../db/client";
 import { similarityJobTracks, similarityJobs, tracks } from "../db/schema";
 import {
@@ -14,7 +14,8 @@ import { publishSimilarityJobUpdate } from "./events";
 // Mirrors lib/fingerprint/queue.ts's shape exactly: no local p-queue/concurrency here (the DSP
 // work runs on python-backend, which owns its own concurrency via SIMILARITY_MAX_CONCURRENT_JOBS).
 // This module's job is just to submit one batch job to that service and relay its SSE progress
-// into our own similarityJobs/similarityJobTracks rows + tracks.similarityStatus.
+// into our own similarityJobs/similarityJobTracks rows + tracks.similarityStatus (and, as a side
+// effect of the same job, tracks.genre — see the isNull-guarded update in applyUpdate below).
 
 export function requestSimilarityJobCancellation(jobId: number): void {
   const db = getDb();
@@ -98,6 +99,17 @@ async function runJob(jobId: number, jobTrackIdByTrackId: Map<number, number>): 
           .set({ similarityStatus: "ready", similarityAnalyzedAt: now() })
           .where(eq(tracks.id, r.track_id))
           .run();
+        // Audio-based genre detection rides along on the same model pass as the similarity
+        // embedding (python-backend's extract_embedding_and_genre) — fill it in here, same "never
+        // overwrite, only fill gaps" contract as every other metadata source (Spotify enrich,
+        // tag extraction). The isNull guard makes this an atomic conditional update rather than a
+        // read-then-write, so a concurrent manual edit can't be raced.
+        if (r.genre != null) {
+          db.update(tracks)
+            .set({ genre: r.genre })
+            .where(and(eq(tracks.id, r.track_id), isNull(tracks.genre)))
+            .run();
+        }
         db.update(similarityJobs)
           .set({ processedTracks: sql`${similarityJobs.processedTracks} + 1` })
           .where(eq(similarityJobs.id, jobId))

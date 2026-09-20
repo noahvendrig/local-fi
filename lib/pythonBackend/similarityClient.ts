@@ -7,6 +7,9 @@ export interface PythonTrackSimilarityResult {
   track_id: number;
   status: "done" | "failed";
   error: string | null;
+  /** Comma-joined genre label(s) from audio analysis (e.g. "House, Electronic, Dance"), or null
+   *  when nothing cleared the confidence threshold — see python-backend/services/similarity/genre.py. */
+  genre: string | null;
 }
 
 /** Mirrors python-backend/models/similarity_schemas.py's SimilarityJobResponse — field names

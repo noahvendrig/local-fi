@@ -62,5 +62,4 @@ export interface SpotifyTrackMetadata {
   coverArtUrl: string | null;
   spotifyUrl: string;
   releaseDate: string | null;
-  genres: string[];
 }

@@ -1,7 +1,8 @@
-"""One-time dev-side export: PANNs Cnn14's embedding head -> ONNX, for Smart Shuffle
-(services/similarity/). NOT part of the running app -- python-backend's own requirements.txt
-only needs onnxruntime; this script needs torch + panns_inference, installed separately in a
-throwaway venv, e.g.:
+"""One-time dev-side export: PANNs Cnn14's embedding head + AudioSet classifier head -> ONNX, for
+Smart Shuffle similarity (services/similarity/embedding.py) and audio-based genre detection
+(services/similarity/genre.py). NOT part of the running app -- python-backend's own
+requirements.txt only needs onnxruntime; this script needs torch + panns_inference, installed
+separately in a throwaway venv, e.g.:
 
     python -m venv .export-venv
     .export-venv/Scripts/pip install torch --index-url https://download.pytorch.org/whl/cpu
@@ -23,7 +24,11 @@ auto-upgraded to 18 by the exporter (one op, Pad, has no opset-17 version-conver
 this is expected, not a failure. Reference-vs-ONNX outputs matched within atol=1e-3 across zeros,
 random-noise, and sine-wave inputs; the raw embedding is NOT L2-normalized by the model itself
 (observed norm ~10.7) -- normalization happens in embedding.py's extract_embedding, after
-mean-pooling across a track's windows, not here.
+mean-pooling across a track's windows, not here. `genre_probs` (added 2026-09-20, alongside
+`embedding`) IS already sigmoided by Cnn14's own forward (AudioSet is multi-label, so Cnn14 uses
+per-class sigmoid rather than softmax) -- callers threshold it directly, no further activation
+needed. Exporting both from one graph costs nothing extra at inference: Cnn14's forward computes
+clipwise_output and embedding in the same pass regardless, this just stops discarding the former.
 """
 from __future__ import annotations
 
@@ -43,16 +48,17 @@ OUTPUT_DIR = Path(__file__).resolve().parent.parent / "weights"
 OUTPUT_PATH = OUTPUT_DIR / "cnn14.onnx"
 
 
-class EmbeddingOnly(nn.Module):
+class EmbeddingAndGenre(nn.Module):
     """Cnn14's forward returns a dict ({'clipwise_output', 'embedding'}); ONNX export needs a
-    plain tensor-in/tensor-out module, so this wrapper slices out just the embedding."""
+    plain tensor-in/tensor-out module, so this wrapper returns both as a tuple instead."""
 
     def __init__(self, inner: nn.Module):
         super().__init__()
         self.inner = inner
 
-    def forward(self, waveform: torch.Tensor) -> torch.Tensor:
-        return self.inner(waveform, None)["embedding"]
+    def forward(self, waveform: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        out = self.inner(waveform, None)
+        return out["embedding"], out["clipwise_output"]
 
 
 def main() -> None:
@@ -60,14 +66,15 @@ def main() -> None:
 
     print("Loading PANNs Cnn14 checkpoint...")
     at = AudioTagging(checkpoint_path=None, device="cpu")
-    wrapper = EmbeddingOnly(at.model)
+    wrapper = EmbeddingAndGenre(at.model)
     wrapper.eval()
 
     dummy = torch.zeros(1, WINDOW_SAMPLES, dtype=torch.float32)
 
     with torch.no_grad():
-        ref = wrapper(dummy).numpy()
-    print("Reference embedding shape:", ref.shape)
+        ref_embedding, ref_genre = wrapper(dummy)
+    ref_embedding, ref_genre = ref_embedding.numpy(), ref_genre.numpy()
+    print("Reference embedding shape:", ref_embedding.shape, "genre_probs shape:", ref_genre.shape)
 
     print(f"Exporting to {OUTPUT_PATH} (opset 18, fixed input shape (1, {WINDOW_SAMPLES}))...")
     torch.onnx.export(
@@ -75,7 +82,7 @@ def main() -> None:
         dummy,
         str(OUTPUT_PATH),
         input_names=["waveform"],
-        output_names=["embedding"],
+        output_names=["embedding", "genre_probs"],
         opset_version=18,
         do_constant_folding=True,
     )
@@ -84,11 +91,14 @@ def main() -> None:
     import onnxruntime as ort
 
     sess = ort.InferenceSession(str(OUTPUT_PATH), providers=["CPUExecutionProvider"])
-    onnx_out = sess.run(None, {"waveform": dummy.numpy()})[0]
-    diff = np.abs(ref - onnx_out)
-    ok = np.allclose(ref, onnx_out, atol=1e-3)
-    print(f"Verification (zeros input): max abs diff {diff.max():.2e}, allclose={ok}")
-    if not ok:
+    onnx_embedding, onnx_genre = sess.run(None, {"waveform": dummy.numpy()})
+    embedding_ok = np.allclose(ref_embedding, onnx_embedding, atol=1e-3)
+    genre_ok = np.allclose(ref_genre, onnx_genre, atol=1e-3)
+    print(
+        f"Verification (zeros input): embedding max abs diff {np.abs(ref_embedding - onnx_embedding).max():.2e}, allclose={embedding_ok}; "
+        f"genre_probs max abs diff {np.abs(ref_genre - onnx_genre).max():.2e}, allclose={genre_ok}"
+    )
+    if not (embedding_ok and genre_ok):
         raise SystemExit("ONNX output diverged from the reference PyTorch model -- do not ship this export.")
     print("PASS")
 

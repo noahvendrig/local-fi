@@ -431,10 +431,12 @@ export const similarityJobTracks = sqliteTable(
 );
 
 // On-demand Spotify metadata backfill (Settings → Spotify) — matches library tracks missing
-// genre and/or year against the Spotify catalog by title+artist and fills only those gaps,
-// same "detection never overwrites, only fills" contract as analysisJobs. Pure Node/HTTP work
-// (a couple of Spotify Web API calls per track), no python-backend involved — closer in shape to
-// analysisJobs than to fingerprintJobs/similarityJobs.
+// release year against the Spotify catalog by title+artist and fills only that gap, same
+// "detection never overwrites, only fills" contract as analysisJobs. Genre isn't covered: Spotify
+// deprecated the artist genres field (see lib/spotify/enrichMatch.ts), so there's nothing to look
+// up there — genre is backfilled separately from on-device audio analysis (similarityJobs). Pure
+// Node/HTTP work (a couple of Spotify Web API calls per track), no python-backend involved —
+// closer in shape to analysisJobs than to fingerprintJobs/similarityJobs.
 export const spotifyEnrichJobs = sqliteTable(
   "spotify_enrich_jobs",
   {

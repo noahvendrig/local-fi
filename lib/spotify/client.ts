@@ -22,8 +22,6 @@ export interface SpotifyTrackMetadata {
   spotifyUrl: string;
   /** Album's release_date as Spotify returns it (YYYY, YYYY-MM, or YYYY-MM-DD depending on release_date_precision). */
   releaseDate: string | null;
-  /** The primary (first-listed) artist's genres, from Spotify's artist catalog — tracks and albums carry no genre of their own. Empty when genres weren't fetched (see includeGenres) or Spotify has none on file. */
-  genres: string[];
 }
 
 export class SpotifyConfigError extends Error {}
@@ -220,29 +218,6 @@ interface SpotifyPlaylistItemsPage {
   next: string | null;
 }
 
-/** Fetches genres for a set of artist ids — tracks and albums carry no genre of their own, only
- *  artists do. One request per artist: GET /v1/artists?ids=... (the batch form, up to 50 ids/call
- *  per Spotify's docs) returns a bare 403 on this app — confirmed by probing it directly, no
- *  Retry-After/quota reason, just "Forbidden", while GET /v1/artists/{id} for the same id works
- *  fine. Whatever changed on Spotify's side restricted the multi-get and left the single-get
- *  alone, so this falls back to the latter. Costlier in request count for a track with many
- *  distinct primary artists, but there's no working batch alternative right now. A missing/
- *  unrecognized id just 404s and is skipped rather than failing the whole lookup. */
-async function fetchArtistGenres(artistIds: (string | null | undefined)[]): Promise<Map<string, string[]>> {
-  const uniqueIds = [...new Set(artistIds.filter((id): id is string => !!id))];
-  const map = new Map<string, string[]>();
-  for (const id of uniqueIds) {
-    const artist = await spotifyGet<{ id: string; genres: string[] }>(`https://api.spotify.com/v1/artists/${encodeURIComponent(id)}`).catch(
-      (err) => {
-        if (err instanceof SpotifyNotFoundError) return null;
-        throw err;
-      }
-    );
-    if (artist) map.set(artist.id, artist.genres ?? []);
-  }
-  return map;
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -348,16 +323,7 @@ export async function fetchPlaylistMeta(playlistId: string): Promise<SpotifyPlay
 
 /** Fetches every track in one of the user's own playlists, paginating through Spotify's 100-per-page limit. */
 export async function fetchPlaylistTracks(playlistId: string): Promise<SpotifyTrackMetadata[]> {
-  const entries: {
-    title: string;
-    artists: string[];
-    primaryArtistId: string | null;
-    album: string | null;
-    releaseDate: string | null;
-    durationMs: number;
-    coverArtUrl: string | null;
-    spotifyUrl: string;
-  }[] = [];
+  const entries: SpotifyTrackMetadata[] = [];
   let url: string | null =
     `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/items?limit=100&fields=next,items(is_local,item(id,name,type,artists(id,name),album(name,images,release_date),duration_ms))`;
 
@@ -373,7 +339,6 @@ export async function fetchPlaylistTracks(playlistId: string): Promise<SpotifyTr
       entries.push({
         title: track.name,
         artists: track.artists.map((a) => a.name),
-        primaryArtistId: track.artists[0]?.id ?? null,
         album: track.album?.name ?? null,
         releaseDate: track.album?.release_date ?? null,
         durationMs: track.duration_ms,
@@ -384,18 +349,7 @@ export async function fetchPlaylistTracks(playlistId: string): Promise<SpotifyTr
     url = page.next;
   }
 
-  const genresByArtistId = await fetchArtistGenres(entries.map((e) => e.primaryArtistId));
-
-  return entries.map((e) => ({
-    title: e.title,
-    artists: e.artists,
-    album: e.album,
-    durationMs: e.durationMs,
-    coverArtUrl: e.coverArtUrl,
-    spotifyUrl: e.spotifyUrl,
-    releaseDate: e.releaseDate,
-    genres: e.primaryArtistId ? (genresByArtistId.get(e.primaryArtistId) ?? []) : [],
-  }));
+  return entries;
 }
 
 interface SpotifySearchItem {
@@ -410,32 +364,20 @@ interface SpotifySearchResponse {
   tracks: { items: SpotifySearchItem[] };
 }
 
-/** Catalog search — unlike playlist reads, this works for any track regardless of ownership.
- *  `includeGenres` costs one extra /artists request (batched across all results), so it defaults
- *  off for the live-typing search bar and is only turned on by callers that actually need genre
- *  (playlist imports fetch it unconditionally via fetchPlaylistTracks; the metadata backfill job
- *  in lib/spotify/enrichMatch.ts passes it explicitly). */
-export async function searchTracks(query: string, limit = 8, options?: { includeGenres?: boolean }): Promise<SpotifyTrackMetadata[]> {
+/** Catalog search — unlike playlist reads, this works for any track regardless of ownership. */
+export async function searchTracks(query: string, limit = 8): Promise<SpotifyTrackMetadata[]> {
   const page = await spotifyGet<SpotifySearchResponse>(
     `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=${limit}`
   );
   const items = page.tracks.items.filter((track) => track.id);
 
-  const genresByArtistId = options?.includeGenres
-    ? await fetchArtistGenres(items.map((track) => track.artists[0]?.id))
-    : null;
-
-  return items.map((track) => {
-    const primaryArtistId = track.artists[0]?.id ?? null;
-    return {
-      title: track.name,
-      artists: track.artists.map((a) => a.name),
-      album: track.album?.name ?? null,
-      durationMs: track.duration_ms,
-      coverArtUrl: pickLargestImage(track.album?.images ?? []),
-      spotifyUrl: `https://open.spotify.com/track/${track.id}`,
-      releaseDate: track.album?.release_date ?? null,
-      genres: primaryArtistId ? (genresByArtistId?.get(primaryArtistId) ?? []) : [],
-    };
-  });
+  return items.map((track) => ({
+    title: track.name,
+    artists: track.artists.map((a) => a.name),
+    album: track.album?.name ?? null,
+    durationMs: track.duration_ms,
+    coverArtUrl: pickLargestImage(track.album?.images ?? []),
+    spotifyUrl: `https://open.spotify.com/track/${track.id}`,
+    releaseDate: track.album?.release_date ?? null,
+  }));
 }

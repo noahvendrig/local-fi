@@ -33,6 +33,11 @@ class TrackSimilarityResult(BaseModel):
     track_id: int
     status: str  # "done" | "failed"
     error: Optional[str] = None
+    # Comma-joined genre label(s) from Cnn14's AudioSet classifier head (services/similarity/genre.py),
+    # e.g. "House, Electronic, Dance" -- only set when status == "done", and None even then if no
+    # genre class cleared the confidence threshold. The caller (local-fi's lib/similarity/queue.ts)
+    # only ever uses this to fill a currently-null tracks.genre, never to overwrite one.
+    genre: Optional[str] = None
 
 
 class SimilarityJobResponse(BaseModel):

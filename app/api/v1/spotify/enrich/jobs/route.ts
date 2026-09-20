@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, inArray, isNull, or } from "drizzle-orm";
+import { and, inArray, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb } from "@/lib/db/client";
@@ -13,11 +13,13 @@ const BodySchema = z.object({
 });
 
 /**
- * POST /api/v1/spotify/enrich/jobs — backfills genre/release-year for tracks missing either,
- * by matching them against the Spotify catalog on title+artist (lib/spotify/enrichMatch.ts).
- * Never overwrites a value that's already set — only fills gaps. `trackIds` covers a
- * caller-filtered subset; omitted means "every track missing genre or year", the Settings
- * backfill-the-library case. Mirrors app/api/v1/fingerprint/jobs/route.ts.
+ * POST /api/v1/spotify/enrich/jobs — backfills release year for tracks missing it, by matching
+ * them against the Spotify catalog on title+artist (lib/spotify/enrichMatch.ts). Never overwrites
+ * a value that's already set — only fills gaps. Genre isn't covered here: Spotify deprecated the
+ * artist genres field (see enrichMatch.ts's docstring), so it can't be looked up at all; genre is
+ * backfilled separately from on-device audio analysis. `trackIds` covers a caller-filtered
+ * subset; omitted means "every track missing release year", the Settings backfill-the-library
+ * case. Mirrors app/api/v1/fingerprint/jobs/route.ts.
  */
 export async function POST(request: Request) {
   if (!isSpotifyConnected()) {
@@ -37,7 +39,7 @@ export async function POST(request: Request) {
   }
 
   const db = getDb();
-  const missing = or(isNull(tracks.genre), isNull(tracks.year));
+  const missing = isNull(tracks.year);
   const validIds = parsed.data.trackIds
     ? db
         .select({ id: tracks.id })
@@ -53,7 +55,7 @@ export async function POST(request: Request) {
         .map((t) => t.id);
 
   if (validIds.length === 0) {
-    return NextResponse.json({ error: { code: "invalid_request", message: "No tracks are missing genre or release year." } }, { status: 400 });
+    return NextResponse.json({ error: { code: "invalid_request", message: "No tracks are missing release year." } }, { status: 400 });
   }
 
   const now = new Date().toISOString();
